@@ -5,7 +5,7 @@ import { ClusterAnalysis } from "./components/ClusterAnalysis";
 import { DecisionTreeAnalysis } from "./components/DecisionTreeAnalysis";
 import { NeuralNetworkAnalysis } from "./components/NeuralNetworkAnalysis";
 import { HybridAnalysis } from "./components/HybridAnalysis";
-import { FundamentalsData } from "./components/FundamentalsData";
+import { FundamentalsPage } from "../pages/fundamentals";
 import { NotFound } from "./components/NotFound";
 
 export const router = createBrowserRouter([
@@ -18,8 +18,9 @@ export const router = createBrowserRouter([
       { path: "decision-tree", Component: DecisionTreeAnalysis },
       { path: "neural-network", Component: NeuralNetworkAnalysis },
       { path: "hybrid", Component: HybridAnalysis },
-      { path: "fundamentals", Component: FundamentalsData },
+      { path: "fundamentals", Component: FundamentalsPage },
       { path: "*", Component: NotFound },
     ],
   },
 ]);
+

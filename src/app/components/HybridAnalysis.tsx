@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Layers, Play, Settings } from "lucide-react";
 import { ResponsiveContainer, BarChart, Bar, CartesianGrid, XAxis, YAxis, Tooltip } from "recharts";
 import { EmbeddedMarkowitz } from "./EmbeddedMarkowitz";
-import { useFundamentals } from "../context/FundamentalsContext";
+import { useFundamentals } from "../../entities/fundamentals";
 import { useAppSettings } from "../context/AppSettingsContext";
 
 const modelComparison = [
@@ -114,3 +114,4 @@ export function HybridAnalysis() {
     </div>
   );
 }
+

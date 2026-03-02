@@ -1,9 +1,9 @@
 export {
   FundamentalsProvider,
   useFundamentals,
-} from "../../entities/fundamentals";
+} from "./model/fundamentals-context";
 export type {
   ShareRecord,
   AssetFundamentalRecord,
   FundamentalsCache,
-} from "../../entities/fundamentals";
+} from "./model/fundamentals-context";

@@ -12,7 +12,7 @@ import {
   Tooltip,
   ResponsiveContainer,
 } from "recharts";
-import { useFundamentals } from "../context/FundamentalsContext";
+import { useFundamentals } from "../../entities/fundamentals";
 import { useAppSettings } from "../context/AppSettingsContext";
 
 type EmbeddedMarkowitzProps = {
@@ -121,3 +121,4 @@ export function EmbeddedMarkowitz({ accentClassName = "text-indigo-600" }: Embed
     </div>
   );
 }
+

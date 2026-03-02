@@ -1,7 +1,7 @@
 import { RouterProvider } from 'react-router';
 import { router } from './routes';
 import { AppSettingsProvider } from "./context/AppSettingsContext";
-import { FundamentalsProvider } from "./context/FundamentalsContext";
+import { FundamentalsProvider } from "../entities/fundamentals";
 
 export default function App() {
   return (
@@ -12,3 +12,4 @@ export default function App() {
     </AppSettingsProvider>
   );
 }
+

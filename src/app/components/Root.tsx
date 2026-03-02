@@ -67,6 +67,27 @@ export function Root() {
               {mobileMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
             </button>
           </div>
+
+          <nav className="hidden lg:flex items-center gap-1 pb-3 overflow-x-auto">
+            {navigation.map((item) => {
+              const Icon = item.icon;
+              const isActive = location.pathname === item.path;
+              return (
+                <Link
+                  key={item.path}
+                  to={item.path}
+                  className={`inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm transition-colors ${
+                    isActive
+                      ? "bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300"
+                      : "text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800"
+                  }`}
+                >
+                  <Icon className="w-4 h-4" />
+                  <span className="font-medium whitespace-nowrap">{item.name}</span>
+                </Link>
+              );
+            })}
+          </nav>
         </div>
 
         {mobileMenuOpen && (
