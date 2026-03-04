@@ -1,11 +1,15 @@
 {
-  "name": "@figma/my-make-file",
+  "name": "@analytic-system/analytic-system-make-file",
   "private": true,
   "version": "0.0.1",
   "type": "module",
+  "main": "electron/main.cjs",
   "scripts": {
+    "start": "electron .",
     "build": "vite build",
-    "dev": "vite"
+    "dev": "vite",
+    "electron:dev": "concurrently -k \"vite\" \"wait-on tcp:5173 && electron .\"",
+    "electron:build": "npm run build && electron-builder"
   },
   "dependencies": {
     "@emotion/react": "11.14.0",
@@ -36,8 +40,8 @@
     "@radix-ui/react-slot": "1.1.2",
     "@radix-ui/react-switch": "1.1.3",
     "@radix-ui/react-tabs": "1.1.3",
-    "@radix-ui/react-toggle-group": "1.1.2",
     "@radix-ui/react-toggle": "1.1.2",
+    "@radix-ui/react-toggle-group": "1.1.2",
     "@radix-ui/react-tooltip": "1.1.8",
     "class-variance-authority": "0.7.1",
     "clsx": "2.1.1",
@@ -66,8 +70,12 @@
   "devDependencies": {
     "@tailwindcss/vite": "4.1.12",
     "@vitejs/plugin-react": "4.7.0",
+    "concurrently": "^9.2.1",
+    "electron": "^37.10.3",
+    "electron-builder": "^26.0.12",
     "tailwindcss": "4.1.12",
-    "vite": "6.3.5"
+    "vite": "6.3.5",
+    "wait-on": "^8.0.5"
   },
   "peerDependencies": {
     "react": "18.3.1",
@@ -84,6 +92,21 @@
   "pnpm": {
     "overrides": {
       "vite": "6.3.5"
+    }
+  },
+  "build": {
+    "appId": "com.invest.analytics.desktop",
+    "productName": "Invest Analytics",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**/*",
+      "electron/**/*",
+      "package.json"
+    ],
+    "win": {
+      "target": "nsis"
     }
   }
 }

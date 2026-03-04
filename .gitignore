@@ -1,5 +1,7 @@
 node_modules/
 dist/
+release/
+dist-electron/
 build/
 .env
 *.zip
