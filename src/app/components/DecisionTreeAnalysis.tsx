@@ -1,357 +1,585 @@
-import { useState } from "react";
-import { GitBranch, Play, Settings, ChevronRight, Upload } from "lucide-react";
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from "recharts";
+﻿import { useMemo, useState } from "react";
+import { GitBranch, Play, Settings } from "lucide-react";
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from "recharts";
 import { EmbeddedMarkowitz } from "./EmbeddedMarkowitz";
+import { useFundamentals } from "../context/FundamentalsContext";
 
-export function DecisionTreeAnalysis() {
-  const [params, setParams] = useState({
-    apiToken: "",
-    dataLoaded: false,
-    maxDepth: "5",
-    minSamples: "20",
-    criterion: "gini",
-    target: "investment_decision",
-  });
+type MetricItem = {
+  label: string;
+  value: string;
+};
 
-  const [modelRun, setModelRun] = useState(false);
+type FeatureImportanceItem = {
+  feature: string;
+  importance: number;
+};
 
-  const metrics = {
-    accuracy: 0.847,
-    precision: 0.829,
-    recall: 0.856,
-    f1Score: 0.842,
-  };
+type ConfusionMatrixData = {
+  labels: string[];
+  matrix: number[][];
+};
 
-  // Важность признаков: P/E, P/B, ROE, g
-  const featureImportance = [
-    { feature: "ROE", importance: 32 },
-    { feature: "P/E", importance: 28 },
-    { feature: "g (рост)", importance: 24 },
-    { feature: "P/B", importance: 16 },
+type PortfolioPosition = {
+  ticker: string;
+  name: string;
+  sector: string;
+  weight: number;
+  expectedReturn: number;
+  risk: number;
+  predictedText: string;
+};
+
+type SectorAllocationItem = {
+  sector: string;
+  weight: number;
+};
+
+type NumericSummaryItem = {
+  metric: string;
+  mean: number;
+  median: number;
+  min: number;
+  max: number;
+};
+
+const ENABLE_TEMP_LOGS = true;
+const palette = ["#10b981", "#059669", "#34d399", "#0ea5a4", "#22c55e", "#84cc16", "#14b8a6", "#2dd4bf"];
+
+function numberOr(value: unknown, fallback = 0): number {
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return value;
+  }
+  if (typeof value === "string") {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : fallback;
+  }
+  return fallback;
+}
+
+function formatMetricPercentOrNumber(value: number): string {
+  if (!Number.isFinite(value)) {
+    return "-";
+  }
+  if (value >= 0 && value <= 1) {
+    return `${(value * 100).toFixed(2)}%`;
+  }
+  return value.toFixed(4);
+}
+
+function extractMetrics(parsed: Record<string, unknown>): MetricItem[] {
+  const source =
+    (parsed.metrics as Record<string, unknown> | undefined) ??
+    (parsed.model_metrics as Record<string, unknown> | undefined) ??
+    (parsed.stats as Record<string, unknown> | undefined) ??
+    (parsed.summary as Record<string, unknown> | undefined) ??
+    {};
+
+  const mapping: Array<{ key: string; label: string }> = [
+    { key: "accuracy", label: "Accuracy" },
+    { key: "precision", label: "Precision" },
+    { key: "recall", label: "Recall" },
+    { key: "f1", label: "F1" },
+    { key: "f1_score", label: "F1 Score" },
+    { key: "roc_auc", label: "ROC AUC" },
+    { key: "balanced_accuracy", label: "Balanced Accuracy" },
+    { key: "train_accuracy", label: "Train Accuracy" },
+    { key: "test_accuracy", label: "Test Accuracy" },
   ];
 
-  // Confusion Matrix данные
-  const confusionMatrix = {
-    truePositive: 156,
-    falsePositive: 28,
-    trueNegative: 142,
-    falseNegative: 24,
-  };
+  const result: MetricItem[] = [];
+  for (const item of mapping) {
+    if (item.key in source) {
+      result.push({
+        label: item.label,
+        value: formatMetricPercentOrNumber(numberOr(source[item.key], NaN)),
+      });
+    }
+  }
 
-  const handleLoadData = () => {
-    setParams({ ...params, dataLoaded: true });
-  };
+  return result;
+}
 
-  const handleRunModel = () => {
-    setModelRun(true);
+function extractFeatureImportance(parsed: Record<string, unknown>): FeatureImportanceItem[] {
+  const raw =
+    parsed.feature_importance ??
+    parsed.featureImportance ??
+    parsed.importances ??
+    parsed.feature_weights ??
+    null;
+
+  if (Array.isArray(raw)) {
+    const rows = raw
+      .map((item, idx) => {
+        const row = item as Record<string, unknown>;
+        return {
+          feature: String(row.feature ?? row.name ?? row.column ?? `Feature ${idx + 1}`),
+          importance: numberOr(row.importance, numberOr(row.score, numberOr(row.weight, 0))),
+        };
+      })
+      .filter((r) => Number.isFinite(r.importance));
+
+    const max = rows.length ? Math.max(...rows.map((r) => r.importance)) : 0;
+    const normalized = max <= 1 ? rows.map((r) => ({ ...r, importance: r.importance * 100 })) : rows;
+    return normalized.sort((a, b) => b.importance - a.importance);
+  }
+
+  if (raw && typeof raw === "object") {
+    const entries = Object.entries(raw as Record<string, unknown>)
+      .map(([feature, value]) => ({ feature, importance: numberOr(value, 0) }))
+      .filter((r) => Number.isFinite(r.importance));
+
+    const max = entries.length ? Math.max(...entries.map((r) => r.importance)) : 0;
+    const normalized = max <= 1 ? entries.map((r) => ({ ...r, importance: r.importance * 100 })) : entries;
+    return normalized.sort((a, b) => b.importance - a.importance);
+  }
+
+  return [];
+}
+
+function extractConfusionMatrix(parsed: Record<string, unknown>): ConfusionMatrixData | null {
+  const raw = parsed.confusion_matrix ?? parsed.confusionMatrix ?? parsed.matrix;
+
+  if (Array.isArray(raw) && raw.every((row) => Array.isArray(row))) {
+    const matrix = raw.map((row) => (row as unknown[]).map((v) => numberOr(v, 0)));
+    const labelsRaw = parsed.class_labels ?? parsed.classes;
+    const labels = Array.isArray(labelsRaw)
+      ? labelsRaw.map((v) => String(v))
+      : Array.from({ length: matrix.length }, (_, i) => `Class ${i + 1}`);
+    return { labels, matrix };
+  }
+
+  if (raw && typeof raw === "object") {
+    const obj = raw as Record<string, unknown>;
+    if ("truePositive" in obj || "falsePositive" in obj || "trueNegative" in obj || "falseNegative" in obj) {
+      const tp = numberOr(obj.truePositive, 0);
+      const fp = numberOr(obj.falsePositive, 0);
+      const tn = numberOr(obj.trueNegative, 0);
+      const fn = numberOr(obj.falseNegative, 0);
+      return {
+        labels: ["Покупка", "Продажа"],
+        matrix: [
+          [tp, fn],
+          [fp, tn],
+        ],
+      };
+    }
+  }
+
+  return null;
+}
+
+function extractPortfolioMetrics(parsed: Record<string, unknown>): MetricItem[] {
+  const portfolio = (parsed.portfolio as Record<string, unknown> | undefined) ?? {};
+  const portfolioMetrics = (portfolio.metrics as Record<string, unknown> | undefined) ?? {};
+  const stats = (parsed.stats as Record<string, unknown> | undefined) ?? {};
+  const summary = (parsed.summary as Record<string, unknown> | undefined) ?? {};
+  const summaryKeyMetrics = (summary.key_metrics as Record<string, unknown> | undefined) ?? {};
+
+  const source = Object.keys(portfolioMetrics).length
+    ? portfolioMetrics
+    : Object.keys(summaryKeyMetrics).length
+      ? summaryKeyMetrics
+      : stats;
+
+  const mapping: Array<{ key: string; label: string }> = [
+    { key: "expected_return", label: "Expected Return" },
+    { key: "risk", label: "Risk" },
+    { key: "sharpe_ratio", label: "Sharpe Ratio" },
+    { key: "diversification_score", label: "Diversification" },
+  ];
+
+  return mapping
+    .filter((item) => item.key in source)
+    .map((item) => ({
+      label: item.label,
+      value: formatMetricPercentOrNumber(numberOr(source[item.key], NaN)),
+    }));
+}
+
+function extractPortfolioPositions(parsed: Record<string, unknown>): PortfolioPosition[] {
+  const portfolio = (parsed.portfolio as Record<string, unknown> | undefined) ?? {};
+  const positions = Array.isArray(portfolio.positions) ? portfolio.positions : [];
+
+  const rows = positions.map((item, idx) => {
+    const row = item as Record<string, unknown>;
+    return {
+      ticker: String(row.ticker ?? row.Ticker ?? `Asset ${idx + 1}`),
+      name: String(row.name ?? row.Company ?? "-"),
+      sector: String(row["Сектор"] ?? row.sector ?? "-"),
+      weight: numberOr(row.weights, numberOr(row.weight, 0)),
+      expectedReturn: numberOr(row["Ожидаемая_доходность"], numberOr(row.expected_return, NaN)),
+      risk: numberOr(row["Риск"], numberOr(row.risk, NaN)),
+      predictedText: String(row["Predicted_Оценка_текст"] ?? row.predicted_text ?? "-"),
+    } satisfies PortfolioPosition;
+  });
+
+  const maxWeight = rows.length ? Math.max(...rows.map((r) => r.weight)) : 0;
+  const normalized = maxWeight <= 1 ? rows.map((r) => ({ ...r, weight: r.weight * 100 })) : rows;
+  return normalized.sort((a, b) => b.weight - a.weight);
+}
+
+function extractSectorAllocation(parsed: Record<string, unknown>): SectorAllocationItem[] {
+  const portfolio = (parsed.portfolio as Record<string, unknown> | undefined) ?? {};
+  const allocation = (portfolio.sector_allocation as Record<string, unknown> | undefined) ?? {};
+  const rows = Object.entries(allocation).map(([sector, weight]) => ({ sector, weight: numberOr(weight, 0) }));
+  const maxWeight = rows.length ? Math.max(...rows.map((r) => r.weight)) : 0;
+  const normalized = maxWeight <= 1 ? rows.map((r) => ({ ...r, weight: r.weight * 100 })) : rows;
+  return normalized.sort((a, b) => b.weight - a.weight);
+}
+
+function extractNumericSummary(parsed: Record<string, unknown>): NumericSummaryItem[] {
+  const stats = (parsed.stats as Record<string, unknown> | undefined) ?? {};
+  const numericSummary = (stats.numeric_summary as Record<string, unknown> | undefined) ?? {};
+
+  return Object.entries(numericSummary)
+    .map(([metric, raw]) => {
+      const row = raw as Record<string, unknown>;
+      return {
+        metric,
+        mean: numberOr(row.mean, NaN),
+        median: numberOr(row.median, NaN),
+        min: numberOr(row.min, NaN),
+        max: numberOr(row.max, NaN),
+      } satisfies NumericSummaryItem;
+    })
+    .filter((item) => Number.isFinite(item.mean));
+}
+
+function extractPortfolioAssetsCount(parsed: Record<string, unknown>): number {
+  const portfolio = (parsed.portfolio as Record<string, unknown> | undefined) ?? {};
+  const stats = (parsed.stats as Record<string, unknown> | undefined) ?? {};
+  const summary = (parsed.summary as Record<string, unknown> | undefined) ?? {};
+
+  return numberOr(
+    portfolio.assets_count,
+    numberOr(stats.portfolio_assets_count, numberOr(summary.portfolio_assets_count, 0)),
+  );
+}
+
+export function DecisionTreeAnalysis() {
+  const { cache, hasData } = useFundamentals();
+  const [isRunning, setIsRunning] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [metrics, setMetrics] = useState<MetricItem[]>([]);
+  const [featureImportance, setFeatureImportance] = useState<FeatureImportanceItem[]>([]);
+  const [confusionMatrix, setConfusionMatrix] = useState<ConfusionMatrixData | null>(null);
+  const [portfolioPositions, setPortfolioPositions] = useState<PortfolioPosition[]>([]);
+  const [sectorAllocation, setSectorAllocation] = useState<SectorAllocationItem[]>([]);
+  const [numericSummary, setNumericSummary] = useState<NumericSummaryItem[]>([]);
+  const [portfolioAssetsCount, setPortfolioAssetsCount] = useState(0);
+  const [serverKeys, setServerKeys] = useState<string[]>([]);
+
+  const requestData = useMemo(
+    () =>
+      cache.shares
+        .map((share) => {
+          const f = cache.fundamentalsByFigi[share.figi];
+          if (!f) {
+            return null;
+          }
+
+          return {
+            figi: share.figi,
+            ticker: share.ticker,
+            name: share.name,
+            exchange: share.exchange,
+            currency: share.currency,
+            lot: share.lot,
+            market_cap_bn: f.marketCapBn,
+            pe_ratio: f.peRatio,
+            pb_ratio: f.pbRatio,
+            ps_ratio: f.psRatio,
+            ev_to_ebitda: f.evToEbitda,
+            roa: f.roa,
+            net_margin: f.netMargin,
+            net_debt_to_ebitda: f.netDebtToEbitda,
+            total_debt: f.totalDebt,
+            roe: f.roe,
+            dividend_yield: f.dividendYield,
+            beta: f.beta,
+            g: f.roe,
+          };
+        })
+        .filter((row): row is NonNullable<typeof row> => Boolean(row)),
+    [cache.fundamentalsByFigi, cache.shares],
+  );
+
+  const runAnalysis = async () => {
+    setError(null);
+    setIsRunning(true);
+
+    try {
+      const response = await fetch("/api/tree-solver-analysis", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ data: requestData }),
+      });
+
+      const text = await response.text();
+      const parsed = text ? (JSON.parse(text) as Record<string, unknown>) : {};
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}${text ? `: ${text}` : ""}`);
+      }
+
+      const parsedMetrics = extractPortfolioMetrics(parsed);
+      const parsedImportance = extractFeatureImportance(parsed);
+      const parsedMatrix = extractConfusionMatrix(parsed);
+      const parsedPositions = extractPortfolioPositions(parsed);
+      const parsedAllocation = extractSectorAllocation(parsed);
+      const parsedNumericSummary = extractNumericSummary(parsed);
+      const parsedAssetsCount = extractPortfolioAssetsCount(parsed);
+
+      setMetrics(parsedMetrics);
+      setFeatureImportance(parsedImportance);
+      setConfusionMatrix(parsedMatrix);
+      setPortfolioPositions(parsedPositions);
+      setSectorAllocation(parsedAllocation);
+      setNumericSummary(parsedNumericSummary);
+      setPortfolioAssetsCount(parsedAssetsCount);
+      setServerKeys(Object.keys(parsed));
+
+      if (ENABLE_TEMP_LOGS) {
+        console.info("[Tree][Request][Success]", {
+          ts: new Date().toISOString(),
+          status: response.status,
+          metrics: parsedMetrics.length,
+          featureImportance: parsedImportance.length,
+          hasMatrix: Boolean(parsedMatrix),
+          portfolioPositions: parsedPositions.length,
+          sectorAllocation: parsedAllocation.length,
+          responseKeys: Object.keys(parsed),
+        });
+      }
+    } catch (e) {
+      const message = e instanceof Error ? e.message : "Не удалось выполнить анализ дерева решений";
+      setError(message);
+      setMetrics([]);
+      setFeatureImportance([]);
+      setConfusionMatrix(null);
+      setPortfolioPositions([]);
+      setSectorAllocation([]);
+      setNumericSummary([]);
+      setPortfolioAssetsCount(0);
+      setServerKeys([]);
+
+      if (ENABLE_TEMP_LOGS) {
+        console.error("[Tree][Request][Error]", {
+          ts: new Date().toISOString(),
+          message,
+        });
+      }
+    } finally {
+      setIsRunning(false);
+    }
   };
 
   return (
     <div className="space-y-6">
-      {/* Header */}
       <div className="bg-gradient-to-r from-green-600 to-emerald-600 rounded-xl p-6 text-white shadow-lg">
         <div className="flex items-center gap-3 mb-2">
           <GitBranch className="w-8 h-8" />
-          <h1 className="text-3xl font-bold">Анализ деревьев решений</h1>
+          <h1 className="text-3xl font-bold">Анализ дерева решений</h1>
         </div>
-        <p className="text-green-100">
-          Классификация инвестиционных решений на основе P/E, P/B, ROE и темпов роста g
-        </p>
+        <p className="text-green-100">Модель и гиперпараметры автоматически подбираются на сервере.</p>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-        {/* Настройки модели */}
         <div className="lg:col-span-1">
           <div className="bg-white rounded-xl p-6 shadow-sm border border-slate-200">
             <div className="flex items-center gap-2 mb-6">
               <Settings className="w-5 h-5 text-green-600" />
-              <h2 className="font-semibold text-slate-900">Параметры</h2>
+              <h2 className="font-semibold text-slate-900">Запуск анализа</h2>
             </div>
 
             <div className="space-y-4">
-              {/* T-API Token */}
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-2">
-                  T-API Token
-                </label>
-                <input
-                  type="password"
-                  value={params.apiToken}
-                  onChange={(e) => setParams({ ...params, apiToken: e.target.value })}
-                  className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 outline-none text-sm"
-                  placeholder="t.xxxxxxxxxxxxx"
-                />
+              <div className="rounded-lg border border-slate-200 p-3 bg-slate-50">
+                <p className="text-sm text-slate-700">Источник: кэш фундаментальных данных</p>
+                <p className="text-xs text-slate-500 mt-1">Записей: {requestData.length}</p>
               </div>
 
-              <button
-                onClick={handleLoadData}
-                className="w-full bg-slate-600 text-white py-2.5 rounded-lg font-medium hover:bg-slate-700 transition-all shadow-sm flex items-center justify-center gap-2"
-              >
-                <Upload className="w-4 h-4" />
-                Загрузить данные
-              </button>
-
-              {params.dataLoaded && (
-                <div className="bg-green-50 border border-green-200 rounded-lg p-3">
-                  <p className="text-sm text-green-700">✓ Данные загружены</p>
-                  <p className="text-xs text-green-600 mt-1">247 компаний</p>
+              {!hasData && (
+                <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
+                  <p className="text-sm text-amber-800">Кэш пуст. Сначала загрузите фундаментальные данные.</p>
                 </div>
               )}
 
-              <div className="border-t border-slate-200 pt-4">
-                <label className="block text-sm font-medium text-slate-700 mb-2">
-                  Цель классификации
-                </label>
-                <select
-                  value={params.target}
-                  onChange={(e) => setParams({ ...params, target: e.target.value })}
-                  className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 outline-none"
-                  disabled={!params.dataLoaded}
-                >
-                  <option value="investment_decision">Решение (Покупка/Продажа)</option>
-                  <option value="risk_level">Уровень риска</option>
-                  <option value="growth_potential">Потенциал роста</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-2">
-                  Критерий разделения
-                </label>
-                <select
-                  value={params.criterion}
-                  onChange={(e) => setParams({ ...params, criterion: e.target.value })}
-                  className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 outline-none"
-                  disabled={!params.dataLoaded}
-                >
-                  <option value="gini">Gini</option>
-                  <option value="entropy">Entropy</option>
-                  <option value="log_loss">Log Loss</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-2">
-                  Максимальная глубина
-                </label>
-                <input
-                  type="number"
-                  value={params.maxDepth}
-                  onChange={(e) => setParams({ ...params, maxDepth: e.target.value })}
-                  className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 outline-none"
-                  min="1"
-                  max="20"
-                  disabled={!params.dataLoaded}
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-2">
-                  Мин. выборка для разделения
-                </label>
-                <input
-                  type="number"
-                  value={params.minSamples}
-                  onChange={(e) => setParams({ ...params, minSamples: e.target.value })}
-                  className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 outline-none"
-                  min="2"
-                  max="100"
-                  disabled={!params.dataLoaded}
-                />
-              </div>
+              {error && (
+                <div className="bg-red-50 border border-red-200 rounded-lg p-3">
+                  <p className="text-sm text-red-700 break-words">{error}</p>
+                </div>
+              )}
 
               <button
-                onClick={handleRunModel}
-                disabled={!params.dataLoaded}
+                onClick={runAnalysis}
+                disabled={!hasData || !requestData.length || isRunning}
                 className="w-full bg-gradient-to-r from-green-600 to-emerald-600 text-white py-3 rounded-lg font-medium hover:from-green-700 hover:to-emerald-700 transition-all shadow-md hover:shadow-lg flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <Play className="w-5 h-5" />
-                Обучить модель
+                {isRunning ? "Выполняется..." : "Запустить анализ"}
               </button>
             </div>
           </div>
         </div>
 
-        {/* Результаты */}
         <div className="lg:col-span-3 space-y-6">
-          {/* Метрики модели */}
-          {modelRun && (
+          {!!metrics.length && (
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              <div className="bg-white rounded-xl p-4 shadow-sm border border-slate-200">
-                <div className="text-sm text-slate-600 mb-1">Accuracy</div>
-                <div className="text-2xl font-semibold text-green-600">
-                  {(metrics.accuracy * 100).toFixed(1)}%
+              {metrics.map((m) => (
+                <div key={m.label} className="bg-white rounded-xl p-4 shadow-sm border border-slate-200">
+                  <div className="text-sm text-slate-600 mb-1">{m.label}</div>
+                  <div className="text-2xl font-semibold text-slate-900">{m.value}</div>
                 </div>
-              </div>
-              <div className="bg-white rounded-xl p-4 shadow-sm border border-slate-200">
-                <div className="text-sm text-slate-600 mb-1">Precision</div>
-                <div className="text-2xl font-semibold text-slate-900">
-                  {(metrics.precision * 100).toFixed(1)}%
-                </div>
-              </div>
-              <div className="bg-white rounded-xl p-4 shadow-sm border border-slate-200">
-                <div className="text-sm text-slate-600 mb-1">Recall</div>
-                <div className="text-2xl font-semibold text-slate-900">
-                  {(metrics.recall * 100).toFixed(1)}%
-                </div>
-              </div>
-              <div className="bg-white rounded-xl p-4 shadow-sm border border-slate-200">
-                <div className="text-sm text-slate-600 mb-1">F1 Score</div>
-                <div className="text-2xl font-semibold text-slate-900">
-                  {(metrics.f1Score * 100).toFixed(1)}%
-                </div>
-              </div>
+              ))}
             </div>
           )}
 
-          {/* Важность признаков */}
-          <div className="bg-white rounded-xl p-6 shadow-sm border border-slate-200">
-            <h3 className="font-semibold text-slate-900 mb-4">Важность признаков</h3>
-            <ResponsiveContainer width="100%" height={300}>
-              <BarChart 
-                data={featureImportance} 
-                layout="vertical"
-                margin={{ top: 5, right: 30, left: 80, bottom: 5 }}
-              >
-                <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                <XAxis type="number" stroke="#64748b" unit="%" />
-                <YAxis type="category" dataKey="feature" stroke="#64748b" />
-                <Tooltip
-                  contentStyle={{
-                    backgroundColor: 'white',
-                    border: '1px solid #e2e8f0',
-                    borderRadius: '8px'
-                  }}
-                />
-                <Bar dataKey="importance" fill="#10b981" radius={[0, 4, 4, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
-            <div className="mt-4 bg-green-50 border border-green-200 rounded-lg p-4">
-              <p className="text-sm text-slate-700">
-                <strong>ROE (32%)</strong> - наиболее важный фактор для классификации. 
-                Высокая рентабельность собственного капитала сильно влияет на инвестиционное решение.
-              </p>
+          {portfolioAssetsCount > 0 && (
+            <div className="bg-white rounded-xl p-4 shadow-sm border border-slate-200">
+              <p className="text-sm text-slate-600">Активов в оптимальном портфеле</p>
+              <p className="text-2xl font-semibold text-slate-900">{portfolioAssetsCount}</p>
             </div>
-          </div>
+          )}
 
-          {/* Визуализация дерева решений */}
-          {modelRun && (
+          {!!sectorAllocation.length && (
             <div className="bg-white rounded-xl p-6 shadow-sm border border-slate-200">
-              <h3 className="font-semibold text-slate-900 mb-4">Структура дерева решений</h3>
-              <div className="space-y-4">
-                {/* Root Node */}
-                <div className="flex items-start gap-3">
-                  <div className="bg-green-100 border-2 border-green-500 rounded-lg p-4 flex-1">
-                    <div className="text-sm font-medium text-slate-900">Корень: ROE &gt; 15%</div>
-                    <div className="text-xs text-slate-600 mt-1">samples = 247 | gini = 0.498</div>
-                  </div>
-                </div>
+              <h3 className="font-semibold text-slate-900 mb-4">Распределение по секторам</h3>
+              <ResponsiveContainer width="100%" height={320}>
+                <BarChart data={sectorAllocation} layout="vertical" margin={{ top: 5, right: 30, left: 130, bottom: 5 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                  <XAxis type="number" stroke="#64748b" unit="%" />
+                  <YAxis type="category" dataKey="sector" stroke="#64748b" width={130} />
+                  <Tooltip formatter={(v: number) => `${Number(v).toFixed(2)}%`} />
+                  <Bar dataKey="weight" fill="#10b981" radius={[0, 4, 4, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          )}
 
-                {/* Level 1 */}
-                <div className="ml-8 space-y-3">
-                  <div className="flex items-center gap-2">
-                    <ChevronRight className="w-5 h-5 text-slate-400" />
-                    <div className="bg-blue-50 border border-blue-300 rounded-lg p-3 flex-1">
-                      <div className="text-sm font-medium text-slate-900">P/E &lt; 20</div>
-                      <div className="text-xs text-slate-600 mt-1">samples = 132 | gini = 0.445</div>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center gap-2">
-                    <ChevronRight className="w-5 h-5 text-slate-400" />
-                    <div className="bg-blue-50 border border-blue-300 rounded-lg p-3 flex-1">
-                      <div className="text-sm font-medium text-slate-900">g &gt; 10%</div>
-                      <div className="text-xs text-slate-600 mt-1">samples = 115 | gini = 0.412</div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Level 2 */}
-                <div className="ml-16 space-y-3">
-                  <div className="flex items-center gap-2">
-                    <ChevronRight className="w-5 h-5 text-slate-400" />
-                    <div className="bg-blue-100 border border-blue-400 rounded-lg p-3 flex-1">
-                      <div className="text-sm font-medium text-slate-900">P/B &lt; 3</div>
-                      <div className="text-xs text-slate-600 mt-1">samples = 68 | gini = 0.289</div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Leaves */}
-                <div className="ml-24 space-y-3">
-                  <div className="flex items-center gap-2">
-                    <ChevronRight className="w-5 h-5 text-slate-400" />
-                    <div className="bg-emerald-100 border border-emerald-500 rounded-lg p-3 flex-1">
-                      <div className="text-sm font-medium text-slate-900">Лист: Покупка 🟢</div>
-                      <div className="text-xs text-slate-600 mt-1">
-                        samples = 42 | value = [38, 4] | confidence = 90.5%
-                      </div>
-                      <div className="text-xs text-green-700 mt-1 font-medium">
-                        ROE &gt; 15%, P/E &lt; 20, g &gt; 10%, P/B &lt; 3
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center gap-2">
-                    <ChevronRight className="w-5 h-5 text-slate-400" />
-                    <div className="bg-red-100 border border-red-500 rounded-lg p-3 flex-1">
-                      <div className="text-sm font-medium text-slate-900">Лист: Продажа 🔴</div>
-                      <div className="text-xs text-slate-600 mt-1">
-                        samples = 26 | value = [4, 22] | confidence = 84.6%
-                      </div>
-                      <div className="text-xs text-red-700 mt-1 font-medium">
-                        Не соответствует критериям покупки
-                      </div>
-                    </div>
-                  </div>
-                </div>
+          {!!portfolioPositions.length && (
+            <div className="bg-white rounded-xl p-6 shadow-sm border border-slate-200">
+              <h3 className="font-semibold text-slate-900 mb-4">Позиции оптимального портфеля</h3>
+              <div className="overflow-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="text-left border-b border-slate-200">
+                      <th className="py-2 pr-3">Ticker</th>
+                      <th className="py-2 pr-3">Компания</th>
+                      <th className="py-2 pr-3">Сектор</th>
+                      <th className="py-2 pr-3">Вес, %</th>
+                      <th className="py-2 pr-3">Ожид. доходность</th>
+                      <th className="py-2 pr-3">Риск</th>
+                      <th className="py-2 pr-3">Оценка</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {portfolioPositions.map((row) => (
+                      <tr key={`${row.ticker}-${row.name}`} className="border-b border-slate-100">
+                        <td className="py-2 pr-3 font-medium text-slate-900">{row.ticker}</td>
+                        <td className="py-2 pr-3 text-slate-700">{row.name}</td>
+                        <td className="py-2 pr-3 text-slate-700">{row.sector}</td>
+                        <td className="py-2 pr-3 text-slate-700">{row.weight.toFixed(2)}</td>
+                        <td className="py-2 pr-3 text-slate-700">
+                          {Number.isFinite(row.expectedReturn) ? row.expectedReturn.toFixed(4) : "-"}
+                        </td>
+                        <td className="py-2 pr-3 text-slate-700">
+                          {Number.isFinite(row.risk) ? row.risk.toFixed(4) : "-"}
+                        </td>
+                        <td className="py-2 pr-3 text-slate-700">{row.predictedText}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
             </div>
           )}
 
-          {/* Confusion Matrix */}
-          {modelRun && (
+          {!!numericSummary.length && (
+            <div className="bg-white rounded-xl p-6 shadow-sm border border-slate-200">
+              <h3 className="font-semibold text-slate-900 mb-4">Сводка по числовым признакам</h3>
+              <div className="overflow-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="text-left border-b border-slate-200">
+                      <th className="py-2 pr-3">Метрика</th>
+                      <th className="py-2 pr-3">Mean</th>
+                      <th className="py-2 pr-3">Median</th>
+                      <th className="py-2 pr-3">Min</th>
+                      <th className="py-2 pr-3">Max</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {numericSummary.map((row) => (
+                      <tr key={row.metric} className="border-b border-slate-100">
+                        <td className="py-2 pr-3 font-medium text-slate-900">{row.metric}</td>
+                        <td className="py-2 pr-3 text-slate-700">{row.mean.toFixed(4)}</td>
+                        <td className="py-2 pr-3 text-slate-700">{row.median.toFixed(4)}</td>
+                        <td className="py-2 pr-3 text-slate-700">{row.min.toFixed(4)}</td>
+                        <td className="py-2 pr-3 text-slate-700">{row.max.toFixed(4)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          {!!featureImportance.length && (
+            <div className="bg-white rounded-xl p-6 shadow-sm border border-slate-200">
+              <h3 className="font-semibold text-slate-900 mb-4">Важность признаков</h3>
+              <ResponsiveContainer width="100%" height={300}>
+                <BarChart data={featureImportance} layout="vertical" margin={{ top: 5, right: 30, left: 90, bottom: 5 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                  <XAxis type="number" stroke="#64748b" unit="%" />
+                  <YAxis type="category" dataKey="feature" stroke="#64748b" width={90} />
+                  <Tooltip formatter={(v: number) => `${Number(v).toFixed(2)}%`} />
+                  <Bar dataKey="importance" radius={[0, 4, 4, 0]}>
+                    {featureImportance.map((row, idx) => (
+                      <Cell key={row.feature} fill={palette[idx % palette.length]} />
+                    ))}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          )}
+
+          {confusionMatrix && (
             <div className="bg-white rounded-xl p-6 shadow-sm border border-slate-200">
               <h3 className="font-semibold text-slate-900 mb-4">Матрица ошибок</h3>
-              <div className="max-w-md mx-auto">
-                <div className="grid grid-cols-3 gap-2">
-                  <div></div>
-                  <div className="text-center text-sm font-medium text-slate-700">Прогноз: Покупка</div>
-                  <div className="text-center text-sm font-medium text-slate-700">Прогноз: Продажа</div>
-
-                  <div className="text-sm font-medium text-slate-700 flex items-center">Факт: Покупка</div>
-                  <div className="bg-green-100 border border-green-300 rounded-lg p-4 text-center">
-                    <div className="text-2xl font-semibold text-green-700">
-                      {confusionMatrix.truePositive}
-                    </div>
-                    <div className="text-xs text-slate-600 mt-1">True Positive</div>
-                  </div>
-                  <div className="bg-red-100 border border-red-300 rounded-lg p-4 text-center">
-                    <div className="text-2xl font-semibold text-red-700">
-                      {confusionMatrix.falseNegative}
-                    </div>
-                    <div className="text-xs text-slate-600 mt-1">False Negative</div>
-                  </div>
-
-                  <div className="text-sm font-medium text-slate-700 flex items-center">Факт: Продажа</div>
-                  <div className="bg-red-100 border border-red-300 rounded-lg p-4 text-center">
-                    <div className="text-2xl font-semibold text-red-700">
-                      {confusionMatrix.falsePositive}
-                    </div>
-                    <div className="text-xs text-slate-600 mt-1">False Positive</div>
-                  </div>
-                  <div className="bg-green-100 border border-green-300 rounded-lg p-4 text-center">
-                    <div className="text-2xl font-semibold text-green-700">
-                      {confusionMatrix.trueNegative}
-                    </div>
-                    <div className="text-xs text-slate-600 mt-1">True Negative</div>
-                  </div>
-                </div>
+              <div className="max-w-2xl overflow-auto">
+                <table className="w-full text-sm border-collapse">
+                  <thead>
+                    <tr>
+                      <th className="p-2 border border-slate-200 bg-slate-50"></th>
+                      {confusionMatrix.labels.map((label) => (
+                        <th key={`pred-${label}`} className="p-2 border border-slate-200 bg-slate-50 text-left">
+                          Прогноз: {label}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {confusionMatrix.matrix.map((row, rowIndex) => (
+                      <tr key={`row-${rowIndex}`}>
+                        <td className="p-2 border border-slate-200 bg-slate-50 font-medium">Факт: {confusionMatrix.labels[rowIndex] ?? `Class ${rowIndex + 1}`}</td>
+                        {row.map((value, colIndex) => (
+                          <td key={`cell-${rowIndex}-${colIndex}`} className="p-2 border border-slate-200 text-center font-semibold text-slate-900">
+                            {value}
+                          </td>
+                        ))}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
             </div>
           )}
 
-          <EmbeddedMarkowitz accentClassName="text-green-600" />
+          {!!serverKeys.length && (
+            <div className="bg-white rounded-xl p-4 shadow-sm border border-slate-200">
+              <p className="text-sm text-slate-600">Ключи ответа сервера: {serverKeys.join(", ")}</p>
+            </div>
+          )}
         </div>
       </div>
     </div>

@@ -9,6 +9,7 @@ import {
 import { createTBankInstrumentsApi } from "../../../shared/api/tbank";
 
 const FUNDAMENTALS_CACHE_KEY = "fundamentals-cache-v1";
+const ENABLE_TEMP_LOGS = true;
 
 const SHARES_ENDPOINT =
   "https://invest-public-api.tbank.ru/rest/tinkoff.public.invest.api.contract.v1.InstrumentsService/Shares";
@@ -78,16 +79,43 @@ function loadCacheFromStorage(): FundamentalsCache {
 
   const raw = window.localStorage.getItem(FUNDAMENTALS_CACHE_KEY);
   if (!raw) {
+    if (ENABLE_TEMP_LOGS) {
+      console.info("[Fundamentals][Cache][Load]", {
+        ts: new Date().toISOString(),
+        key: FUNDAMENTALS_CACHE_KEY,
+        found: false,
+      });
+    }
     return emptyCache;
   }
 
   try {
     const parsed = JSON.parse(raw) as FundamentalsCache;
     if (!Array.isArray(parsed.shares) || !parsed.fundamentalsByFigi) {
+      if (ENABLE_TEMP_LOGS) {
+        console.warn("[Fundamentals][Cache][Load][Invalid]", {
+          ts: new Date().toISOString(),
+          key: FUNDAMENTALS_CACHE_KEY,
+        });
+      }
       return emptyCache;
+    }
+    if (ENABLE_TEMP_LOGS) {
+      console.info("[Fundamentals][Cache][Load][OK]", {
+        ts: new Date().toISOString(),
+        sharesCount: parsed.shares.length,
+        fundamentalsCount: Object.keys(parsed.fundamentalsByFigi).length,
+        lastUpdated: parsed.lastUpdated,
+      });
     }
     return parsed;
   } catch {
+    if (ENABLE_TEMP_LOGS) {
+      console.error("[Fundamentals][Cache][Load][ParseError]", {
+        ts: new Date().toISOString(),
+        key: FUNDAMENTALS_CACHE_KEY,
+      });
+    }
     return emptyCache;
   }
 }
@@ -97,6 +125,15 @@ function saveCacheToStorage(cache: FundamentalsCache): void {
     return;
   }
   window.localStorage.setItem(FUNDAMENTALS_CACHE_KEY, JSON.stringify(cache));
+  if (ENABLE_TEMP_LOGS) {
+    console.info("[Fundamentals][Cache][Save]", {
+      ts: new Date().toISOString(),
+      key: FUNDAMENTALS_CACHE_KEY,
+      sharesCount: cache.shares.length,
+      fundamentalsCount: Object.keys(cache.fundamentalsByFigi).length,
+      lastUpdated: cache.lastUpdated,
+    });
+  }
 }
 
 const FundamentalsContext = createContext<FundamentalsContextValue | null>(null);
@@ -109,6 +146,7 @@ export function FundamentalsProvider({ children }: { children: ReactNode }) {
   const loadFundamentals = useCallback(async () => {
     setIsLoading(true);
     setError(null);
+    const start = performance.now();
 
     try {
       const api = createTBankInstrumentsApi();
@@ -127,6 +165,15 @@ export function FundamentalsProvider({ children }: { children: ReactNode }) {
 
       setCache(nextCache);
       saveCacheToStorage(nextCache);
+      if (ENABLE_TEMP_LOGS) {
+        console.info("[Fundamentals][Load][Done]", {
+          ts: new Date().toISOString(),
+          durationMs: Number((performance.now() - start).toFixed(1)),
+          sharesCount: shares.length,
+          fundamentalsCount: Object.keys(fundamentalsByFigi).length,
+          firstTickers: shares.slice(0, 5).map((s) => s.ticker),
+        });
+      }
     } catch (err) {
       const message = err instanceof Error ? err.message : "Failed to load fundamentals";
       setError(message);
@@ -141,6 +188,12 @@ export function FundamentalsProvider({ children }: { children: ReactNode }) {
     setError(null);
     if (typeof window !== "undefined") {
       window.localStorage.removeItem(FUNDAMENTALS_CACHE_KEY);
+      if (ENABLE_TEMP_LOGS) {
+        console.info("[Fundamentals][Cache][Clear]", {
+          ts: new Date().toISOString(),
+          key: FUNDAMENTALS_CACHE_KEY,
+        });
+      }
     }
   }, []);
 

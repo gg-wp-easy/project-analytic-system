@@ -1,188 +1,822 @@
-import { useState } from "react";
-import { Network, Play, Settings, Upload } from "lucide-react";
-import { ScatterChart, Scatter, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Cell } from "recharts";
-import { EmbeddedMarkowitz } from "./EmbeddedMarkowitz";
+﻿import { useEffect, useMemo, useRef, useState } from "react";
+import { Download, ImageDown, Network, Play, Settings, Trophy } from "lucide-react";
+import {
+  ScatterChart,
+  Scatter,
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  Legend,
+  ResponsiveContainer,
+  Cell,
+  PieChart,
+  Pie,
+} from "recharts";
+import { useFundamentals } from "../context/FundamentalsContext";
 
-export function ClusterAnalysis() {
-  const [params, setParams] = useState({
-    apiToken: "",
-    dataLoaded: false,
-    numClusters: "4",
-    algorithm: "kmeans",
+type ClusterPoint = {
+  ticker: string;
+  figi: string;
+  pe: number;
+  g: number;
+  cluster: number;
+  color: string;
+  label: string;
+};
+
+type ClusterGroup = {
+  name: string;
+  count: number;
+  avgPE: number;
+  avgG: number;
+  color: string;
+  description: string;
+};
+
+type MetricItem = {
+  label: string;
+  value: string;
+};
+
+type PortfolioRow = {
+  ticker: string;
+  name: string;
+  weight: number;
+  expectedReturn?: number;
+  risk?: number;
+  sharpe?: number;
+};
+
+type StrategyPortfolio = {
+  name: string;
+  expectedReturn: number;
+  risk: number;
+  sharpe: number;
+  diversification: number;
+  rows: PortfolioRow[];
+  assetsCount: number;
+};
+
+type AnalysisSummary = {
+  companiesCount: number;
+  clustersCount: number;
+  portfoliosCount: number;
+  clusterDistribution: Array<{ cluster: string; count: number; color: string }>;
+};
+
+const palette = ["#3b82f6", "#10b981", "#f59e0b", "#ef4444", "#8b5cf6", "#06b6d4", "#14b8a6", "#f97316"];
+const ENABLE_TEMP_LOGS = true;
+
+function numberOr(value: unknown, fallback = 0): number {
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return value;
+  }
+  if (typeof value === "string") {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : fallback;
+  }
+  return fallback;
+}
+
+function formatMetric(value: unknown): string {
+  if (typeof value === "number") {
+    if (Math.abs(value) >= 1000) {
+      return value.toFixed(0);
+    }
+    return value.toFixed(4);
+  }
+  return String(value);
+}
+
+function escapeHtml(value: string): string {
+  return value
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#39;");
+}
+
+function downloadPortfolioAsExcel(rows: PortfolioRow[], filename: string): void {
+  const tableRows = rows
+    .map(
+      (row) =>
+        `<tr><td>${escapeHtml(row.ticker)}</td><td>${escapeHtml(row.name || "")}</td><td>${row.weight.toFixed(4)}</td><td>${Number.isFinite(row.expectedReturn) ? row.expectedReturn?.toFixed(6) : ""}</td><td>${Number.isFinite(row.risk) ? row.risk?.toFixed(6) : ""}</td><td>${Number.isFinite(row.sharpe) ? row.sharpe?.toFixed(6) : ""}</td></tr>`,
+    )
+    .join("");
+
+  const html =
+    `\uFEFF<html><head><meta charset="utf-8"></head><body>` +
+    `<table border="1"><tr><th>Ticker</th><th>Name</th><th>Weight, %</th><th>Return</th><th>Risk</th><th>Sharpe</th></tr>${tableRows}</table>` +
+    `</body></html>`;
+
+  const blob = new Blob([html], { type: "application/vnd.ms-excel;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+}
+
+async function downloadSvgAsPng(svg: SVGSVGElement, filename: string): Promise<void> {
+  const xml = new XMLSerializer().serializeToString(svg);
+  const svgBlob = new Blob([xml], { type: "image/svg+xml;charset=utf-8" });
+  const url = URL.createObjectURL(svgBlob);
+
+  await new Promise<void>((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => {
+      const width = Math.max(svg.clientWidth, 600);
+      const height = Math.max(svg.clientHeight, 400);
+      const canvas = document.createElement("canvas");
+      canvas.width = width * 2;
+      canvas.height = height * 2;
+
+      const ctx = canvas.getContext("2d");
+      if (!ctx) {
+        reject(new Error("Cannot create canvas context"));
+        return;
+      }
+
+      ctx.fillStyle = "#ffffff";
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+      canvas.toBlob((blob) => {
+        if (!blob) {
+          reject(new Error("Failed to create PNG blob"));
+          return;
+        }
+        const pngUrl = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = pngUrl;
+        link.download = filename;
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        URL.revokeObjectURL(pngUrl);
+        resolve();
+      }, "image/png");
+    };
+    img.onerror = () => reject(new Error("Failed to render chart image"));
+    img.src = url;
   });
 
-  const [modelRun, setModelRun] = useState(false);
+  URL.revokeObjectURL(url);
+}
 
-  // Генерация кластерных данных по P/E и g
-  const generateClusterData = () => {
-    const clusters = [
-      { center: [12, 20], color: "#3b82f6", label: "Кластер 1: Высокий рост" },
-      { center: [8, 15], color: "#10b981", label: "Кластер 2: Растущие" },
-      { center: [15, 8], color: "#f59e0b", label: "Кластер 3: Переоцененные" },
-      { center: [6, 5], color: "#ef4444", label: "Кластер 4: Value" },
-    ];
+function firstObject(source: unknown[]): Record<string, unknown> {
+  const found = source.find((item) => item && typeof item === "object");
+  return (found as Record<string, unknown>) ?? {};
+}
 
-    const data: any[] = [];
-    clusters.forEach((cluster, clusterIdx) => {
-      for (let i = 0; i < 15; i++) {
-        data.push({
-          pe: cluster.center[0] + (Math.random() - 0.5) * 4,
-          g: cluster.center[1] + (Math.random() - 0.5) * 6,
-          cluster: clusterIdx,
-          color: cluster.color,
-          label: cluster.label,
-        });
-      }
+function extractPortfolioRowsFromTopPositions(
+  topPositions: unknown,
+  metrics?: Record<string, unknown>,
+): PortfolioRow[] {
+  if (!Array.isArray(topPositions)) {
+    return [];
+  }
+
+  const rows = topPositions.map((item, index) => {
+    const row = item as Record<string, unknown>;
+    return {
+      ticker: String(row.ticker ?? row.Ticker ?? row.symbol ?? `Asset ${index + 1}`),
+      name: String(row.name ?? row.Name ?? ""),
+      weight: numberOr(row.weight, numberOr(row.Weight, numberOr(row.allocation, numberOr(row.share, 0)))),
+      expectedReturn: numberOr(
+        row.expected_return,
+        numberOr(row.Expected_Return, numberOr(metrics?.expected_return, numberOr(metrics?.return, NaN))),
+      ),
+      risk: numberOr(row.risk, numberOr(row.Risk, numberOr(metrics?.risk, numberOr(metrics?.volatility, NaN)))),
+      sharpe: numberOr(row.sharpe, numberOr(row.sharpe_ratio, numberOr(metrics?.sharpe, numberOr(metrics?.sharpe_ratio, NaN)))),
+    } satisfies PortfolioRow;
+  });
+
+  return normalizeWeights(rows);
+}
+
+function readAssetsCount(source: Record<string, unknown>): number {
+  return numberOr(
+    source.assets_count,
+    numberOr(
+      source.assetsCount,
+      numberOr(
+        source.positions_count,
+        numberOr(source.positionsCount, numberOr(source.portfolio_size, numberOr(source.count, 0))),
+      ),
+    ),
+  );
+}
+
+function extractPoints(parsed: Record<string, unknown>): ClusterPoint[] {
+  const pointsSource = Array.isArray(parsed.points)
+    ? parsed.points
+    : Array.isArray(parsed.data)
+      ? parsed.data
+      : Array.isArray(parsed.clusters)
+        ? parsed.clusters
+        : Array.isArray(parsed.companies)
+          ? parsed.companies
+        : [];
+
+  return pointsSource
+    .map((item, index) => {
+      const row = item as Record<string, unknown>;
+      const cluster = numberOr(
+        row.cluster,
+        numberOr(
+          row.cluster_id,
+          numberOr(row.clusterId, numberOr(row.cluster_label, numberOr(row.group, numberOr(row.Cluster, 0)))),
+        ),
+      );
+      const color = palette[cluster % palette.length];
+      return {
+        ticker: String(row.ticker ?? row.Ticker ?? row.name ?? row.Company ?? `Asset ${index + 1}`),
+        figi: String(row.figi ?? row.id ?? index),
+        pe: numberOr(row.pe, numberOr(row.pe_ratio, numberOr(row.peRatio, numberOr(row.PE, numberOr(row["P/E"], 0))))),
+        g: numberOr(
+          row.g,
+          numberOr(
+            row.roe,
+            numberOr(
+              row.ROE,
+              numberOr(row.growth, numberOr(row.Expected_Return, numberOr(row.dividend_yield, numberOr(row.dividendYield, 0)))),
+            ),
+          ),
+        ),
+        cluster,
+        color,
+        label: String(row.label ?? `Кластер ${cluster + 1}`),
+      } satisfies ClusterPoint;
+    })
+    .filter((p) => Number.isFinite(p.pe) && Number.isFinite(p.g));
+}
+
+function extractGroups(parsed: Record<string, unknown>, points: ClusterPoint[]): ClusterGroup[] {
+  const profilesSource = Array.isArray(parsed.cluster_profiles) ? parsed.cluster_profiles : [];
+  if (profilesSource.length > 0) {
+    return profilesSource.map((item, index) => {
+      const row = item as Record<string, unknown>;
+      const cluster = numberOr(
+        row.cluster,
+        numberOr(row.cluster_id, numberOr(row.clusterId, numberOr(row.group, index))),
+      );
+
+      const count = numberOr(
+        row.count,
+        numberOr(row.size, numberOr(row.companies_count, points.filter((p) => p.cluster === cluster).length)),
+      );
+
+      const avgPE = numberOr(
+        row.avg_pe,
+        numberOr(row.avgPE, numberOr(row.mean_pe, numberOr(row.pe_mean, 0))),
+      );
+      const avgG = numberOr(
+        row.avg_g,
+        numberOr(row.avg_roe, numberOr(row.avgROE, numberOr(row.g_mean, numberOr(row.mean_growth, 0)))),
+      );
+
+      return {
+        name: String(row.name ?? row.label ?? `Кластер ${cluster + 1}`),
+        count,
+        avgPE,
+        avgG,
+        color: palette[cluster % palette.length],
+        description: String(row.description ?? "Результат серверной кластеризации (k-means)"),
+      } satisfies ClusterGroup;
     });
+  }
 
-    return data;
-  };
+  const groupsMap = new Map<number, ClusterPoint[]>();
+  points.forEach((point) => {
+    const current = groupsMap.get(point.cluster) ?? [];
+    current.push(point);
+    groupsMap.set(point.cluster, current);
+  });
 
-  const clusterData = generateClusterData();
+  return Array.from(groupsMap.entries()).map(([cluster, pointsInCluster]) => {
+    const avgPE = pointsInCluster.reduce((acc, p) => acc + p.pe, 0) / pointsInCluster.length;
+    const avgG = pointsInCluster.reduce((acc, p) => acc + p.g, 0) / pointsInCluster.length;
+    return {
+      name: `Кластер ${cluster + 1}`,
+      count: pointsInCluster.length,
+      avgPE,
+      avgG,
+      color: palette[cluster % palette.length],
+      description: "Результат серверной кластеризации (k-means)",
+    };
+  });
+}
 
-  // Группировка по кластерам для отображения
-  const clusterGroups = [
-    { name: "Кластер 1", count: 15, avgPE: 12.1, avgG: 19.8, color: "#3b82f6", description: "Высокий рост" },
-    { name: "Кластер 2", count: 15, avgPE: 8.2, avgG: 15.2, color: "#10b981", description: "Растущие" },
-    { name: "Кластер 3", count: 15, avgPE: 14.8, avgG: 7.9, color: "#f59e0b", description: "Переоцененные" },
-    { name: "Кластер 4", count: 15, avgPE: 6.1, avgG: 5.3, color: "#ef4444", description: "Value" },
+function extractMetrics(parsed: Record<string, unknown>, points: ClusterPoint[], groups: ClusterGroup[]): MetricItem[] {
+  const summaryObj = (parsed.summary as Record<string, unknown> | undefined) ?? {};
+  const bestPortfolioObj = (summaryObj.best_portfolio as Record<string, unknown> | undefined) ?? {};
+  const bestMetrics = bestPortfolioObj.metrics as Record<string, unknown> | undefined;
+
+  const metricsObj =
+    bestMetrics ??
+    (parsed.metrics as Record<string, unknown> | undefined) ??
+    (parsed.model_metrics as Record<string, unknown> | undefined) ??
+    (parsed.stats as Record<string, unknown> | undefined) ??
+    summaryObj ??
+    {};
+
+  const collected: MetricItem[] = [];
+  const candidates: Array<{ key: string; label: string }> = [
+    { key: "silhouette", label: "Silhouette" },
+    { key: "silhouette_score", label: "Silhouette score" },
+    { key: "davies_bouldin", label: "Davies-Bouldin" },
+    { key: "calinski_harabasz", label: "Calinski-Harabasz" },
+    { key: "inertia", label: "Inertia" },
+    { key: "score", label: "Model score" },
+    { key: "expected_return", label: "Expected return" },
+    { key: "risk", label: "Risk" },
+    { key: "volatility", label: "Volatility" },
+    { key: "sharpe", label: "Sharpe" },
+    { key: "sharpe_ratio", label: "Sharpe ratio" },
+    { key: "diversification_score", label: "Diversification" },
   ];
 
-  const handleLoadData = () => {
-    setParams({ ...params, dataLoaded: true });
+  for (const item of candidates) {
+    if (item.key in metricsObj) {
+      collected.push({ label: item.label, value: formatMetric(metricsObj[item.key]) });
+    }
+  }
+
+  collected.unshift(
+    { label: "Кластеров", value: String(groups.length) },
+    { label: "Активов", value: String(points.length) },
+  );
+
+  return collected;
+}
+
+function extractPortfolioStrategies(parsed: Record<string, unknown>): StrategyPortfolio[] {
+  const fromPortfolios = parsed.portfolios;
+  const strategies: StrategyPortfolio[] = [];
+
+  if (fromPortfolios && typeof fromPortfolios === "object" && !Array.isArray(fromPortfolios)) {
+    for (const [name, rawValue] of Object.entries(fromPortfolios as Record<string, unknown>)) {
+      if (!rawValue || typeof rawValue !== "object") {
+        continue;
+      }
+      const portfolio = rawValue as Record<string, unknown>;
+      const metrics = (portfolio.metrics as Record<string, unknown> | undefined) ?? {};
+      const rows = extractPortfolioRowsFromTopPositions(portfolio.top_positions, metrics);
+      strategies.push({
+        name: String(portfolio.name ?? name),
+        expectedReturn: numberOr(metrics.expected_return, 0),
+        risk: numberOr(metrics.risk, 0),
+        sharpe: numberOr(metrics.sharpe_ratio, numberOr(metrics.sharpe, 0)),
+        diversification: numberOr(metrics.diversification_score, 0),
+        rows,
+        assetsCount: readAssetsCount(portfolio) || rows.length,
+      });
+    }
+  }
+
+  return strategies.sort((a, b) => b.sharpe - a.sharpe);
+}
+
+function extractBestPortfolioAssetsCount(parsed: Record<string, unknown>): number {
+  const summary = (parsed.summary as Record<string, unknown> | undefined) ?? {};
+  const bestPortfolio = (summary.best_portfolio as Record<string, unknown> | undefined) ?? {};
+  return readAssetsCount(bestPortfolio);
+}
+
+function extractSummary(parsed: Record<string, unknown>): AnalysisSummary | null {
+  const summary = (parsed.summary as Record<string, unknown> | undefined) ?? null;
+  if (!summary) {
+    return null;
+  }
+
+  const rawDistribution = (summary.cluster_distribution as Record<string, unknown> | undefined) ?? {};
+  const clusterDistribution = Object.entries(rawDistribution).map(([cluster, value], index) => ({
+    cluster: `Кластер ${Number(cluster) + 1}`,
+    count: numberOr(value, 0),
+    color: palette[index % palette.length],
+  }));
+
+  return {
+    companiesCount: numberOr(summary.companies_count, 0),
+    clustersCount: numberOr(summary.clusters_count, clusterDistribution.length),
+    portfoliosCount: numberOr(summary.portfolios_count, 0),
+    clusterDistribution,
+  };
+}
+
+function extractPortfolio(parsed: Record<string, unknown>): PortfolioRow[] {
+  const summary = (parsed.summary as Record<string, unknown> | undefined) ?? {};
+  const bestPortfolio = (summary.best_portfolio as Record<string, unknown> | undefined) ?? {};
+  const bestMetrics = (bestPortfolio.metrics as Record<string, unknown> | undefined) ?? {};
+  const fromBestPositions = extractPortfolioRowsFromTopPositions(bestPortfolio.positions, bestMetrics);
+  const fromBestTopPositions = extractPortfolioRowsFromTopPositions(bestPortfolio.top_positions, bestMetrics);
+  const fromBest = fromBestPositions.length ? fromBestPositions : fromBestTopPositions;
+  if (fromBest.length) {
+    return fromBest;
+  }
+
+  const portfolios = Array.isArray(parsed.portfolios) ? parsed.portfolios : [];
+  if (portfolios.length) {
+    const first = firstObject(portfolios);
+    const fromWeights =
+      first.weights ??
+      first.optimal_weights ??
+      first.portfolio ??
+      first.best_portfolio;
+
+    if (fromWeights && typeof fromWeights === "object") {
+      const rows = Object.entries(fromWeights as Record<string, unknown>).map(([ticker, rawWeight]) => ({
+        ticker,
+        name: ticker,
+        weight: numberOr(rawWeight, 0),
+        expectedReturn: numberOr(first.expected_return, numberOr(first.return, NaN)),
+        risk: numberOr(first.risk, numberOr(first.volatility, NaN)),
+        sharpe: numberOr(first.sharpe, NaN),
+      }));
+      return normalizeWeights(rows);
+    }
+  }
+
+  const portfolioCandidate =
+    parsed.optimal_portfolio ??
+    parsed.portfolio ??
+    parsed.best_portfolio ??
+    parsed.optimal_weights ??
+    parsed.weights;
+
+  if (Array.isArray(portfolioCandidate)) {
+    const rows = portfolioCandidate.map((item, index) => {
+      const row = item as Record<string, unknown>;
+      const ticker = String(row.ticker ?? row.asset ?? row.symbol ?? `Asset ${index + 1}`);
+      const weight = numberOr(row.weight, numberOr(row.allocation, numberOr(row.share, 0)));
+      return {
+        ticker,
+        name: String(row.name ?? row.company ?? row.Company ?? ticker),
+        weight,
+        expectedReturn: numberOr(row.expected_return, numberOr(row.return, NaN)),
+        risk: numberOr(row.risk, numberOr(row.volatility, NaN)),
+        sharpe: numberOr(row.sharpe, NaN),
+      };
+    });
+    return normalizeWeights(rows);
+  }
+
+  if (portfolioCandidate && typeof portfolioCandidate === "object") {
+    const entries = Object.entries(portfolioCandidate as Record<string, unknown>).filter(
+      ([, value]) => typeof value === "number" || typeof value === "string",
+    );
+    const rows = entries.map(([ticker, rawWeight]) => ({ ticker, name: ticker, weight: numberOr(rawWeight, 0) }));
+    return normalizeWeights(rows);
+  }
+
+  return [];
+}
+
+function normalizeWeights(rows: PortfolioRow[]): PortfolioRow[] {
+  if (!rows.length) {
+    return [];
+  }
+  const max = Math.max(...rows.map((r) => r.weight));
+  const scaled = max <= 1 ? rows.map((r) => ({ ...r, weight: r.weight * 100 })) : rows;
+  return scaled.sort((a, b) => b.weight - a.weight);
+}
+
+export function ClusterAnalysis() {
+  const { cache, hasData } = useFundamentals();
+  const [isRunning, setIsRunning] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [serverRaw, setServerRaw] = useState<Record<string, unknown> | null>(null);
+  const [clusterData, setClusterData] = useState<ClusterPoint[]>([]);
+  const [clusterGroups, setClusterGroups] = useState<ClusterGroup[]>([]);
+  const [metrics, setMetrics] = useState<MetricItem[]>([]);
+  const [optimalPortfolio, setOptimalPortfolio] = useState<PortfolioRow[]>([]);
+  const [portfolioStrategies, setPortfolioStrategies] = useState<StrategyPortfolio[]>([]);
+  const [summaryInfo, setSummaryInfo] = useState<AnalysisSummary | null>(null);
+  const [bestPortfolioAssetsCount, setBestPortfolioAssetsCount] = useState(0);
+  const portfolioChartRef = useRef<HTMLDivElement | null>(null);
+
+  const displayPortfolio = useMemo(() => {
+    if (optimalPortfolio.length) {
+      return optimalPortfolio;
+    }
+    const fallback = portfolioStrategies.find((s) => s.rows.length > 0);
+    return fallback?.rows ?? [];
+  }, [optimalPortfolio, portfolioStrategies]);
+
+  const requestData = useMemo(
+    () =>
+      cache.shares
+        .map((share) => {
+          const f = cache.fundamentalsByFigi[share.figi];
+          if (!f) {
+            return null;
+          }
+
+          return {
+            figi: share.figi,
+            ticker: share.ticker,
+            name: share.name,
+            exchange: share.exchange,
+            currency: share.currency,
+            lot: share.lot,
+            market_cap_bn: f.marketCapBn,
+            pe_ratio: f.peRatio,
+            pb_ratio: f.pbRatio,
+            ps_ratio: f.psRatio,
+            ev_to_ebitda: f.evToEbitda,
+            roa: f.roa,
+            net_margin: f.netMargin,
+            net_debt_to_ebitda: f.netDebtToEbitda,
+            total_debt: f.totalDebt,
+            roe: f.roe,
+            dividend_yield: f.dividendYield,
+            beta: f.beta,
+            peRatio: f.peRatio,
+            pbRatio: f.pbRatio,
+            marketCapBn: f.marketCapBn,
+            dividendYield: f.dividendYield,
+          };
+        })
+        .filter((row): row is NonNullable<typeof row> => Boolean(row)),
+    [cache.fundamentalsByFigi, cache.shares],
+  );
+
+  const exportPortfolioToExcel = () => {
+    if (!displayPortfolio.length) {
+      return;
+    }
+    downloadPortfolioAsExcel(displayPortfolio, "optimal-portfolio.xls");
   };
 
-  const handleRunModel = () => {
-    setModelRun(true);
+  const savePortfolioChartPng = async () => {
+    const svg = portfolioChartRef.current?.querySelector("svg");
+    if (!svg) {
+      return;
+    }
+    try {
+      await downloadSvgAsPng(svg, "optimal-portfolio-chart.png");
+    } catch (e) {
+      const message = e instanceof Error ? e.message : "Failed to export PNG";
+      setError(message);
+    }
+  };
+
+  useEffect(() => {
+    if (!ENABLE_TEMP_LOGS) {
+      return;
+    }
+    console.info("[Cluster][RequestData][Prepared]", {
+      ts: new Date().toISOString(),
+      sharesInCache: cache.shares.length,
+      fundamentalsInCache: Object.keys(cache.fundamentalsByFigi).length,
+      requestRows: requestData.length,
+      sample: requestData.slice(0, 2),
+    });
+  }, [cache.fundamentalsByFigi, cache.shares.length, requestData]);
+
+  const runClusterAnalysis = async () => {
+    setError(null);
+    setIsRunning(true);
+    const startedAt = performance.now();
+
+    try {
+      const body = JSON.stringify({ data: requestData });
+      const response = await fetch("/api/cluster-analysis", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body,
+      });
+
+      const text = await response.text();
+      const parsed = text ? (JSON.parse(text) as Record<string, unknown>) : {};
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}${text ? `: ${text}` : ""}`);
+      }
+
+      setServerRaw(parsed);
+
+      const points = extractPoints(parsed);
+      const groups = extractGroups(parsed, points);
+      const parsedMetrics = extractMetrics(parsed, points, groups);
+      const portfolio = extractPortfolio(parsed);
+      const strategies = extractPortfolioStrategies(parsed);
+      const summary = extractSummary(parsed);
+      const bestAssetsCount = extractBestPortfolioAssetsCount(parsed);
+
+      if (!points.length && ENABLE_TEMP_LOGS) {
+        console.warn("[Cluster][Parse][NoPoints]", {
+          ts: new Date().toISOString(),
+          responseKeys: Object.keys(parsed),
+          companiesPreview: Array.isArray(parsed.companies) ? parsed.companies.slice(0, 2) : null,
+        });
+      }
+
+      setClusterData(points);
+      setClusterGroups(groups);
+      setMetrics(parsedMetrics);
+      setOptimalPortfolio(portfolio);
+      setPortfolioStrategies(strategies);
+      setSummaryInfo(summary);
+      setBestPortfolioAssetsCount(bestAssetsCount);
+
+      if (ENABLE_TEMP_LOGS) {
+        console.info("[Cluster][Request][Success]", {
+          ts: new Date().toISOString(),
+          durationMs: Number((performance.now() - startedAt).toFixed(1)),
+          status: response.status,
+          points: points.length,
+          groups: groups.length,
+          portfolioRows: portfolio.length,
+          responseKeys: Object.keys(parsed),
+        });
+      }
+    } catch (e) {
+      const message = e instanceof Error ? e.message : "Не удалось выполнить кластеризацию";
+      setError(message);
+      setServerRaw(null);
+      setClusterData([]);
+      setClusterGroups([]);
+      setMetrics([]);
+      setOptimalPortfolio([]);
+      setPortfolioStrategies([]);
+      setSummaryInfo(null);
+      setBestPortfolioAssetsCount(0);
+
+      if (ENABLE_TEMP_LOGS) {
+        console.error("[Cluster][Request][Error]", {
+          ts: new Date().toISOString(),
+          durationMs: Number((performance.now() - startedAt).toFixed(1)),
+          message,
+        });
+      }
+    } finally {
+      setIsRunning(false);
+    }
   };
 
   return (
     <div className="space-y-6">
-      {/* Header */}
       <div className="bg-gradient-to-r from-purple-600 to-pink-600 rounded-xl p-6 text-white shadow-lg">
         <div className="flex items-center gap-3 mb-2">
           <Network className="w-8 h-8" />
           <h1 className="text-3xl font-bold">Кластерный анализ</h1>
         </div>
         <p className="text-purple-100">
-          Группировка компаний по мультипликатору P/E и темпам роста g
+          Кластеризация выполняется на сервере. По умолчанию используется алгоритм K-Means.
         </p>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-        {/* Настройки модели */}
         <div className="lg:col-span-1">
-          <div className="bg-white rounded-xl p-6 shadow-sm border border-slate-200">
+          <div className="bg-white dark:bg-slate-900 rounded-xl p-6 shadow-sm border border-slate-200 dark:border-slate-800">
             <div className="flex items-center gap-2 mb-6">
               <Settings className="w-5 h-5 text-purple-600" />
-              <h2 className="font-semibold text-slate-900">Параметры</h2>
+              <h2 className="font-semibold text-slate-900 dark:text-slate-100">Параметры</h2>
             </div>
 
             <div className="space-y-4">
-              {/* T-API Token */}
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-2">
-                  T-API Token
-                </label>
-                <input
-                  type="password"
-                  value={params.apiToken}
-                  onChange={(e) => setParams({ ...params, apiToken: e.target.value })}
-                  className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 outline-none text-sm"
-                  placeholder="t.xxxxxxxxxxxxx"
-                />
+              <div className="rounded-lg border border-slate-200 dark:border-slate-700 p-3 bg-slate-50 dark:bg-slate-800/40">
+                <p className="text-sm text-slate-700 dark:text-slate-300">Источник: кэш фундаментальных данных</p>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">Записей: {requestData.length}</p>
               </div>
 
-              <button
-                onClick={handleLoadData}
-                className="w-full bg-slate-600 text-white py-2.5 rounded-lg font-medium hover:bg-slate-700 transition-all shadow-sm flex items-center justify-center gap-2"
-              >
-                <Upload className="w-4 h-4" />
-                Загрузить данные
-              </button>
-
-              {params.dataLoaded && (
-                <div className="bg-green-50 border border-green-200 rounded-lg p-3">
-                  <p className="text-sm text-green-700">✓ Данные загружены</p>
-                  <p className="text-xs text-green-600 mt-1">247 компаний</p>
+              {!hasData && (
+                <div className="bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900 rounded-lg p-3">
+                  <p className="text-sm text-amber-800 dark:text-amber-300">Кэш пуст. Сначала загрузите фундаментальные данные.</p>
                 </div>
               )}
 
-              <div className="border-t border-slate-200 pt-4">
-                <label className="block text-sm font-medium text-slate-700 mb-2">
-                  Алгоритм
-                </label>
-                <select
-                  value={params.algorithm}
-                  onChange={(e) => setParams({ ...params, algorithm: e.target.value })}
-                  className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 outline-none"
-                  disabled={!params.dataLoaded}
-                >
-                  <option value="kmeans">K-Means</option>
-                  <option value="dbscan">DBSCAN</option>
-                  <option value="hierarchical">Иерархическая</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-2">
-                  Количество кластеров
-                </label>
-                <input
-                  type="number"
-                  value={params.numClusters}
-                  onChange={(e) => setParams({ ...params, numClusters: e.target.value })}
-                  className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 outline-none"
-                  min="2"
-                  max="10"
-                  disabled={!params.dataLoaded}
-                />
-              </div>
+              {error && (
+                <div className="bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-900 rounded-lg p-3">
+                  <p className="text-sm text-red-700 dark:text-red-300 break-words">{error}</p>
+                </div>
+              )}
 
               <button
-                onClick={handleRunModel}
-                disabled={!params.dataLoaded}
+                onClick={runClusterAnalysis}
+                disabled={!hasData || !requestData.length || isRunning}
                 className="w-full bg-gradient-to-r from-purple-600 to-pink-600 text-white py-3 rounded-lg font-medium hover:from-purple-700 hover:to-pink-700 transition-all shadow-md hover:shadow-lg flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <Play className="w-5 h-5" />
-                Запустить анализ
+                {isRunning ? "Выполняется..." : "Запустить анализ"}
               </button>
             </div>
           </div>
         </div>
 
-        {/* Результаты */}
         <div className="lg:col-span-3 space-y-6">
-          {/* Статистика кластеров */}
-          {modelRun && (
+          {!!metrics.length && (
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              {metrics.map((m) => (
+                <div key={m.label} className="bg-white dark:bg-slate-900 rounded-xl p-4 shadow-sm border border-slate-200 dark:border-slate-800">
+                  <div className="text-sm text-slate-600 dark:text-slate-400 mb-1">{m.label}</div>
+                  <div className="text-2xl font-semibold text-slate-900 dark:text-slate-100">{m.value}</div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {summaryInfo && (
+            <div className="bg-white dark:bg-slate-900 rounded-xl p-6 shadow-sm border border-slate-200 dark:border-slate-800 space-y-4">
+              <h3 className="font-semibold text-slate-900 dark:text-slate-100">Сводка по результату</h3>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-sm">
+                <div className="rounded-lg border border-slate-200 dark:border-slate-700 p-3">
+                  <div className="text-slate-500 dark:text-slate-400">Компаний</div>
+                  <div className="text-xl font-semibold text-slate-900 dark:text-slate-100">{summaryInfo.companiesCount}</div>
+                </div>
+                <div className="rounded-lg border border-slate-200 dark:border-slate-700 p-3">
+                  <div className="text-slate-500 dark:text-slate-400">Кластеров</div>
+                  <div className="text-xl font-semibold text-slate-900 dark:text-slate-100">{summaryInfo.clustersCount}</div>
+                </div>
+                <div className="rounded-lg border border-slate-200 dark:border-slate-700 p-3">
+                  <div className="text-slate-500 dark:text-slate-400">Портфелей</div>
+                  <div className="text-xl font-semibold text-slate-900 dark:text-slate-100">{summaryInfo.portfoliosCount}</div>
+                </div>
+              </div>
+
+              {!!summaryInfo.clusterDistribution.length && (
+                <div className="h-64">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={summaryInfo.clusterDistribution}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                      <XAxis dataKey="cluster" stroke="#64748b" />
+                      <YAxis stroke="#64748b" />
+                      <Tooltip />
+                      <Bar dataKey="count">
+                        {summaryInfo.clusterDistribution.map((entry) => (
+                          <Cell key={entry.cluster} fill={entry.color} />
+                        ))}
+                      </Bar>
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              )}
+            </div>
+          )}
+
+          {!!portfolioStrategies.length && (
+            <div className="bg-white dark:bg-slate-900 rounded-xl p-6 shadow-sm border border-slate-200 dark:border-slate-800">
+              <h3 className="font-semibold text-slate-900 dark:text-slate-100 mb-4">Стратегии портфелей</h3>
+              <div className="overflow-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="text-left border-b border-slate-200 dark:border-slate-800">
+                      <th className="py-2 pr-3">Стратегия</th>
+                      <th className="py-2 pr-3">Expected return</th>
+                      <th className="py-2 pr-3">Risk</th>
+                      <th className="py-2 pr-3">Sharpe</th>
+                      <th className="py-2 pr-3">Diversification</th>
+                      <th className="py-2 pr-3">Позиций</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {portfolioStrategies.map((row) => (
+                      <tr key={row.name} className="border-b border-slate-100 dark:border-slate-800">
+                        <td className="py-2 pr-3 font-medium text-slate-900 dark:text-slate-100">{row.name}</td>
+                        <td className="py-2 pr-3 text-slate-700 dark:text-slate-300">{row.expectedReturn.toFixed(4)}</td>
+                        <td className="py-2 pr-3 text-slate-700 dark:text-slate-300">{row.risk.toFixed(4)}</td>
+                        <td className="py-2 pr-3 text-slate-700 dark:text-slate-300">{row.sharpe.toFixed(4)}</td>
+                        <td className="py-2 pr-3 text-slate-700 dark:text-slate-300">{row.diversification.toFixed(4)}</td>
+                        <td className="py-2 pr-3 text-slate-700 dark:text-slate-300">{row.assetsCount}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          {!!clusterGroups.length && (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {clusterGroups.map((cluster) => (
-                <div
-                  key={cluster.name}
-                  className="bg-white rounded-xl p-5 shadow-sm border border-slate-200"
-                >
+                <div key={cluster.name} className="bg-white dark:bg-slate-900 rounded-xl p-5 shadow-sm border border-slate-200 dark:border-slate-800">
                   <div className="flex items-center gap-3 mb-3">
-                    <div
-                      className="w-4 h-4 rounded-full"
-                      style={{ backgroundColor: cluster.color }}
-                    />
+                    <div className="w-4 h-4 rounded-full" style={{ backgroundColor: cluster.color }} />
                     <div>
-                      <h3 className="font-semibold text-slate-900">{cluster.name}</h3>
-                      <p className="text-xs text-slate-600">{cluster.description}</p>
+                      <h3 className="font-semibold text-slate-900 dark:text-slate-100">{cluster.name}</h3>
+                      <p className="text-xs text-slate-600 dark:text-slate-300">{cluster.description}</p>
                     </div>
                   </div>
                   <div className="space-y-2 text-sm">
                     <div className="flex justify-between">
-                      <span className="text-slate-600">Компаний:</span>
-                      <span className="font-medium text-slate-900">{cluster.count}</span>
+                      <span className="text-slate-600 dark:text-slate-400">Компаний:</span>
+                      <span className="font-medium text-slate-900 dark:text-slate-100">{cluster.count}</span>
                     </div>
                     <div className="flex justify-between">
-                      <span className="text-slate-600">Ср. P/E:</span>
-                      <span className="font-medium text-blue-600">{cluster.avgPE.toFixed(1)}</span>
+                      <span className="text-slate-600 dark:text-slate-400">Средний P/E:</span>
+                      <span className="font-medium text-blue-600 dark:text-blue-400">{cluster.avgPE.toFixed(2)}</span>
                     </div>
                     <div className="flex justify-between">
-                      <span className="text-slate-600">Ср. рост g:</span>
-                      <span className="font-medium text-green-600">{cluster.avgG.toFixed(1)}%</span>
+                      <span className="text-slate-600 dark:text-slate-400">Средний g:</span>
+                      <span className="font-medium text-green-600 dark:text-green-400">{cluster.avgG.toFixed(2)}%</span>
                     </div>
                   </div>
                 </div>
@@ -190,130 +824,141 @@ export function ClusterAnalysis() {
             </div>
           )}
 
-          {/* График кластеров */}
-          <div className="bg-white rounded-xl p-6 shadow-sm border border-slate-200">
-            <h3 className="font-semibold text-slate-900 mb-4">Визуализация кластеров: P/E vs Темпы роста g</h3>
-            <ResponsiveContainer width="100%" height={500}>
+          <div className="bg-white dark:bg-slate-900 rounded-xl p-6 shadow-sm border border-slate-200 dark:border-slate-800">
+            <h3 className="font-semibold text-slate-900 dark:text-slate-100 mb-4">Визуализация кластеров (P/E vs g)</h3>
+            <ResponsiveContainer width="100%" height={460}>
               <ScatterChart margin={{ top: 20, right: 30, left: 20, bottom: 20 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                <XAxis
-                  type="number"
-                  dataKey="pe"
-                  name="P/E"
-                  label={{ value: 'P/E', position: 'insideBottom', offset: -10 }}
-                  stroke="#64748b"
-                />
-                <YAxis
-                  type="number"
-                  dataKey="g"
-                  name="Рост"
-                  unit="%"
-                  label={{ value: 'Темпы роста g (%)', angle: -90, position: 'insideLeft' }}
-                  stroke="#64748b"
-                />
+                <XAxis type="number" dataKey="pe" name="P/E" stroke="#64748b" />
+                <YAxis type="number" dataKey="g" name="g/ROE" unit="%" stroke="#64748b" />
                 <Tooltip
-                  cursor={{ strokeDasharray: '3 3' }}
+                  cursor={{ strokeDasharray: "3 3" }}
                   content={({ payload }) => {
-                    if (payload && payload.length) {
-                      const data = payload[0].payload;
-                      return (
-                        <div className="bg-white p-3 rounded-lg shadow-lg border border-slate-200">
-                          <p className="text-sm font-medium text-slate-700 mb-1">
-                            {data.label}
-                          </p>
-                          <p className="text-sm text-slate-600">
-                            P/E: {data.pe.toFixed(2)}
-                          </p>
-                          <p className="text-sm text-slate-600">
-                            Рост: {data.g.toFixed(2)}%
-                          </p>
-                        </div>
-                      );
+                    if (!payload || !payload.length) {
+                      return null;
                     }
-                    return null;
+                    const data = payload[0].payload as ClusterPoint;
+                    return (
+                      <div className="bg-white dark:bg-slate-900 p-3 rounded-lg shadow-lg border border-slate-200 dark:border-slate-700">
+                        <p className="text-sm font-medium text-slate-700 dark:text-slate-200 mb-1">{data.ticker}</p>
+                        <p className="text-sm text-slate-600 dark:text-slate-300">P/E: {data.pe.toFixed(2)}</p>
+                        <p className="text-sm text-slate-600 dark:text-slate-300">g: {data.g.toFixed(2)}%</p>
+                        <p className="text-sm text-slate-600 dark:text-slate-300">{data.label}</p>
+                      </div>
+                    );
                   }}
                 />
-                {modelRun && (
-                  <>
-                    <Scatter name="Кластер 1" data={clusterData.filter((d) => d.cluster === 0)}>
-                      {clusterData.filter((d) => d.cluster === 0).map((entry, index) => (
-                        <Cell key={`cell-0-${index}`} fill={entry.color} />
+                {Array.from(new Set(clusterData.map((d) => d.cluster))).map((cluster) => {
+                  const points = clusterData.filter((d) => d.cluster === cluster);
+                  return (
+                    <Scatter key={cluster} name={`Кластер ${cluster + 1}`} data={points}>
+                      {points.map((entry) => (
+                        <Cell key={`${entry.figi}-${entry.cluster}`} fill={entry.color} />
                       ))}
                     </Scatter>
-                    <Scatter name="Кластер 2" data={clusterData.filter((d) => d.cluster === 1)}>
-                      {clusterData.filter((d) => d.cluster === 1).map((entry, index) => (
-                        <Cell key={`cell-1-${index}`} fill={entry.color} />
-                      ))}
-                    </Scatter>
-                    <Scatter name="Кластер 3" data={clusterData.filter((d) => d.cluster === 2)}>
-                      {clusterData.filter((d) => d.cluster === 2).map((entry, index) => (
-                        <Cell key={`cell-2-${index}`} fill={entry.color} />
-                      ))}
-                    </Scatter>
-                    <Scatter name="Кластер 4" data={clusterData.filter((d) => d.cluster === 3)}>
-                      {clusterData.filter((d) => d.cluster === 3).map((entry, index) => (
-                        <Cell key={`cell-3-${index}`} fill={entry.color} />
-                      ))}
-                    </Scatter>
-                    <Legend />
-                  </>
-                )}
+                  );
+                })}
+                <Legend />
               </ScatterChart>
             </ResponsiveContainer>
           </div>
 
-          {/* Характеристики кластеров */}
-          {modelRun && (
-            <div className="bg-white rounded-xl p-6 shadow-sm border border-slate-200">
-              <h3 className="font-semibold text-slate-900 mb-4">Интерпретация кластеров</h3>
-              <div className="space-y-4">
-                <div className="flex items-start gap-3">
-                  <div className="w-3 h-3 rounded-full bg-blue-500 mt-1.5 flex-shrink-0" />
-                  <div>
-                    <h4 className="font-medium text-slate-900">Кластер 1: Высокий рост</h4>
-                    <p className="text-sm text-slate-600 mt-1">
-                      Компании с умеренным P/E и высокими темпами роста. Это растущие компании с хорошим 
-                      потенциалом, которые еще не сильно переоценены рынком. PEG-ratio благоприятный.
-                    </p>
-                  </div>
+          {(!!displayPortfolio.length || bestPortfolioAssetsCount > 0) && (
+            <div className="bg-white dark:bg-slate-900 rounded-xl p-6 shadow-sm border border-slate-200 dark:border-slate-800">
+              <div className="flex items-center justify-between gap-3 mb-4">
+                <div className="flex items-center gap-2">
+                  <Trophy className="w-5 h-5 text-amber-500" />
+                  <h3 className="font-semibold text-slate-900 dark:text-slate-100">Оптимальный портфель из кластерного анализа</h3>
                 </div>
-                <div className="flex items-start gap-3">
-                  <div className="w-3 h-3 rounded-full bg-green-500 mt-1.5 flex-shrink-0" />
-                  <div>
-                    <h4 className="font-medium text-slate-900">Кластер 2: Растущие</h4>
-                    <p className="text-sm text-slate-600 mt-1">
-                      Сбалансированное соотношение P/E и роста. Компании с устойчивым развитием и 
-                      справедливой оценкой. Подходят для основы портфеля.
-                    </p>
-                  </div>
-                </div>
-                <div className="flex items-start gap-3">
-                  <div className="w-3 h-3 rounded-full bg-orange-500 mt-1.5 flex-shrink-0" />
-                  <div>
-                    <h4 className="font-medium text-slate-900">Кластер 3: Переоцененные</h4>
-                    <p className="text-sm text-slate-600 mt-1">
-                      Высокий P/E при низких темпах роста. Потенциально переоцененные активы, требующие 
-                      тщательного фундаментального анализа перед инвестированием.
-                    </p>
-                  </div>
-                </div>
-                <div className="flex items-start gap-3">
-                  <div className="w-3 h-3 rounded-full bg-red-500 mt-1.5 flex-shrink-0" />
-                  <div>
-                    <h4 className="font-medium text-slate-900">Кластер 4: Value</h4>
-                    <p className="text-sm text-slate-600 mt-1">
-                      Низкий P/E и умеренные темпы роста. Классические value-акции, которые могут быть 
-                      недооценены рынком. Подходят для стоимостного инвестирования.
-                    </p>
-                  </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={savePortfolioChartPng}
+                    disabled={!displayPortfolio.length}
+                    className="inline-flex items-center gap-1 px-3 py-2 text-xs rounded-md border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-200 disabled:opacity-50"
+                  >
+                    <ImageDown className="w-4 h-4" />
+                    PNG
+                  </button>
+                  <button
+                    onClick={exportPortfolioToExcel}
+                    disabled={!displayPortfolio.length}
+                    className="inline-flex items-center gap-1 px-3 py-2 text-xs rounded-md border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-200 disabled:opacity-50"
+                  >
+                    <Download className="w-4 h-4" />
+                    Excel
+                  </button>
                 </div>
               </div>
+
+              {bestPortfolioAssetsCount > 0 && (
+                <p className="text-sm text-slate-600 dark:text-slate-300 mb-4">
+                  Количество активов в портфеле: <span className="font-semibold text-slate-900 dark:text-slate-100">{bestPortfolioAssetsCount}</span>
+                </p>
+              )}
+              {!!displayPortfolio.length && (
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                  <div className="h-72" ref={portfolioChartRef}>
+                    <ResponsiveContainer width="100%" height="100%">
+                      <PieChart>
+                        <Pie
+                          data={displayPortfolio}
+                          dataKey="weight"
+                          nameKey="ticker"
+                          cx="50%"
+                          cy="50%"
+                          outerRadius={105}
+                          labelLine={false}
+                          label={({ ticker, weight }) => (Number(weight) >= 6 ? `${ticker}: ${Number(weight).toFixed(1)}%` : "")}
+                        >
+                          {displayPortfolio.map((row, idx) => (
+                            <Cell key={row.ticker} fill={palette[idx % palette.length]} />
+                          ))}
+                        </Pie>
+                        <Tooltip formatter={(v: number) => `${Number(v).toFixed(2)}%`} />
+                      </PieChart>
+                  </ResponsiveContainer>
+                </div>
+
+                <div className="overflow-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="text-left border-b border-slate-200 dark:border-slate-800">
+                        <th className="py-2 pr-3">Ticker</th>
+                        <th className="py-2 pr-3">Name</th>
+                        <th className="py-2 pr-3">Вес, %</th>
+                        <th className="py-2 pr-3">Return</th>
+                        <th className="py-2 pr-3">Risk</th>
+                        <th className="py-2 pr-3">Sharpe</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {displayPortfolio.map((row) => (
+                        <tr key={row.ticker} className="border-b border-slate-100 dark:border-slate-800">
+                          <td className="py-2 pr-3 font-medium text-slate-900 dark:text-slate-100">{row.ticker}</td>
+                          <td className="py-2 pr-3 text-slate-700 dark:text-slate-300">{row.name || "-"}</td>
+                          <td className="py-2 pr-3 text-slate-700 dark:text-slate-300">{row.weight.toFixed(2)}</td>
+                          <td className="py-2 pr-3 text-slate-700 dark:text-slate-300">
+                            {Number.isFinite(row.expectedReturn) ? row.expectedReturn?.toFixed(4) : "-"}
+                          </td>
+                          <td className="py-2 pr-3 text-slate-700 dark:text-slate-300">
+                            {Number.isFinite(row.risk) ? row.risk?.toFixed(4) : "-"}
+                          </td>
+                          <td className="py-2 pr-3 text-slate-700 dark:text-slate-300">
+                            {Number.isFinite(row.sharpe) ? row.sharpe?.toFixed(4) : "-"}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                </div>
+              )}
             </div>
           )}
 
-          <EmbeddedMarkowitz accentClassName="text-purple-600" />
         </div>
       </div>
     </div>
   );
 }
+

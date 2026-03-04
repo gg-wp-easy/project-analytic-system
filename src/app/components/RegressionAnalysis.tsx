@@ -82,28 +82,6 @@ export function RegressionAnalysis() {
             </div>
 
             <div className="space-y-4">
-              {/* T-API Token */}
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-2">
-                  T-API Token
-                </label>
-                <input
-                  type="password"
-                  value={params.apiToken}
-                  onChange={(e) => setParams({ ...params, apiToken: e.target.value })}
-                  className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none text-sm"
-                  placeholder="t.xxxxxxxxxxxxx"
-                />
-              </div>
-
-              <button
-                onClick={handleLoadData}
-                className="w-full bg-slate-600 text-white py-2.5 rounded-lg font-medium hover:bg-slate-700 transition-all shadow-sm flex items-center justify-center gap-2"
-              >
-                <Upload className="w-4 h-4" />
-                Загрузить данные
-              </button>
-
               {params.dataLoaded && (
                 <div className="bg-green-50 border border-green-200 rounded-lg p-3">
                   <p className="text-sm text-green-700">✓ Данные загружены</p>
