@@ -1,36 +1,540 @@
-import { useState } from "react";
-import { Layers, Play, Settings } from "lucide-react";
-import { ResponsiveContainer, BarChart, Bar, CartesianGrid, XAxis, YAxis, Tooltip } from "recharts";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Download, ImageDown, Layers, Play, Settings, Trophy } from "lucide-react";
+import {
+  ResponsiveContainer,
+  BarChart,
+  Bar,
+  CartesianGrid,
+  XAxis,
+  YAxis,
+  Tooltip,
+  PieChart,
+  Pie,
+  Cell,
+  LineChart,
+  Line,
+  Legend,
+} from "recharts";
 import { EmbeddedMarkowitz } from "./EmbeddedMarkowitz";
-import { useFundamentals } from "../../entities/fundamentals";
+import { useFundamentals } from "../context/FundamentalsContext";
 import { useAppSettings } from "../context/AppSettingsContext";
 
-const modelComparison = [
-  { model: "Cluster", score: 0.74 },
-  { model: "Tree", score: 0.81 },
-  { model: "Neural", score: 0.86 },
-  { model: "Hybrid", score: 0.91 },
-];
+type MetricItem = {
+  label: string;
+  value: string;
+};
+
+type ModelScore = {
+  model: string;
+  score: number;
+};
+
+type PortfolioPosition = {
+  ticker: string;
+  name: string;
+  weight: number;
+  expectedReturn: number;
+  risk: number;
+  sharpe: number;
+};
+
+type StrategyPortfolio = {
+  key: string;
+  name: string;
+  expectedReturn: number;
+  risk: number;
+  sharpe: number;
+  diversification: number;
+  assetsCount: number;
+};
+
+type TrainingPoint = {
+  epoch: number;
+  trainLoss: number;
+  valLoss: number;
+};
+
+const ENABLE_TEMP_LOGS = true;
+const palette = ["#0891b2", "#2563eb", "#f97316", "#16a34a", "#e11d48", "#a855f7", "#0ea5e9", "#f59e0b"];
+const HYBRID_STATE_KEY = "hybrid-analysis-state-v1";
+
+function escapeHtml(value: string): string {
+  return value
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#39;");
+}
+
+function downloadPortfolioAsExcel(rows: PortfolioPosition[], filename: string): void {
+  const tableRows = rows
+    .map(
+      (row) =>
+        `<tr><td>${escapeHtml(row.ticker)}</td><td>${escapeHtml(row.name || "")}</td><td>${row.weight.toFixed(4)}</td><td>${Number.isFinite(row.expectedReturn) ? row.expectedReturn.toFixed(6) : ""}</td><td>${Number.isFinite(row.risk) ? row.risk.toFixed(6) : ""}</td><td>${Number.isFinite(row.sharpe) ? row.sharpe.toFixed(6) : ""}</td></tr>`,
+    )
+    .join("");
+
+  const html =
+    `\uFEFF<html><head><meta charset="utf-8"></head><body>` +
+    `<table border="1"><tr><th>Ticker</th><th>Name</th><th>Weight, %</th><th>Expected Return</th><th>Risk</th><th>Sharpe</th></tr>${tableRows}</table>` +
+    `</body></html>`;
+
+  const blob = new Blob([html], { type: "application/vnd.ms-excel;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+}
+
+async function downloadSvgAsPng(svg: SVGSVGElement, filename: string): Promise<void> {
+  const xml = new XMLSerializer().serializeToString(svg);
+  const svgBlob = new Blob([xml], { type: "image/svg+xml;charset=utf-8" });
+  const url = URL.createObjectURL(svgBlob);
+
+  await new Promise<void>((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => {
+      const width = Math.max(svg.clientWidth, 600);
+      const height = Math.max(svg.clientHeight, 400);
+      const canvas = document.createElement("canvas");
+      canvas.width = width * 2;
+      canvas.height = height * 2;
+
+      const ctx = canvas.getContext("2d");
+      if (!ctx) {
+        reject(new Error("Cannot create canvas context"));
+        return;
+      }
+
+      ctx.fillStyle = "#ffffff";
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+      canvas.toBlob((blob) => {
+        if (!blob) {
+          reject(new Error("Failed to create PNG blob"));
+          return;
+        }
+        const pngUrl = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = pngUrl;
+        link.download = filename;
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        URL.revokeObjectURL(pngUrl);
+        resolve();
+      }, "image/png");
+    };
+    img.onerror = () => reject(new Error("Failed to render chart image"));
+    img.src = url;
+  });
+
+  URL.revokeObjectURL(url);
+}
+
+function numberOr(value: unknown, fallback = 0): number {
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return value;
+  }
+  if (typeof value === "string") {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : fallback;
+  }
+  return fallback;
+}
+
+function formatMetric(value: number): string {
+  if (!Number.isFinite(value)) {
+    return "-";
+  }
+  if (value >= 0 && value <= 1) {
+    return `${(value * 100).toFixed(2)}%`;
+  }
+  return value.toFixed(4);
+}
+
+function extractModelScores(parsed: Record<string, unknown>, fallbackWeights: { cluster: number; tree: number; neural: number }): ModelScore[] {
+  const rawArray = Array.isArray(parsed.model_scores) ? parsed.model_scores : Array.isArray(parsed.models) ? parsed.models : [];
+  if (rawArray.length) {
+    const mapped = rawArray
+      .map((item) => {
+        const row = item as Record<string, unknown>;
+        return {
+          model: String(row.model ?? row.name ?? row.model_name ?? "Model"),
+          score: numberOr(row.score, numberOr(row.weighted_score, numberOr(row.sharpe, NaN))),
+        };
+      })
+      .filter((row) => Number.isFinite(row.score));
+    if (mapped.length) {
+      return mapped.sort((a, b) => b.score - a.score);
+    }
+  }
+
+  const source =
+    (parsed.ensemble_weights as Record<string, unknown> | undefined) ??
+    (parsed.weights as Record<string, unknown> | undefined) ??
+    (parsed.hybrid_weights as Record<string, unknown> | undefined) ??
+    null;
+
+  if (source) {
+    return Object.entries(source)
+      .map(([model, score]) => ({ model, score: numberOr(score, NaN) }))
+      .filter((row) => Number.isFinite(row.score))
+      .sort((a, b) => b.score - a.score);
+  }
+
+  return [
+    { model: "Cluster", score: fallbackWeights.cluster },
+    { model: "Tree", score: fallbackWeights.tree },
+    { model: "Neural", score: fallbackWeights.neural },
+  ];
+}
+
+function extractMetrics(parsed: Record<string, unknown>): MetricItem[] {
+  const stats = (parsed.stats as Record<string, unknown> | undefined) ?? {};
+  const summary = (parsed.summary as Record<string, unknown> | undefined) ?? {};
+  const portfolios = (parsed.portfolios as Record<string, unknown> | undefined) ?? {};
+  const maxSharpe = (portfolios.max_sharpe as Record<string, unknown> | undefined) ?? {};
+  const maxSharpeMetrics = (maxSharpe.metrics as Record<string, unknown> | undefined) ?? {};
+
+  const rows: MetricItem[] = [];
+  const countMapping: Array<{ key: string; label: string }> = [
+    { key: "cluster_selected_count", label: "Cluster Selected" },
+    { key: "tree_selected_count", label: "Tree Selected" },
+    { key: "undervalued_count", label: "Undervalued" },
+    { key: "models_count", label: "Models" },
+  ];
+
+  for (const item of countMapping) {
+    if (item.key in stats || item.key in summary) {
+      rows.push({
+        label: item.label,
+        value: String(numberOr(stats[item.key], numberOr(summary[item.key], NaN))),
+      });
+    }
+  }
+
+  const portfolioMapping: Array<{ key: string; label: string }> = [
+    { key: "expected_return", label: "Expected Return" },
+    { key: "volatility", label: "Volatility" },
+    { key: "sharpe_ratio", label: "Sharpe Ratio" },
+    { key: "diversification_score", label: "Diversification" },
+  ];
+
+  for (const item of portfolioMapping) {
+    if (item.key in maxSharpeMetrics) {
+      rows.push({
+        label: item.label,
+        value: formatMetric(numberOr(maxSharpeMetrics[item.key], NaN)),
+      });
+    }
+  }
+
+  return rows;
+}
+
+function extractPortfolioStrategies(parsed: Record<string, unknown>): StrategyPortfolio[] {
+  const portfolios = parsed.portfolios;
+  if (!portfolios || typeof portfolios !== "object" || Array.isArray(portfolios)) {
+    return [];
+  }
+
+  const mapping: Record<string, string> = {
+    max_sharpe: "Max Sharpe",
+    min_volatility: "Min Volatility",
+  };
+
+  return Object.entries(portfolios as Record<string, unknown>)
+    .map(([key, value]) => {
+      const row = (value as Record<string, unknown>) ?? {};
+      const metrics = (row.metrics as Record<string, unknown> | undefined) ?? {};
+      return {
+        key,
+        name: mapping[key] ?? key,
+        expectedReturn: numberOr(metrics.expected_return, NaN),
+        risk: numberOr(metrics.volatility, numberOr(metrics.risk, NaN)),
+        sharpe: numberOr(metrics.sharpe_ratio, NaN),
+        diversification: numberOr(metrics.diversification_score, NaN),
+        assetsCount: numberOr(row.assets_count, 0),
+      } satisfies StrategyPortfolio;
+    })
+    .sort((a, b) => numberOr(b.sharpe, -Infinity) - numberOr(a.sharpe, -Infinity));
+}
+
+function extractPortfolioPositions(parsed: Record<string, unknown>): PortfolioPosition[] {
+  const portfolios = (parsed.portfolios as Record<string, unknown> | undefined) ?? {};
+  const maxSharpe = (portfolios.max_sharpe as Record<string, unknown> | undefined) ?? {};
+  const maxSharpeMetrics = (maxSharpe.metrics as Record<string, unknown> | undefined) ?? {};
+  const positions = Array.isArray(maxSharpe.positions) ? maxSharpe.positions : [];
+
+  const tickerMap = new Map<string, { name: string; expectedReturn: number }>();
+  const merged = [
+    ...(Array.isArray(parsed.cluster_selected) ? parsed.cluster_selected : []),
+    ...(Array.isArray(parsed.undervalued_stocks) ? parsed.undervalued_stocks : []),
+  ];
+
+  for (const item of merged) {
+    const row = item as Record<string, unknown>;
+    const ticker = String(row.ticker ?? row.Ticker ?? "");
+    if (!ticker) {
+      continue;
+    }
+    tickerMap.set(ticker, {
+      name: String(row.name ?? row.Company ?? ticker),
+      expectedReturn: numberOr(row.expected_return, numberOr(row.g, numberOr(row.roe, NaN))),
+    });
+  }
+
+  const rows = positions.map((item, idx) => {
+    const row = item as Record<string, unknown>;
+    const ticker = String(row.ticker ?? `Asset ${idx + 1}`);
+    const mapped = tickerMap.get(ticker);
+    return {
+      ticker,
+      name: mapped?.name ?? ticker,
+      weight: numberOr(row.weight, 0),
+      expectedReturn: mapped?.expectedReturn ?? numberOr(maxSharpeMetrics.expected_return, NaN),
+      risk: numberOr(maxSharpeMetrics.volatility, NaN),
+      sharpe: numberOr(maxSharpeMetrics.sharpe_ratio, NaN),
+    } satisfies PortfolioPosition;
+  });
+
+  const maxWeight = rows.length ? Math.max(...rows.map((r) => r.weight)) : 0;
+  const normalized = maxWeight <= 1 ? rows.map((r) => ({ ...r, weight: r.weight * 100 })) : rows;
+  return normalized.sort((a, b) => b.weight - a.weight);
+}
+
+function extractPortfolioAssetsCount(parsed: Record<string, unknown>): number {
+  const stats = (parsed.stats as Record<string, unknown> | undefined) ?? {};
+  const summary = (parsed.summary as Record<string, unknown> | undefined) ?? {};
+  const portfolios = (parsed.portfolios as Record<string, unknown> | undefined) ?? {};
+  const maxSharpe = (portfolios.max_sharpe as Record<string, unknown> | undefined) ?? {};
+
+  return numberOr(maxSharpe.assets_count, numberOr(stats.portfolio_assets_count, numberOr(summary.portfolio_assets_count, 0)));
+}
+
+function extractTrainingHistory(parsed: Record<string, unknown>): TrainingPoint[] {
+  const history = (parsed.training_history as Record<string, unknown> | undefined) ?? {};
+  const train = Array.isArray(history.train_loss) ? history.train_loss : [];
+  const val = Array.isArray(history.val_loss) ? history.val_loss : [];
+  const count = Math.max(train.length, val.length);
+
+  return Array.from({ length: count }, (_, idx) => ({
+    epoch: idx + 1,
+    trainLoss: numberOr(train[idx], NaN),
+    valLoss: numberOr(val[idx], NaN),
+  })).filter((row) => Number.isFinite(row.trainLoss) || Number.isFinite(row.valLoss));
+}
 
 export function HybridAnalysis() {
   const { hasData, cache } = useFundamentals();
-  const { t } = useAppSettings();
-  const [run, setRun] = useState(false);
+  const { locale } = useAppSettings();
+  const isEn = locale === "en";
+  const tx = (ru: string, en: string) => (isEn ? en : ru);
+
+  const [isRunning, setIsRunning] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [weights, setWeights] = useState({
     clusterWeight: "30",
     treeWeight: "30",
     neuralWeight: "40",
   });
+  const [modelComparison, setModelComparison] = useState<ModelScore[]>([]);
+  const [metrics, setMetrics] = useState<MetricItem[]>([]);
+  const [portfolioStrategies, setPortfolioStrategies] = useState<StrategyPortfolio[]>([]);
+  const [portfolio, setPortfolio] = useState<PortfolioPosition[]>([]);
+  const [trainingHistory, setTrainingHistory] = useState<TrainingPoint[]>([]);
+  const [portfolioAssetsCount, setPortfolioAssetsCount] = useState(0);
+  const portfolioChartRef = useRef<HTMLDivElement | null>(null);
+
+  const requestData = useMemo(
+    () =>
+      cache.shares
+        .map((share) => {
+          const f = cache.fundamentalsByFigi[share.figi];
+          if (!f) {
+            return null;
+          }
+
+          return {
+            figi: share.figi,
+            ticker: share.ticker,
+            name: share.name,
+            exchange: share.exchange,
+            currency: share.currency,
+            lot: share.lot,
+            market_cap_bn: f.marketCapBn,
+            pe_ratio: f.peRatio,
+            pb_ratio: f.pbRatio,
+            ps_ratio: f.psRatio,
+            ev_to_ebitda: f.evToEbitda,
+            roa: f.roa,
+            net_margin: f.netMargin,
+            net_debt_to_ebitda: f.netDebtToEbitda,
+            total_debt: f.totalDebt,
+            roe: f.roe,
+            dividend_yield: f.dividendYield,
+            beta: f.beta,
+            g: f.roe,
+          };
+        })
+        .filter((row): row is NonNullable<typeof row> => Boolean(row)),
+    [cache.fundamentalsByFigi, cache.shares],
+  );
+
+  useEffect(() => {
+    try {
+      const raw = window.localStorage.getItem(HYBRID_STATE_KEY);
+      if (!raw) {
+        return;
+      }
+      const parsed = JSON.parse(raw) as {
+        weights?: { clusterWeight?: string; treeWeight?: string; neuralWeight?: string };
+        modelComparison?: ModelScore[];
+        metrics?: MetricItem[];
+        portfolioStrategies?: StrategyPortfolio[];
+        portfolio?: PortfolioPosition[];
+        trainingHistory?: TrainingPoint[];
+        portfolioAssetsCount?: number;
+        error?: string | null;
+      };
+      if (parsed.weights) {
+        setWeights({
+          clusterWeight: String(parsed.weights.clusterWeight ?? "30"),
+          treeWeight: String(parsed.weights.treeWeight ?? "30"),
+          neuralWeight: String(parsed.weights.neuralWeight ?? "40"),
+        });
+      }
+      if (Array.isArray(parsed.modelComparison)) setModelComparison(parsed.modelComparison);
+      if (Array.isArray(parsed.metrics)) setMetrics(parsed.metrics);
+      if (Array.isArray(parsed.portfolioStrategies)) setPortfolioStrategies(parsed.portfolioStrategies);
+      if (Array.isArray(parsed.portfolio)) setPortfolio(parsed.portfolio);
+      if (Array.isArray(parsed.trainingHistory)) setTrainingHistory(parsed.trainingHistory);
+      if (typeof parsed.portfolioAssetsCount === "number") setPortfolioAssetsCount(parsed.portfolioAssetsCount);
+      if (typeof parsed.error === "string" || parsed.error === null) setError(parsed.error);
+    } catch {
+      // Ignore broken persisted state
+    }
+  }, []);
+
+  useEffect(() => {
+    const payload = {
+      weights,
+      modelComparison,
+      metrics,
+      portfolioStrategies,
+      portfolio,
+      trainingHistory,
+      portfolioAssetsCount,
+      error,
+    };
+    window.localStorage.setItem(HYBRID_STATE_KEY, JSON.stringify(payload));
+  }, [weights, modelComparison, metrics, portfolioStrategies, portfolio, trainingHistory, portfolioAssetsCount, error]);
+
+  const runHybridAnalysis = async () => {
+    setError(null);
+    setIsRunning(true);
+
+    const numericWeights = {
+      cluster: numberOr(weights.clusterWeight, 0),
+      tree: numberOr(weights.treeWeight, 0),
+      neural: numberOr(weights.neuralWeight, 0),
+    };
+
+    try {
+      const response = await fetch("/api/hybrid-analysis", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          data: requestData,
+          weights: numericWeights,
+        }),
+      });
+
+      const text = await response.text();
+      const parsed = text ? (JSON.parse(text) as Record<string, unknown>) : {};
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}${text ? `: ${text}` : ""}`);
+      }
+
+      const parsedScores = extractModelScores(parsed, numericWeights);
+      const parsedMetrics = extractMetrics(parsed);
+      const parsedStrategies = extractPortfolioStrategies(parsed);
+      const parsedPortfolio = extractPortfolioPositions(parsed);
+      const parsedHistory = extractTrainingHistory(parsed);
+      const parsedAssetsCount = extractPortfolioAssetsCount(parsed);
+
+      setModelComparison(parsedScores);
+      setMetrics(parsedMetrics);
+      setPortfolioStrategies(parsedStrategies);
+      setPortfolio(parsedPortfolio);
+      setTrainingHistory(parsedHistory);
+      setPortfolioAssetsCount(parsedAssetsCount);
+
+      if (ENABLE_TEMP_LOGS) {
+        console.info("[Hybrid][Request][Success]", {
+          ts: new Date().toISOString(),
+          status: response.status,
+          scores: parsedScores.length,
+          metrics: parsedMetrics.length,
+          strategies: parsedStrategies.length,
+          portfolio: parsedPortfolio.length,
+          history: parsedHistory.length,
+          responseKeys: Object.keys(parsed),
+        });
+      }
+    } catch (e) {
+      const message = e instanceof Error ? e.message : tx("Не удалось выполнить гибридный анализ", "Failed to run hybrid analysis");
+      setError(message);
+      setModelComparison([]);
+      setMetrics([]);
+      setPortfolioStrategies([]);
+      setPortfolio([]);
+      setTrainingHistory([]);
+      setPortfolioAssetsCount(0);
+    } finally {
+      setIsRunning(false);
+    }
+  };
+
+  const exportPortfolioToExcel = () => {
+    if (!portfolio.length) {
+      return;
+    }
+    downloadPortfolioAsExcel(portfolio, "hybrid-optimal-portfolio.xls");
+  };
+
+  const savePortfolioChartPng = async () => {
+    const svg = portfolioChartRef.current?.querySelector("svg");
+    if (!svg) {
+      return;
+    }
+    try {
+      await downloadSvgAsPng(svg as SVGSVGElement, "hybrid-optimal-portfolio.png");
+    } catch (e) {
+      const message = e instanceof Error ? e.message : tx("Не удалось сохранить PNG", "Failed to save PNG");
+      setError(message);
+    }
+  };
 
   return (
     <div className="space-y-6">
       <div className="bg-gradient-to-r from-cyan-700 to-blue-700 rounded-xl p-6 text-white shadow-lg">
         <div className="flex items-center gap-3 mb-2">
           <Layers className="w-8 h-8" />
-          <h1 className="text-3xl font-bold">{t("hybrid.title")}</h1>
+          <h1 className="text-3xl font-bold">{tx("Гибридный анализ", "Hybrid Analysis")}</h1>
         </div>
         <p className="text-cyan-100">
-          {t("hybrid.description")}
+          {tx(
+            "Комбинированный сигнал на базе кластеризации, дерева решений и нейросети.",
+            "Combined signal based on clustering, decision tree, and neural network.",
+          )}
         </p>
       </div>
 
@@ -39,10 +543,14 @@ export function HybridAnalysis() {
           <div className="bg-white dark:bg-slate-900 rounded-xl p-6 shadow-sm border border-slate-200 dark:border-slate-800 space-y-4">
             <div className="flex items-center gap-2">
               <Settings className="w-5 h-5 text-cyan-700" />
-              <h2 className="font-semibold text-slate-900 dark:text-slate-100">{t("hybrid.paramsTitle")}</h2>
+              <h2 className="font-semibold text-slate-900 dark:text-slate-100">{tx("Параметры ансамбля", "Ensemble Parameters")}</h2>
+            </div>
+            <div className="rounded-lg border border-slate-200 dark:border-slate-700 p-3 bg-slate-50 dark:bg-slate-800/40">
+              <p className="text-sm text-slate-700 dark:text-slate-300">{tx("Источник: кэш фундаментальных данных", "Source: fundamentals cache")}</p>
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">{tx("Записей", "Records")}: {requestData.length}</p>
             </div>
             <label className="block text-sm text-slate-700 dark:text-slate-300">
-              Вес Cluster (%)
+              {isEn ? "Cluster Weight (%)" : "Вес Cluster (%)"}
               <input
                 className="mt-1 w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2"
                 value={weights.clusterWeight}
@@ -50,7 +558,7 @@ export function HybridAnalysis() {
               />
             </label>
             <label className="block text-sm text-slate-700 dark:text-slate-300">
-              Вес Tree (%)
+              {isEn ? "Tree Weight (%)" : "Вес Tree (%)"}
               <input
                 className="mt-1 w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2"
                 value={weights.treeWeight}
@@ -58,60 +566,199 @@ export function HybridAnalysis() {
               />
             </label>
             <label className="block text-sm text-slate-700 dark:text-slate-300">
-              Вес Neural (%)
+              {isEn ? "Neural Weight (%)" : "Вес Neural (%)"}
               <input
                 className="mt-1 w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2"
                 value={weights.neuralWeight}
                 onChange={(e) => setWeights((v) => ({ ...v, neuralWeight: e.target.value }))}
               />
             </label>
+            {error && (
+              <div className="bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-900 rounded-lg p-3">
+                <p className="text-sm text-red-700 dark:text-red-300 break-words">{error}</p>
+              </div>
+            )}
             <button
               type="button"
-              onClick={() => setRun(true)}
-              disabled={!hasData}
+              onClick={runHybridAnalysis}
+              disabled={!hasData || !requestData.length || isRunning}
               className="w-full inline-flex items-center justify-center gap-2 rounded-lg bg-gradient-to-r from-cyan-700 to-blue-700 px-4 py-2 text-white font-medium disabled:opacity-50"
             >
               <Play className="w-4 h-4" />
-              {t("hybrid.run")}
+              {isRunning ? tx("Выполняется...", "Running...") : tx("Запустить гибрид", "Run Hybrid")}
             </button>
             {!hasData && (
-              <p className="text-xs text-amber-700 dark:text-amber-300">
-                {t("hybrid.needFundamentals")}
-              </p>
+              <p className="text-xs text-amber-700 dark:text-amber-300">{tx("Для запуска сначала загрузите фундаментальные данные.", "Load fundamentals first.")}</p>
             )}
           </div>
         </div>
 
         <div className="lg:col-span-3 space-y-6">
-          <div className="bg-white dark:bg-slate-900 rounded-xl p-6 shadow-sm border border-slate-200 dark:border-slate-800">
-            <h3 className="font-semibold text-slate-900 dark:text-slate-100 mb-4">{t("hybrid.compareTitle")}</h3>
-            <div className="h-72">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={modelComparison}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                  <XAxis dataKey="model" stroke="#64748b" />
-                  <YAxis stroke="#64748b" domain={[0, 1]} />
-                  <Tooltip />
-                  <Bar dataKey="score" fill="#0891b2" />
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-          </div>
-
-          {run && (
-            <div className="bg-white dark:bg-slate-900 rounded-xl p-6 shadow-sm border border-slate-200 dark:border-slate-800">
-              <h3 className="font-semibold text-slate-900 dark:text-slate-100 mb-3">{t("hybrid.resultTitle")}</h3>
-              <p className="text-sm text-slate-700 dark:text-slate-300">
-                {t("hybrid.resultText")} ({cache.shares.length}): Cluster {weights.clusterWeight}%, Tree{" "}
-                {weights.treeWeight}%, Neural {weights.neuralWeight}%.
-              </p>
+          {!!metrics.length && (
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              {metrics.map((m) => (
+                <div key={m.label} className="bg-white dark:bg-slate-900 rounded-xl p-4 shadow-sm border border-slate-200 dark:border-slate-800">
+                  <div className="text-sm text-slate-600 dark:text-slate-400 mb-1">{m.label}</div>
+                  <div className="text-2xl font-semibold text-slate-900 dark:text-slate-100">{m.value}</div>
+                </div>
+              ))}
             </div>
           )}
 
-          <EmbeddedMarkowitz accentClassName="text-cyan-700" />
+          {!!modelComparison.length && (
+            <div className="bg-white dark:bg-slate-900 rounded-xl p-6 shadow-sm border border-slate-200 dark:border-slate-800">
+              <h3 className="font-semibold text-slate-900 dark:text-slate-100 mb-4">{tx("Сравнение моделей", "Model Comparison")}</h3>
+              <div className="h-72">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={modelComparison}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                    <XAxis dataKey="model" stroke="#64748b" />
+                    <YAxis stroke="#64748b" />
+                    <Tooltip formatter={(v: number) => Number(v).toFixed(4)} />
+                    <Bar dataKey="score" fill="#0891b2" />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+          )}
+
+          {!!trainingHistory.length && (
+            <div className="bg-white dark:bg-slate-900 rounded-xl p-6 shadow-sm border border-slate-200 dark:border-slate-800">
+              <h3 className="font-semibold text-slate-900 dark:text-slate-100 mb-4">{tx("История обучения", "Training History")}</h3>
+              <ResponsiveContainer width="100%" height={320}>
+                <LineChart data={trainingHistory}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                  <XAxis dataKey="epoch" stroke="#64748b" />
+                  <YAxis stroke="#64748b" />
+                  <Tooltip formatter={(v: number) => Number(v).toFixed(4)} />
+                  <Legend />
+                  <Line type="monotone" dataKey="trainLoss" name="Train Loss" stroke="#0ea5e9" dot={false} strokeWidth={2} />
+                  <Line type="monotone" dataKey="valLoss" name="Val Loss" stroke="#f97316" dot={false} strokeWidth={2} />
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
+          )}
+
+          {!!portfolioStrategies.length && (
+            <div className="bg-white dark:bg-slate-900 rounded-xl p-6 shadow-sm border border-slate-200 dark:border-slate-800">
+              <h3 className="font-semibold text-slate-900 dark:text-slate-100 mb-4">{tx("Стратегии портфеля", "Portfolio Strategies")}</h3>
+              <div className="overflow-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="text-left border-b border-slate-200 dark:border-slate-800">
+                      <th className="py-2 pr-3">{tx("Стратегия", "Strategy")}</th>
+                      <th className="py-2 pr-3">Expected return</th>
+                      <th className="py-2 pr-3">Volatility</th>
+                      <th className="py-2 pr-3">Sharpe</th>
+                      <th className="py-2 pr-3">Diversification</th>
+                      <th className="py-2 pr-3">{tx("Позиций", "Positions")}</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {portfolioStrategies.map((s) => (
+                      <tr key={s.key} className="border-b border-slate-100 dark:border-slate-800">
+                        <td className="py-2 pr-3 font-medium text-slate-900 dark:text-slate-100">{s.name}</td>
+                        <td className="py-2 pr-3 text-slate-700 dark:text-slate-300">{Number.isFinite(s.expectedReturn) ? s.expectedReturn.toFixed(4) : "-"}</td>
+                        <td className="py-2 pr-3 text-slate-700 dark:text-slate-300">{Number.isFinite(s.risk) ? s.risk.toFixed(4) : "-"}</td>
+                        <td className="py-2 pr-3 text-slate-700 dark:text-slate-300">{Number.isFinite(s.sharpe) ? s.sharpe.toFixed(4) : "-"}</td>
+                        <td className="py-2 pr-3 text-slate-700 dark:text-slate-300">{Number.isFinite(s.diversification) ? s.diversification.toFixed(4) : "-"}</td>
+                        <td className="py-2 pr-3 text-slate-700 dark:text-slate-300">{s.assetsCount}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          {(!!portfolio.length || portfolioAssetsCount > 0) && (
+            <div className="bg-white dark:bg-slate-900 rounded-xl p-6 shadow-sm border border-slate-200 dark:border-slate-800">
+              <div className="flex items-center justify-between gap-3 mb-4">
+                <div className="flex items-center gap-2">
+                  <Trophy className="w-5 h-5 text-amber-500" />
+                  <h3 className="font-semibold text-slate-900 dark:text-slate-100">{tx("Оптимальный портфель гибрида", "Hybrid Optimal Portfolio")}</h3>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={savePortfolioChartPng}
+                    disabled={!portfolio.length}
+                    className="inline-flex items-center gap-1 px-3 py-2 text-xs rounded-md border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-200 disabled:opacity-50"
+                  >
+                    <ImageDown className="w-4 h-4" />
+                    PNG
+                  </button>
+                  <button
+                    onClick={exportPortfolioToExcel}
+                    disabled={!portfolio.length}
+                    className="inline-flex items-center gap-1 px-3 py-2 text-xs rounded-md border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-200 disabled:opacity-50"
+                  >
+                    <Download className="w-4 h-4" />
+                    Excel
+                  </button>
+                </div>
+              </div>
+              {portfolioAssetsCount > 0 && (
+                <p className="text-sm text-slate-600 dark:text-slate-300 mb-4">
+                  {tx("Количество активов в портфеле", "Assets in portfolio")}: <span className="font-semibold text-slate-900 dark:text-slate-100">{portfolioAssetsCount}</span>
+                </p>
+              )}
+
+              {!!portfolio.length && (
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                  <div className="h-72" ref={portfolioChartRef}>
+                    <ResponsiveContainer width="100%" height="100%">
+                      <PieChart>
+                        <Pie
+                          data={portfolio}
+                          dataKey="weight"
+                          nameKey="ticker"
+                          cx="50%"
+                          cy="50%"
+                          outerRadius={105}
+                          labelLine={false}
+                          label={({ ticker, weight }) => (Number(weight) >= 6 ? `${ticker}: ${Number(weight).toFixed(1)}%` : "")}
+                        >
+                          {portfolio.map((row, idx) => (
+                            <Cell key={row.ticker} fill={palette[idx % palette.length]} />
+                          ))}
+                        </Pie>
+                        <Tooltip formatter={(v: number) => `${Number(v).toFixed(2)}%`} />
+                      </PieChart>
+                    </ResponsiveContainer>
+                  </div>
+
+                  <div className="overflow-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="text-left border-b border-slate-200 dark:border-slate-800">
+                          <th className="py-2 pr-3">Ticker</th>
+                          <th className="py-2 pr-3">{tx("Компания", "Company")}</th>
+                          <th className="py-2 pr-3">{tx("Вес, %", "Weight, %")}</th>
+                          <th className="py-2 pr-3">Return</th>
+                          <th className="py-2 pr-3">Risk</th>
+                          <th className="py-2 pr-3">Sharpe</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {portfolio.map((row) => (
+                          <tr key={`${row.ticker}-${row.name}`} className="border-b border-slate-100 dark:border-slate-800">
+                            <td className="py-2 pr-3 font-medium text-slate-900 dark:text-slate-100">{row.ticker}</td>
+                            <td className="py-2 pr-3 text-slate-700 dark:text-slate-300">{row.name}</td>
+                            <td className="py-2 pr-3 text-slate-700 dark:text-slate-300">{row.weight.toFixed(2)}</td>
+                            <td className="py-2 pr-3 text-slate-700 dark:text-slate-300">{Number.isFinite(row.expectedReturn) ? row.expectedReturn.toFixed(4) : "-"}</td>
+                            <td className="py-2 pr-3 text-slate-700 dark:text-slate-300">{Number.isFinite(row.risk) ? row.risk.toFixed(4) : "-"}</td>
+                            <td className="py-2 pr-3 text-slate-700 dark:text-slate-300">{Number.isFinite(row.sharpe) ? row.sharpe.toFixed(4) : "-"}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
         </div>
       </div>
     </div>
   );
 }
-

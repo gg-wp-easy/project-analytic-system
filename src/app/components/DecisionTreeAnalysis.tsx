@@ -1,8 +1,9 @@
-﻿import { useMemo, useState } from "react";
-import { GitBranch, Play, Settings } from "lucide-react";
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from "recharts";
+﻿import { useEffect, useMemo, useRef, useState } from "react";
+import { Download, GitBranch, ImageDown, Play, Settings, Trophy } from "lucide-react";
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, PieChart, Pie } from "recharts";
 import { EmbeddedMarkowitz } from "./EmbeddedMarkowitz";
 import { useFundamentals } from "../context/FundamentalsContext";
+import { useAppSettings } from "../context/AppSettingsContext";
 
 type MetricItem = {
   label: string;
@@ -44,6 +45,85 @@ type NumericSummaryItem = {
 
 const ENABLE_TEMP_LOGS = true;
 const palette = ["#10b981", "#059669", "#34d399", "#0ea5a4", "#22c55e", "#84cc16", "#14b8a6", "#2dd4bf"];
+const TREE_STATE_KEY = "decision-tree-analysis-state-v1";
+function escapeHtml(value: string): string {
+  return value
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#39;");
+}
+
+function downloadPortfolioAsExcel(rows: PortfolioPosition[], filename: string): void {
+  const tableRows = rows
+    .map(
+      (row) =>
+        `<tr><td>${escapeHtml(row.ticker)}</td><td>${escapeHtml(row.name || "")}</td><td>${escapeHtml(row.sector || "")}</td><td>${row.weight.toFixed(4)}</td><td>${Number.isFinite(row.expectedReturn) ? row.expectedReturn.toFixed(6) : ""}</td><td>${Number.isFinite(row.risk) ? row.risk.toFixed(6) : ""}</td><td>${escapeHtml(row.predictedText || "")}</td></tr>`,
+    )
+    .join("");
+
+  const html =
+    `\uFEFF<html><head><meta charset="utf-8"></head><body>` +
+    `<table border="1"><tr><th>Ticker</th><th>Name</th><th>Sector</th><th>Weight, %</th><th>Expected Return</th><th>Risk</th><th>Prediction</th></tr>${tableRows}</table>` +
+    `</body></html>`;
+
+  const blob = new Blob([html], { type: "application/vnd.ms-excel;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+}
+
+async function downloadSvgAsPng(svg: SVGSVGElement, filename: string): Promise<void> {
+  const xml = new XMLSerializer().serializeToString(svg);
+  const svgBlob = new Blob([xml], { type: "image/svg+xml;charset=utf-8" });
+  const url = URL.createObjectURL(svgBlob);
+
+  await new Promise<void>((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => {
+      const width = Math.max(svg.clientWidth, 600);
+      const height = Math.max(svg.clientHeight, 400);
+      const canvas = document.createElement("canvas");
+      canvas.width = width * 2;
+      canvas.height = height * 2;
+
+      const ctx = canvas.getContext("2d");
+      if (!ctx) {
+        reject(new Error("Cannot create canvas context"));
+        return;
+      }
+
+      ctx.fillStyle = "#ffffff";
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+      canvas.toBlob((blob) => {
+        if (!blob) {
+          reject(new Error("Failed to create PNG blob"));
+          return;
+        }
+        const pngUrl = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = pngUrl;
+        link.download = filename;
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        URL.revokeObjectURL(pngUrl);
+        resolve();
+      }, "image/png");
+    };
+    img.onerror = () => reject(new Error("Failed to render chart image"));
+    img.src = url;
+  });
+
+  URL.revokeObjectURL(url);
+}
 
 function numberOr(value: unknown, fallback = 0): number {
   if (typeof value === "number" && Number.isFinite(value)) {
@@ -258,6 +338,8 @@ function extractPortfolioAssetsCount(parsed: Record<string, unknown>): number {
 
 export function DecisionTreeAnalysis() {
   const { cache, hasData } = useFundamentals();
+  const { locale } = useAppSettings();
+  const isEn = locale === "en";
   const [isRunning, setIsRunning] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [metrics, setMetrics] = useState<MetricItem[]>([]);
@@ -268,6 +350,52 @@ export function DecisionTreeAnalysis() {
   const [numericSummary, setNumericSummary] = useState<NumericSummaryItem[]>([]);
   const [portfolioAssetsCount, setPortfolioAssetsCount] = useState(0);
   const [serverKeys, setServerKeys] = useState<string[]>([]);
+  const portfolioChartRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    try {
+      const raw = window.localStorage.getItem(TREE_STATE_KEY);
+      if (!raw) {
+        return;
+      }
+      const parsed = JSON.parse(raw) as {
+        error?: string | null;
+        metrics?: MetricItem[];
+        featureImportance?: FeatureImportanceItem[];
+        confusionMatrix?: ConfusionMatrixData | null;
+        portfolioPositions?: PortfolioPosition[];
+        sectorAllocation?: SectorAllocationItem[];
+        numericSummary?: NumericSummaryItem[];
+        portfolioAssetsCount?: number;
+        serverKeys?: string[];
+      };
+      if (typeof parsed.error === "string" || parsed.error === null) setError(parsed.error);
+      if (Array.isArray(parsed.metrics)) setMetrics(parsed.metrics);
+      if (Array.isArray(parsed.featureImportance)) setFeatureImportance(parsed.featureImportance);
+      if (parsed.confusionMatrix && typeof parsed.confusionMatrix === "object") setConfusionMatrix(parsed.confusionMatrix);
+      if (Array.isArray(parsed.portfolioPositions)) setPortfolioPositions(parsed.portfolioPositions);
+      if (Array.isArray(parsed.sectorAllocation)) setSectorAllocation(parsed.sectorAllocation);
+      if (Array.isArray(parsed.numericSummary)) setNumericSummary(parsed.numericSummary);
+      if (typeof parsed.portfolioAssetsCount === "number") setPortfolioAssetsCount(parsed.portfolioAssetsCount);
+      if (Array.isArray(parsed.serverKeys)) setServerKeys(parsed.serverKeys);
+    } catch {
+      // ignore broken persisted state
+    }
+  }, []);
+
+  useEffect(() => {
+    const payload = {
+      error,
+      metrics,
+      featureImportance,
+      confusionMatrix,
+      portfolioPositions,
+      sectorAllocation,
+      numericSummary,
+      portfolioAssetsCount,
+      serverKeys,
+    };
+    window.localStorage.setItem(TREE_STATE_KEY, JSON.stringify(payload));
+  }, [error, metrics, featureImportance, confusionMatrix, portfolioPositions, sectorAllocation, numericSummary, portfolioAssetsCount, serverKeys]);
 
   const requestData = useMemo(
     () =>
@@ -352,7 +480,7 @@ export function DecisionTreeAnalysis() {
         });
       }
     } catch (e) {
-      const message = e instanceof Error ? e.message : "Не удалось выполнить анализ дерева решений";
+      const message = e instanceof Error ? e.message : isEn ? "Failed to run decision tree analysis" : "Не удалось выполнить анализ дерева решений";
       setError(message);
       setMetrics([]);
       setFeatureImportance([]);
@@ -374,14 +502,34 @@ export function DecisionTreeAnalysis() {
     }
   };
 
+  const exportPortfolioToExcel = () => {
+    if (!portfolioPositions.length) {
+      return;
+    }
+    downloadPortfolioAsExcel(portfolioPositions, "tree-optimal-portfolio.xls");
+  };
+
+  const savePortfolioChartPng = async () => {
+    const svg = portfolioChartRef.current?.querySelector("svg");
+    if (!svg) {
+      return;
+    }
+    try {
+      await downloadSvgAsPng(svg as SVGSVGElement, "tree-optimal-portfolio.png");
+    } catch (e) {
+      const message = e instanceof Error ? e.message : isEn ? "Failed to save PNG" : "Не удалось сохранить PNG";
+      setError(message);
+    }
+  };
+
   return (
     <div className="space-y-6">
       <div className="bg-gradient-to-r from-green-600 to-emerald-600 rounded-xl p-6 text-white shadow-lg">
         <div className="flex items-center gap-3 mb-2">
           <GitBranch className="w-8 h-8" />
-          <h1 className="text-3xl font-bold">Анализ дерева решений</h1>
+          <h1 className="text-3xl font-bold">{isEn ? "Decision Tree Analysis" : "Анализ дерева решений"}</h1>
         </div>
-        <p className="text-green-100">Модель и гиперпараметры автоматически подбираются на сервере.</p>
+        <p className="text-green-100">{isEn ? "Model and hyperparameters are selected on the server." : "Модель и гиперпараметры автоматически подбираются на сервере."}</p>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
@@ -389,18 +537,18 @@ export function DecisionTreeAnalysis() {
           <div className="bg-white rounded-xl p-6 shadow-sm border border-slate-200">
             <div className="flex items-center gap-2 mb-6">
               <Settings className="w-5 h-5 text-green-600" />
-              <h2 className="font-semibold text-slate-900">Запуск анализа</h2>
+              <h2 className="font-semibold text-slate-900">{isEn ? "Run Analysis" : "Запуск анализа"}</h2>
             </div>
 
             <div className="space-y-4">
               <div className="rounded-lg border border-slate-200 p-3 bg-slate-50">
-                <p className="text-sm text-slate-700">Источник: кэш фундаментальных данных</p>
-                <p className="text-xs text-slate-500 mt-1">Записей: {requestData.length}</p>
+                <p className="text-sm text-slate-700">{isEn ? "Source: fundamentals cache" : "Источник: кэш фундаментальных данных"}</p>
+                <p className="text-xs text-slate-500 mt-1">{isEn ? "Records" : "Записей"}: {requestData.length}</p>
               </div>
 
               {!hasData && (
                 <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
-                  <p className="text-sm text-amber-800">Кэш пуст. Сначала загрузите фундаментальные данные.</p>
+                  <p className="text-sm text-amber-800">{isEn ? "Cache is empty. Load fundamentals first." : "Кэш пуст. Сначала загрузите фундаментальные данные."}</p>
                 </div>
               )}
 
@@ -416,7 +564,7 @@ export function DecisionTreeAnalysis() {
                 className="w-full bg-gradient-to-r from-green-600 to-emerald-600 text-white py-3 rounded-lg font-medium hover:from-green-700 hover:to-emerald-700 transition-all shadow-md hover:shadow-lg flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <Play className="w-5 h-5" />
-                {isRunning ? "Выполняется..." : "Запустить анализ"}
+                {isRunning ? (isEn ? "Running..." : "Выполняется...") : (isEn ? "Run Analysis" : "Запустить анализ")}
               </button>
             </div>
           </div>
@@ -436,14 +584,14 @@ export function DecisionTreeAnalysis() {
 
           {portfolioAssetsCount > 0 && (
             <div className="bg-white rounded-xl p-4 shadow-sm border border-slate-200">
-              <p className="text-sm text-slate-600">Активов в оптимальном портфеле</p>
+              <p className="text-sm text-slate-600">{isEn ? "Assets in optimal portfolio" : "Активов в оптимальном портфеле"}</p>
               <p className="text-2xl font-semibold text-slate-900">{portfolioAssetsCount}</p>
             </div>
           )}
 
           {!!sectorAllocation.length && (
             <div className="bg-white rounded-xl p-6 shadow-sm border border-slate-200">
-              <h3 className="font-semibold text-slate-900 mb-4">Распределение по секторам</h3>
+              <h3 className="font-semibold text-slate-900 mb-4">{isEn ? "Sector Allocation" : "Распределение по секторам"}</h3>
               <ResponsiveContainer width="100%" height={320}>
                 <BarChart data={sectorAllocation} layout="vertical" margin={{ top: 5, right: 30, left: 130, bottom: 5 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
@@ -458,50 +606,96 @@ export function DecisionTreeAnalysis() {
 
           {!!portfolioPositions.length && (
             <div className="bg-white rounded-xl p-6 shadow-sm border border-slate-200">
-              <h3 className="font-semibold text-slate-900 mb-4">Позиции оптимального портфеля</h3>
-              <div className="overflow-auto">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="text-left border-b border-slate-200">
-                      <th className="py-2 pr-3">Ticker</th>
-                      <th className="py-2 pr-3">Компания</th>
-                      <th className="py-2 pr-3">Сектор</th>
-                      <th className="py-2 pr-3">Вес, %</th>
-                      <th className="py-2 pr-3">Ожид. доходность</th>
-                      <th className="py-2 pr-3">Риск</th>
-                      <th className="py-2 pr-3">Оценка</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {portfolioPositions.map((row) => (
-                      <tr key={`${row.ticker}-${row.name}`} className="border-b border-slate-100">
-                        <td className="py-2 pr-3 font-medium text-slate-900">{row.ticker}</td>
-                        <td className="py-2 pr-3 text-slate-700">{row.name}</td>
-                        <td className="py-2 pr-3 text-slate-700">{row.sector}</td>
-                        <td className="py-2 pr-3 text-slate-700">{row.weight.toFixed(2)}</td>
-                        <td className="py-2 pr-3 text-slate-700">
-                          {Number.isFinite(row.expectedReturn) ? row.expectedReturn.toFixed(4) : "-"}
-                        </td>
-                        <td className="py-2 pr-3 text-slate-700">
-                          {Number.isFinite(row.risk) ? row.risk.toFixed(4) : "-"}
-                        </td>
-                        <td className="py-2 pr-3 text-slate-700">{row.predictedText}</td>
+              <div className="flex items-center justify-between gap-3 mb-4">
+                <div className="flex items-center gap-2">
+                  <Trophy className="w-5 h-5 text-amber-500" />
+                  <h3 className="font-semibold text-slate-900">{isEn ? "Optimal Portfolio from Decision Tree" : "Оптимальный портфель из дерева решений"}</h3>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={savePortfolioChartPng}
+                    disabled={!portfolioPositions.length}
+                    className="inline-flex items-center gap-1 px-3 py-2 text-xs rounded-md border border-slate-300 text-slate-700 disabled:opacity-50"
+                  >
+                    <ImageDown className="w-4 h-4" />
+                    PNG
+                  </button>
+                  <button
+                    onClick={exportPortfolioToExcel}
+                    disabled={!portfolioPositions.length}
+                    className="inline-flex items-center gap-1 px-3 py-2 text-xs rounded-md border border-slate-300 text-slate-700 disabled:opacity-50"
+                  >
+                    <Download className="w-4 h-4" />
+                    Excel
+                  </button>
+                </div>
+              </div>
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <div className="h-72" ref={portfolioChartRef}>
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie
+                        data={portfolioPositions}
+                        dataKey="weight"
+                        nameKey="ticker"
+                        cx="50%"
+                        cy="50%"
+                        outerRadius={105}
+                        labelLine={false}
+                        label={({ ticker, weight }) => (Number(weight) >= 6 ? `${ticker}: ${Number(weight).toFixed(1)}%` : "")}
+                      >
+                        {portfolioPositions.map((row, idx) => (
+                          <Cell key={row.ticker} fill={palette[idx % palette.length]} />
+                        ))}
+                      </Pie>
+                      <Tooltip formatter={(v: number) => `${Number(v).toFixed(2)}%`} />
+                    </PieChart>
+                  </ResponsiveContainer>
+                </div>
+                <div className="overflow-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="text-left border-b border-slate-200">
+                        <th className="py-2 pr-3">Ticker</th>
+                        <th className="py-2 pr-3">{isEn ? "Company" : "Компания"}</th>
+                        <th className="py-2 pr-3">{isEn ? "Sector" : "Сектор"}</th>
+                        <th className="py-2 pr-3">{isEn ? "Weight, %" : "Вес, %"}</th>
+                        <th className="py-2 pr-3">{isEn ? "Expected Return" : "Ожид. доходность"}</th>
+                        <th className="py-2 pr-3">{isEn ? "Risk" : "Риск"}</th>
+                        <th className="py-2 pr-3">{isEn ? "Prediction" : "Оценка"}</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
+                    </thead>
+                    <tbody>
+                      {portfolioPositions.map((row) => (
+                        <tr key={`${row.ticker}-${row.name}`} className="border-b border-slate-100">
+                          <td className="py-2 pr-3 font-medium text-slate-900">{row.ticker}</td>
+                          <td className="py-2 pr-3 text-slate-700">{row.name}</td>
+                          <td className="py-2 pr-3 text-slate-700">{row.sector}</td>
+                          <td className="py-2 pr-3 text-slate-700">{row.weight.toFixed(2)}</td>
+                          <td className="py-2 pr-3 text-slate-700">
+                            {Number.isFinite(row.expectedReturn) ? row.expectedReturn.toFixed(4) : "-"}
+                          </td>
+                          <td className="py-2 pr-3 text-slate-700">
+                            {Number.isFinite(row.risk) ? row.risk.toFixed(4) : "-"}
+                          </td>
+                          <td className="py-2 pr-3 text-slate-700">{row.predictedText}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               </div>
             </div>
           )}
 
           {!!numericSummary.length && (
             <div className="bg-white rounded-xl p-6 shadow-sm border border-slate-200">
-              <h3 className="font-semibold text-slate-900 mb-4">Сводка по числовым признакам</h3>
+              <h3 className="font-semibold text-slate-900 mb-4">{isEn ? "Numeric Features Summary" : "Сводка по числовым признакам"}</h3>
               <div className="overflow-auto">
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="text-left border-b border-slate-200">
-                      <th className="py-2 pr-3">Метрика</th>
+                      <th className="py-2 pr-3">{isEn ? "Metric" : "Метрика"}</th>
                       <th className="py-2 pr-3">Mean</th>
                       <th className="py-2 pr-3">Median</th>
                       <th className="py-2 pr-3">Min</th>
@@ -526,7 +720,7 @@ export function DecisionTreeAnalysis() {
 
           {!!featureImportance.length && (
             <div className="bg-white rounded-xl p-6 shadow-sm border border-slate-200">
-              <h3 className="font-semibold text-slate-900 mb-4">Важность признаков</h3>
+              <h3 className="font-semibold text-slate-900 mb-4">{isEn ? "Feature Importance" : "Важность признаков"}</h3>
               <ResponsiveContainer width="100%" height={300}>
                 <BarChart data={featureImportance} layout="vertical" margin={{ top: 5, right: 30, left: 90, bottom: 5 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
@@ -545,7 +739,7 @@ export function DecisionTreeAnalysis() {
 
           {confusionMatrix && (
             <div className="bg-white rounded-xl p-6 shadow-sm border border-slate-200">
-              <h3 className="font-semibold text-slate-900 mb-4">Матрица ошибок</h3>
+              <h3 className="font-semibold text-slate-900 mb-4">{isEn ? "Confusion Matrix" : "Матрица ошибок"}</h3>
               <div className="max-w-2xl overflow-auto">
                 <table className="w-full text-sm border-collapse">
                   <thead>
@@ -553,7 +747,7 @@ export function DecisionTreeAnalysis() {
                       <th className="p-2 border border-slate-200 bg-slate-50"></th>
                       {confusionMatrix.labels.map((label) => (
                         <th key={`pred-${label}`} className="p-2 border border-slate-200 bg-slate-50 text-left">
-                          Прогноз: {label}
+                          {isEn ? "Predicted" : "Прогноз"}: {label}
                         </th>
                       ))}
                     </tr>
@@ -561,7 +755,7 @@ export function DecisionTreeAnalysis() {
                   <tbody>
                     {confusionMatrix.matrix.map((row, rowIndex) => (
                       <tr key={`row-${rowIndex}`}>
-                        <td className="p-2 border border-slate-200 bg-slate-50 font-medium">Факт: {confusionMatrix.labels[rowIndex] ?? `Class ${rowIndex + 1}`}</td>
+                        <td className="p-2 border border-slate-200 bg-slate-50 font-medium">{isEn ? "Actual" : "Факт"}: {confusionMatrix.labels[rowIndex] ?? `Class ${rowIndex + 1}`}</td>
                         {row.map((value, colIndex) => (
                           <td key={`cell-${rowIndex}-${colIndex}`} className="p-2 border border-slate-200 text-center font-semibold text-slate-900">
                             {value}
@@ -575,13 +769,17 @@ export function DecisionTreeAnalysis() {
             </div>
           )}
 
-          {!!serverKeys.length && (
+          {/*{!!serverKeys.length && (
             <div className="bg-white rounded-xl p-4 shadow-sm border border-slate-200">
-              <p className="text-sm text-slate-600">Ключи ответа сервера: {serverKeys.join(", ")}</p>
+              <p className="text-sm text-slate-600">{isEn ? "Server response keys" : "Ключи ответа сервера"}: {serverKeys.join(", ")}</p>
             </div>
-          )}
+          )}*/}
         </div>
       </div>
     </div>
   );
 }
+
+
+
+
