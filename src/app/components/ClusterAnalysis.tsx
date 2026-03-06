@@ -17,6 +17,10 @@ import {
 } from "recharts";
 import { useFundamentals } from "../context/FundamentalsContext";
 import { useAppSettings } from "../context/AppSettingsContext";
+import { OptimizerSettingsFields } from "./OptimizerSettingsFields";
+import { submitOptimizerSettings, useOptimizerSettings } from "./optimizerSettings";
+import { AnalysisRunningIndicator } from "./AnalysisRunningIndicator";
+import { formatMetricDisplay, localizeMetricLabel } from "./metricDisplay";
 
 type ClusterPoint = {
   ticker: string;
@@ -495,6 +499,7 @@ export function ClusterAnalysis() {
   const { locale } = useAppSettings();
   const isEn = locale === "en";
   const tx = (ru: string, en: string) => (isEn ? en : ru);
+  const { settings: optimizerSettings, setSettings: setOptimizerSettings } = useOptimizerSettings();
   const [isRunning, setIsRunning] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [serverRaw, setServerRaw] = useState<Record<string, unknown> | null>(null);
@@ -639,6 +644,7 @@ export function ClusterAnalysis() {
     const startedAt = performance.now();
 
     try {
+      await submitOptimizerSettings(optimizerSettings);
       const body = JSON.stringify({ data: requestData });
       const response = await fetch("/api/cluster-analysis", {
         method: "POST",
@@ -739,6 +745,11 @@ export function ClusterAnalysis() {
                 <p className="text-sm text-slate-700 dark:text-slate-300">{tx("Источник: кэш фундаментальных данных", "Source: fundamentals cache")}</p>
                 <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">{tx("Записей", "Records")}: {requestData.length}</p>
               </div>
+              <OptimizerSettingsFields
+                isEn={isEn}
+                settings={optimizerSettings}
+                onChange={setOptimizerSettings}
+              />
 
               {!hasData && (
                 <div className="bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900 rounded-lg p-3">
@@ -765,12 +776,20 @@ export function ClusterAnalysis() {
         </div>
 
         <div className="lg:col-span-3 space-y-6">
+          {isRunning && (
+            <AnalysisRunningIndicator
+              title={tx("Выполняем кластеризацию", "Running clustering")}
+              subtitle={tx("Подбираем структуру кластеров и оптимальный портфель", "Estimating clusters and optimal portfolio")}
+              accentClassName="text-purple-600"
+            />
+          )}
+
           {!!metrics.length && (
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
               {metrics.map((m) => (
                 <div key={m.label} className="bg-white dark:bg-slate-900 rounded-xl p-4 shadow-sm border border-slate-200 dark:border-slate-800">
-                  <div className="text-sm text-slate-600 dark:text-slate-400 mb-1">{m.label}</div>
-                  <div className="text-2xl font-semibold text-slate-900 dark:text-slate-100">{m.value}</div>
+                  <div className="text-sm text-slate-600 dark:text-slate-400 mb-1">{localizeMetricLabel(m.label, isEn)}</div>
+                  <div className="text-2xl font-semibold text-slate-900 dark:text-slate-100">{formatMetricDisplay(m.label, m.value)}</div>
                 </div>
               ))}
             </div>
@@ -817,8 +836,8 @@ export function ClusterAnalysis() {
           {!!portfolioStrategies.length && (
             <div className="bg-white dark:bg-slate-900 rounded-xl p-6 shadow-sm border border-slate-200 dark:border-slate-800">
               <h3 className="font-semibold text-slate-900 dark:text-slate-100 mb-4">{tx("Стратегии портфелей", "Portfolio Strategies")}</h3>
-              <div className="overflow-auto">
-                <table className="w-full text-sm">
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-[720px] text-sm [&_th]:whitespace-nowrap [&_td]:whitespace-nowrap">
                   <thead>
                     <tr className="text-left border-b border-slate-200 dark:border-slate-800">
                       <th className="py-2 pr-3">{tx("Стратегия", "Strategy")}</th>
@@ -971,8 +990,8 @@ export function ClusterAnalysis() {
                   </ResponsiveContainer>
                 </div>
 
-                <div className="overflow-auto">
-                  <table className="w-full text-sm">
+                <div className="overflow-x-auto">
+                  <table className="w-full min-w-[720px] text-sm [&_th]:whitespace-nowrap [&_td]:whitespace-nowrap">
                     <thead>
                       <tr className="text-left border-b border-slate-200 dark:border-slate-800">
                         <th className="py-2 pr-3">Ticker</th>

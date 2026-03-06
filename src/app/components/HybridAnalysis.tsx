@@ -18,6 +18,10 @@ import {
 import { EmbeddedMarkowitz } from "./EmbeddedMarkowitz";
 import { useFundamentals } from "../context/FundamentalsContext";
 import { useAppSettings } from "../context/AppSettingsContext";
+import { OptimizerSettingsFields } from "./OptimizerSettingsFields";
+import { submitOptimizerSettings, useOptimizerSettings } from "./optimizerSettings";
+import { AnalysisRunningIndicator } from "./AnalysisRunningIndicator";
+import { formatMetricDisplay, localizeMetricLabel } from "./metricDisplay";
 
 type MetricItem = {
   label: string;
@@ -336,6 +340,7 @@ export function HybridAnalysis() {
   const { locale } = useAppSettings();
   const isEn = locale === "en";
   const tx = (ru: string, en: string) => (isEn ? en : ru);
+  const { settings: optimizerSettings, setSettings: setOptimizerSettings } = useOptimizerSettings();
 
   const [isRunning, setIsRunning] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -447,6 +452,7 @@ export function HybridAnalysis() {
     };
 
     try {
+      await submitOptimizerSettings(optimizerSettings);
       const response = await fetch("/api/hybrid-analysis", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -549,6 +555,11 @@ export function HybridAnalysis() {
               <p className="text-sm text-slate-700 dark:text-slate-300">{tx("Источник: кэш фундаментальных данных", "Source: fundamentals cache")}</p>
               <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">{tx("Записей", "Records")}: {requestData.length}</p>
             </div>
+            <OptimizerSettingsFields
+              isEn={isEn}
+              settings={optimizerSettings}
+              onChange={setOptimizerSettings}
+            />
             <label className="block text-sm text-slate-700 dark:text-slate-300">
               {isEn ? "Cluster Weight (%)" : "Вес Cluster (%)"}
               <input
@@ -594,12 +605,20 @@ export function HybridAnalysis() {
         </div>
 
         <div className="lg:col-span-3 space-y-6">
+          {isRunning && (
+            <AnalysisRunningIndicator
+              title={tx("Выполняем гибридный анализ", "Running hybrid analysis")}
+              subtitle={tx("Собираем сигналы моделей и оптимизируем портфель", "Combining model signals and optimizing portfolio")}
+              accentClassName="text-cyan-700"
+            />
+          )}
+
           {!!metrics.length && (
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
               {metrics.map((m) => (
                 <div key={m.label} className="bg-white dark:bg-slate-900 rounded-xl p-4 shadow-sm border border-slate-200 dark:border-slate-800">
-                  <div className="text-sm text-slate-600 dark:text-slate-400 mb-1">{m.label}</div>
-                  <div className="text-2xl font-semibold text-slate-900 dark:text-slate-100">{m.value}</div>
+                  <div className="text-sm text-slate-600 dark:text-slate-400 mb-1">{localizeMetricLabel(m.label, isEn)}</div>
+                  <div className="text-2xl font-semibold text-slate-900 dark:text-slate-100">{formatMetricDisplay(m.label, m.value)}</div>
                 </div>
               ))}
             </div>
@@ -642,8 +661,8 @@ export function HybridAnalysis() {
           {!!portfolioStrategies.length && (
             <div className="bg-white dark:bg-slate-900 rounded-xl p-6 shadow-sm border border-slate-200 dark:border-slate-800">
               <h3 className="font-semibold text-slate-900 dark:text-slate-100 mb-4">{tx("Стратегии портфеля", "Portfolio Strategies")}</h3>
-              <div className="overflow-auto">
-                <table className="w-full text-sm">
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-[720px] text-sm [&_th]:whitespace-nowrap [&_td]:whitespace-nowrap">
                   <thead>
                     <tr className="text-left border-b border-slate-200 dark:border-slate-800">
                       <th className="py-2 pr-3">{tx("Стратегия", "Strategy")}</th>
@@ -727,8 +746,8 @@ export function HybridAnalysis() {
                     </ResponsiveContainer>
                   </div>
 
-                  <div className="overflow-auto">
-                    <table className="w-full text-sm">
+                  <div className="overflow-x-auto">
+                    <table className="w-full min-w-[720px] text-sm [&_th]:whitespace-nowrap [&_td]:whitespace-nowrap">
                       <thead>
                         <tr className="text-left border-b border-slate-200 dark:border-slate-800">
                           <th className="py-2 pr-3">Ticker</th>

@@ -18,6 +18,10 @@ import {
 import { EmbeddedMarkowitz } from "./EmbeddedMarkowitz";
 import { useFundamentals } from "../context/FundamentalsContext";
 import { useAppSettings } from "../context/AppSettingsContext";
+import { OptimizerSettingsFields } from "./OptimizerSettingsFields";
+import { submitOptimizerSettings, useOptimizerSettings } from "./optimizerSettings";
+import { AnalysisRunningIndicator } from "./AnalysisRunningIndicator";
+import { formatMetricDisplay, localizeMetricLabel } from "./metricDisplay";
 
 type MetricItem = {
   label: string;
@@ -370,6 +374,7 @@ export function NeuralNetworkAnalysis() {
   const { cache, hasData } = useFundamentals();
   const { locale } = useAppSettings();
   const isEn = locale === "en";
+  const { settings: optimizerSettings, setSettings: setOptimizerSettings } = useOptimizerSettings();
   const [isRunning, setIsRunning] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [metrics, setMetrics] = useState<MetricItem[]>([]);
@@ -463,6 +468,7 @@ export function NeuralNetworkAnalysis() {
     setIsRunning(true);
 
     try {
+      await submitOptimizerSettings(optimizerSettings);
       const response = await fetch("/api/ai-analysis", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -574,6 +580,11 @@ export function NeuralNetworkAnalysis() {
                 <p className="text-sm text-slate-700">{isEn ? "Source: fundamentals cache" : "Источник: кэш фундаментальных данных"}</p>
                 <p className="text-xs text-slate-500 mt-1">{isEn ? "Records" : "Записей"}: {requestData.length}</p>
               </div>
+              <OptimizerSettingsFields
+                isEn={isEn}
+                settings={optimizerSettings}
+                onChange={setOptimizerSettings}
+              />
 
               {!hasData && (
                 <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
@@ -602,12 +613,20 @@ export function NeuralNetworkAnalysis() {
         </div>
 
         <div className="lg:col-span-3 space-y-6">
+          {isRunning && (
+            <AnalysisRunningIndicator
+              title={isEn ? "Running neural network analysis" : "Выполняем нейросетевой анализ"}
+              subtitle={isEn ? "Training network and calculating portfolio strategies" : "Обучаем сеть и рассчитываем стратегии портфеля"}
+              accentClassName="text-orange-600"
+            />
+          )}
+
           {!!metrics.length && (
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
               {metrics.map((m) => (
                 <div key={m.label} className="bg-white rounded-xl p-4 shadow-sm border border-slate-200">
-                  <div className="text-sm text-slate-600 mb-1">{m.label}</div>
-                  <div className="text-2xl font-semibold text-slate-900">{m.value}</div>
+                  <div className="text-sm text-slate-600 mb-1">{localizeMetricLabel(m.label, isEn)}</div>
+                  <div className="text-2xl font-semibold text-slate-900">{formatMetricDisplay(m.label, m.value)}</div>
                 </div>
               ))}
             </div>
@@ -633,8 +652,8 @@ export function NeuralNetworkAnalysis() {
           {!!portfolioStrategies.length && (
             <div className="bg-white rounded-xl p-6 shadow-sm border border-slate-200">
               <h3 className="font-semibold text-slate-900 mb-4">{isEn ? "Portfolio Strategies" : "Стратегии портфеля"}</h3>
-              <div className="overflow-auto">
-                <table className="w-full text-sm">
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-[720px] text-sm [&_th]:whitespace-nowrap [&_td]:whitespace-nowrap">
                   <thead>
                     <tr className="text-left border-b border-slate-200">
                       <th className="py-2 pr-3">{isEn ? "Strategy" : "Стратегия"}</th>
@@ -722,8 +741,8 @@ export function NeuralNetworkAnalysis() {
                     </ResponsiveContainer>
                   </div>
 
-                  <div className="overflow-auto">
-                    <table className="w-full text-sm">
+                  <div className="overflow-x-auto">
+                    <table className="w-full min-w-[720px] text-sm [&_th]:whitespace-nowrap [&_td]:whitespace-nowrap">
                       <thead>
                         <tr className="text-left border-b border-slate-200">
                           <th className="py-2 pr-3">Ticker</th>
