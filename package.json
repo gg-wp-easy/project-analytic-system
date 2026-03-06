@@ -8,8 +8,9 @@
     "start": "electron .",
     "build": "vite build",
     "dev": "vite",
+    "server:build": "python server-analytic-system/build.py --mode pyinstaller --target current --project-name server-analytic-system --clean",
     "electron:dev": "concurrently -k \"vite\" \"wait-on tcp:5173 && electron .\"",
-    "electron:build": "npm run build && electron-builder"
+    "electron:build": "npm run server:build && npm run build && electron-builder"
   },
   "dependencies": {
     "@emotion/react": "11.14.0",
@@ -104,6 +105,12 @@
       "dist/**/*",
       "electron/**/*",
       "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "server-analytic-system/dist/server-analytic-system",
+        "to": "server"
+      }
     ],
     "win": {
       "target": "nsis"
