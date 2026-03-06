@@ -4,6 +4,8 @@ const fs = require("fs");
 const http = require("http");
 const path = require("path");
 
+app.commandLine.appendSwitch('ignore-certificate-errors');
+
 const isDev = !app.isPackaged;
 const SERVER_HOST = "127.0.0.1";
 const SERVER_PORT = 8000;
