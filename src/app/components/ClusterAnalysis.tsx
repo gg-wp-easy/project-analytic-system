@@ -16,6 +16,11 @@ import {
   Pie,
 } from "recharts";
 import { useFundamentals } from "../context/FundamentalsContext";
+import { useAppSettings } from "../context/AppSettingsContext";
+import { OptimizerSettingsFields } from "./OptimizerSettingsFields";
+import { submitOptimizerSettings, useOptimizerSettings } from "./optimizerSettings";
+import { AnalysisRunningIndicator } from "./AnalysisRunningIndicator";
+import { formatMetricDisplay, localizeMetricLabel } from "./metricDisplay";
 
 type ClusterPoint = {
   ticker: string;
@@ -69,6 +74,7 @@ type AnalysisSummary = {
 
 const palette = ["#3b82f6", "#10b981", "#f59e0b", "#ef4444", "#8b5cf6", "#06b6d4", "#14b8a6", "#f97316"];
 const ENABLE_TEMP_LOGS = true;
+const CLUSTER_STATE_KEY = "cluster-analysis-state-v1";
 
 function numberOr(value: unknown, fallback = 0): number {
   if (typeof value === "number" && Number.isFinite(value)) {
@@ -490,6 +496,10 @@ function normalizeWeights(rows: PortfolioRow[]): PortfolioRow[] {
 
 export function ClusterAnalysis() {
   const { cache, hasData } = useFundamentals();
+  const { locale } = useAppSettings();
+  const isEn = locale === "en";
+  const tx = (ru: string, en: string) => (isEn ? en : ru);
+  const { settings: optimizerSettings, setSettings: setOptimizerSettings } = useOptimizerSettings();
   const [isRunning, setIsRunning] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [serverRaw, setServerRaw] = useState<Record<string, unknown> | null>(null);
@@ -501,6 +511,53 @@ export function ClusterAnalysis() {
   const [summaryInfo, setSummaryInfo] = useState<AnalysisSummary | null>(null);
   const [bestPortfolioAssetsCount, setBestPortfolioAssetsCount] = useState(0);
   const portfolioChartRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    try {
+      const raw = window.localStorage.getItem(CLUSTER_STATE_KEY);
+      if (!raw) {
+        return;
+      }
+      const parsed = JSON.parse(raw) as {
+        error?: string | null;
+        serverRaw?: Record<string, unknown> | null;
+        clusterData?: ClusterPoint[];
+        clusterGroups?: ClusterGroup[];
+        metrics?: MetricItem[];
+        optimalPortfolio?: PortfolioRow[];
+        portfolioStrategies?: StrategyPortfolio[];
+        summaryInfo?: AnalysisSummary | null;
+        bestPortfolioAssetsCount?: number;
+      };
+
+      if (typeof parsed.error === "string" || parsed.error === null) setError(parsed.error);
+      if (parsed.serverRaw && typeof parsed.serverRaw === "object") setServerRaw(parsed.serverRaw);
+      if (Array.isArray(parsed.clusterData)) setClusterData(parsed.clusterData);
+      if (Array.isArray(parsed.clusterGroups)) setClusterGroups(parsed.clusterGroups);
+      if (Array.isArray(parsed.metrics)) setMetrics(parsed.metrics);
+      if (Array.isArray(parsed.optimalPortfolio)) setOptimalPortfolio(parsed.optimalPortfolio);
+      if (Array.isArray(parsed.portfolioStrategies)) setPortfolioStrategies(parsed.portfolioStrategies);
+      if (parsed.summaryInfo && typeof parsed.summaryInfo === "object") setSummaryInfo(parsed.summaryInfo);
+      if (typeof parsed.bestPortfolioAssetsCount === "number") setBestPortfolioAssetsCount(parsed.bestPortfolioAssetsCount);
+    } catch {
+      // ignore broken persisted state
+    }
+  }, []);
+
+  useEffect(() => {
+    const payload = {
+      error,
+      serverRaw,
+      clusterData,
+      clusterGroups,
+      metrics,
+      optimalPortfolio,
+      portfolioStrategies,
+      summaryInfo,
+      bestPortfolioAssetsCount,
+    };
+    window.localStorage.setItem(CLUSTER_STATE_KEY, JSON.stringify(payload));
+  }, [error, serverRaw, clusterData, clusterGroups, metrics, optimalPortfolio, portfolioStrategies, summaryInfo, bestPortfolioAssetsCount]);
 
   const displayPortfolio = useMemo(() => {
     if (optimalPortfolio.length) {
@@ -587,6 +644,7 @@ export function ClusterAnalysis() {
     const startedAt = performance.now();
 
     try {
+      await submitOptimizerSettings(optimizerSettings);
       const body = JSON.stringify({ data: requestData });
       const response = await fetch("/api/cluster-analysis", {
         method: "POST",
@@ -639,7 +697,7 @@ export function ClusterAnalysis() {
         });
       }
     } catch (e) {
-      const message = e instanceof Error ? e.message : "Не удалось выполнить кластеризацию";
+      const message = e instanceof Error ? e.message : tx("Не удалось выполнить кластеризацию", "Failed to run clustering");
       setError(message);
       setServerRaw(null);
       setClusterData([]);
@@ -667,10 +725,10 @@ export function ClusterAnalysis() {
       <div className="bg-gradient-to-r from-purple-600 to-pink-600 rounded-xl p-6 text-white shadow-lg">
         <div className="flex items-center gap-3 mb-2">
           <Network className="w-8 h-8" />
-          <h1 className="text-3xl font-bold">Кластерный анализ</h1>
+          <h1 className="text-3xl font-bold">{tx("Кластерный анализ", "Cluster Analysis")}</h1>
         </div>
         <p className="text-purple-100">
-          Кластеризация выполняется на сервере. По умолчанию используется алгоритм K-Means.
+          {tx("Кластеризация выполняется на сервере. По умолчанию используется алгоритм K-Means.", "Clustering is performed on the server. K-Means is used by default.")}
         </p>
       </div>
 
@@ -679,18 +737,23 @@ export function ClusterAnalysis() {
           <div className="bg-white dark:bg-slate-900 rounded-xl p-6 shadow-sm border border-slate-200 dark:border-slate-800">
             <div className="flex items-center gap-2 mb-6">
               <Settings className="w-5 h-5 text-purple-600" />
-              <h2 className="font-semibold text-slate-900 dark:text-slate-100">Параметры</h2>
+              <h2 className="font-semibold text-slate-900 dark:text-slate-100">{tx("Параметры", "Parameters")}</h2>
             </div>
 
             <div className="space-y-4">
               <div className="rounded-lg border border-slate-200 dark:border-slate-700 p-3 bg-slate-50 dark:bg-slate-800/40">
-                <p className="text-sm text-slate-700 dark:text-slate-300">Источник: кэш фундаментальных данных</p>
-                <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">Записей: {requestData.length}</p>
+                <p className="text-sm text-slate-700 dark:text-slate-300">{tx("Источник: кэш фундаментальных данных", "Source: fundamentals cache")}</p>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">{tx("Записей", "Records")}: {requestData.length}</p>
               </div>
+              <OptimizerSettingsFields
+                isEn={isEn}
+                settings={optimizerSettings}
+                onChange={setOptimizerSettings}
+              />
 
               {!hasData && (
                 <div className="bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900 rounded-lg p-3">
-                  <p className="text-sm text-amber-800 dark:text-amber-300">Кэш пуст. Сначала загрузите фундаментальные данные.</p>
+                  <p className="text-sm text-amber-800 dark:text-amber-300">{tx("Кэш пуст. Сначала загрузите фундаментальные данные.", "Cache is empty. Load fundamentals first.")}</p>
                 </div>
               )}
 
@@ -706,19 +769,27 @@ export function ClusterAnalysis() {
                 className="w-full bg-gradient-to-r from-purple-600 to-pink-600 text-white py-3 rounded-lg font-medium hover:from-purple-700 hover:to-pink-700 transition-all shadow-md hover:shadow-lg flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <Play className="w-5 h-5" />
-                {isRunning ? "Выполняется..." : "Запустить анализ"}
+                {isRunning ? tx("Выполняется...", "Running...") : tx("Запустить анализ", "Run Analysis")}
               </button>
             </div>
           </div>
         </div>
 
         <div className="lg:col-span-3 space-y-6">
+          {isRunning && (
+            <AnalysisRunningIndicator
+              title={tx("Выполняем кластеризацию", "Running clustering")}
+              subtitle={tx("Подбираем структуру кластеров и оптимальный портфель", "Estimating clusters and optimal portfolio")}
+              accentClassName="text-purple-600"
+            />
+          )}
+
           {!!metrics.length && (
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
               {metrics.map((m) => (
                 <div key={m.label} className="bg-white dark:bg-slate-900 rounded-xl p-4 shadow-sm border border-slate-200 dark:border-slate-800">
-                  <div className="text-sm text-slate-600 dark:text-slate-400 mb-1">{m.label}</div>
-                  <div className="text-2xl font-semibold text-slate-900 dark:text-slate-100">{m.value}</div>
+                  <div className="text-sm text-slate-600 dark:text-slate-400 mb-1">{localizeMetricLabel(m.label, isEn)}</div>
+                  <div className="text-2xl font-semibold text-slate-900 dark:text-slate-100">{formatMetricDisplay(m.label, m.value)}</div>
                 </div>
               ))}
             </div>
@@ -726,18 +797,18 @@ export function ClusterAnalysis() {
 
           {summaryInfo && (
             <div className="bg-white dark:bg-slate-900 rounded-xl p-6 shadow-sm border border-slate-200 dark:border-slate-800 space-y-4">
-              <h3 className="font-semibold text-slate-900 dark:text-slate-100">Сводка по результату</h3>
+              <h3 className="font-semibold text-slate-900 dark:text-slate-100">{tx("Сводка по результату", "Result Summary")}</h3>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-sm">
                 <div className="rounded-lg border border-slate-200 dark:border-slate-700 p-3">
-                  <div className="text-slate-500 dark:text-slate-400">Компаний</div>
+                  <div className="text-slate-500 dark:text-slate-400">{tx("Компаний", "Companies")}</div>
                   <div className="text-xl font-semibold text-slate-900 dark:text-slate-100">{summaryInfo.companiesCount}</div>
                 </div>
                 <div className="rounded-lg border border-slate-200 dark:border-slate-700 p-3">
-                  <div className="text-slate-500 dark:text-slate-400">Кластеров</div>
+                  <div className="text-slate-500 dark:text-slate-400">{tx("Кластеров", "Clusters")}</div>
                   <div className="text-xl font-semibold text-slate-900 dark:text-slate-100">{summaryInfo.clustersCount}</div>
                 </div>
                 <div className="rounded-lg border border-slate-200 dark:border-slate-700 p-3">
-                  <div className="text-slate-500 dark:text-slate-400">Портфелей</div>
+                  <div className="text-slate-500 dark:text-slate-400">{tx("Портфелей", "Portfolios")}</div>
                   <div className="text-xl font-semibold text-slate-900 dark:text-slate-100">{summaryInfo.portfoliosCount}</div>
                 </div>
               </div>
@@ -764,17 +835,17 @@ export function ClusterAnalysis() {
 
           {!!portfolioStrategies.length && (
             <div className="bg-white dark:bg-slate-900 rounded-xl p-6 shadow-sm border border-slate-200 dark:border-slate-800">
-              <h3 className="font-semibold text-slate-900 dark:text-slate-100 mb-4">Стратегии портфелей</h3>
-              <div className="overflow-auto">
-                <table className="w-full text-sm">
+              <h3 className="font-semibold text-slate-900 dark:text-slate-100 mb-4">{tx("Стратегии портфелей", "Portfolio Strategies")}</h3>
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-[720px] text-sm [&_th]:whitespace-nowrap [&_td]:whitespace-nowrap">
                   <thead>
                     <tr className="text-left border-b border-slate-200 dark:border-slate-800">
-                      <th className="py-2 pr-3">Стратегия</th>
+                      <th className="py-2 pr-3">{tx("Стратегия", "Strategy")}</th>
                       <th className="py-2 pr-3">Expected return</th>
                       <th className="py-2 pr-3">Risk</th>
                       <th className="py-2 pr-3">Sharpe</th>
                       <th className="py-2 pr-3">Diversification</th>
-                      <th className="py-2 pr-3">Позиций</th>
+                      <th className="py-2 pr-3">{tx("Позиций", "Positions")}</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -807,15 +878,15 @@ export function ClusterAnalysis() {
                   </div>
                   <div className="space-y-2 text-sm">
                     <div className="flex justify-between">
-                      <span className="text-slate-600 dark:text-slate-400">Компаний:</span>
+                      <span className="text-slate-600 dark:text-slate-400">{tx("Компаний:", "Companies:")}</span>
                       <span className="font-medium text-slate-900 dark:text-slate-100">{cluster.count}</span>
                     </div>
                     <div className="flex justify-between">
-                      <span className="text-slate-600 dark:text-slate-400">Средний P/E:</span>
+                      <span className="text-slate-600 dark:text-slate-400">{tx("Средний P/E:", "Average P/E:")}</span>
                       <span className="font-medium text-blue-600 dark:text-blue-400">{cluster.avgPE.toFixed(2)}</span>
                     </div>
                     <div className="flex justify-between">
-                      <span className="text-slate-600 dark:text-slate-400">Средний g:</span>
+                      <span className="text-slate-600 dark:text-slate-400">{tx("Средний g:", "Average g:")}</span>
                       <span className="font-medium text-green-600 dark:text-green-400">{cluster.avgG.toFixed(2)}%</span>
                     </div>
                   </div>
@@ -825,7 +896,7 @@ export function ClusterAnalysis() {
           )}
 
           <div className="bg-white dark:bg-slate-900 rounded-xl p-6 shadow-sm border border-slate-200 dark:border-slate-800">
-            <h3 className="font-semibold text-slate-900 dark:text-slate-100 mb-4">Визуализация кластеров (P/E vs g)</h3>
+            <h3 className="font-semibold text-slate-900 dark:text-slate-100 mb-4">{tx("Визуализация кластеров (P/E vs g)", "Cluster Visualization (P/E vs g)")}</h3>
             <ResponsiveContainer width="100%" height={460}>
               <ScatterChart margin={{ top: 20, right: 30, left: 20, bottom: 20 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
@@ -851,7 +922,7 @@ export function ClusterAnalysis() {
                 {Array.from(new Set(clusterData.map((d) => d.cluster))).map((cluster) => {
                   const points = clusterData.filter((d) => d.cluster === cluster);
                   return (
-                    <Scatter key={cluster} name={`Кластер ${cluster + 1}`} data={points}>
+                    <Scatter key={cluster} name={`${tx("Кластер", "Cluster")} ${cluster + 1}`} data={points}>
                       {points.map((entry) => (
                         <Cell key={`${entry.figi}-${entry.cluster}`} fill={entry.color} />
                       ))}
@@ -868,7 +939,7 @@ export function ClusterAnalysis() {
               <div className="flex items-center justify-between gap-3 mb-4">
                 <div className="flex items-center gap-2">
                   <Trophy className="w-5 h-5 text-amber-500" />
-                  <h3 className="font-semibold text-slate-900 dark:text-slate-100">Оптимальный портфель из кластерного анализа</h3>
+                  <h3 className="font-semibold text-slate-900 dark:text-slate-100">{tx("Оптимальный портфель из кластерного анализа", "Optimal Portfolio from Cluster Analysis")}</h3>
                 </div>
                 <div className="flex items-center gap-2">
                   <button
@@ -892,7 +963,7 @@ export function ClusterAnalysis() {
 
               {bestPortfolioAssetsCount > 0 && (
                 <p className="text-sm text-slate-600 dark:text-slate-300 mb-4">
-                  Количество активов в портфеле: <span className="font-semibold text-slate-900 dark:text-slate-100">{bestPortfolioAssetsCount}</span>
+                  {tx("Количество активов в портфеле:", "Assets in portfolio:")} <span className="font-semibold text-slate-900 dark:text-slate-100">{bestPortfolioAssetsCount}</span>
                 </p>
               )}
               {!!displayPortfolio.length && (
@@ -919,13 +990,13 @@ export function ClusterAnalysis() {
                   </ResponsiveContainer>
                 </div>
 
-                <div className="overflow-auto">
-                  <table className="w-full text-sm">
+                <div className="overflow-x-auto">
+                  <table className="w-full min-w-[720px] text-sm [&_th]:whitespace-nowrap [&_td]:whitespace-nowrap">
                     <thead>
                       <tr className="text-left border-b border-slate-200 dark:border-slate-800">
                         <th className="py-2 pr-3">Ticker</th>
                         <th className="py-2 pr-3">Name</th>
-                        <th className="py-2 pr-3">Вес, %</th>
+                        <th className="py-2 pr-3">{tx("Вес, %", "Weight, %")}</th>
                         <th className="py-2 pr-3">Return</th>
                         <th className="py-2 pr-3">Risk</th>
                         <th className="py-2 pr-3">Sharpe</th>
