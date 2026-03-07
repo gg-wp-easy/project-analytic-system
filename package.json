@@ -10,8 +10,10 @@
     "build": "vite build",
     "dev": "vite",
     "server:build:win": "cd server-analytic-system && python -m venv .venv && .venv\\Scripts\\activate && pip install -r requirements.txt && python build.py --mode pyinstaller --target current --project-name server-analytic-system --clean",
+    "server:build:linux": "cd server-analytic-system && python3 -m venv .venv && source .venv/bin/activate && pip install -r requirements.txt && python build.py --mode pyinstaller --target current --project-name server-analytic-system --clean",
     "electron:dev": "concurrently -k \"vite\" \"wait-on tcp:5173 && electron .\"",
-    "electron:build:win": "npm run server:build:win && npm run build && electron-builder"
+    "electron:build:win": "npm run server:build:win && npm run build && electron-builder",
+    "electron:build:linux": "npm run server:build:linux && npm run build && electron-builder"
   },
   "dependencies": {
     "@emotion/react": "11.14.0",
