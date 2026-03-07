@@ -21,6 +21,7 @@ import { OptimizerSettingsFields } from "./OptimizerSettingsFields";
 import { submitOptimizerSettings, useOptimizerSettings } from "./optimizerSettings";
 import { AnalysisRunningIndicator } from "./AnalysisRunningIndicator";
 import { formatMetricDisplay, localizeMetricLabel } from "./metricDisplay";
+import { API_BASE_URL } from "../../config/api";
 
 type ClusterPoint = {
   ticker: string;
@@ -646,7 +647,7 @@ export function ClusterAnalysis() {
     try {
       await submitOptimizerSettings(optimizerSettings);
       const body = JSON.stringify({ data: requestData });
-      const response = await fetch("/api/cluster-analysis", {
+      const response = await fetch(`${API_BASE_URL}/cluster-analysis`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body,

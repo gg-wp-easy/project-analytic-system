@@ -1,5 +1,6 @@
 {
   "name": "@analytic-system/analytic-system-make-file",
+  "icon": "electron/assets/icon.png",
   "private": true,
   "version": "0.0.1",
   "type": "module",
@@ -48,6 +49,7 @@
     "clsx": "2.1.1",
     "cmdk": "1.1.1",
     "date-fns": "3.6.0",
+    "electron-log": "^5.4.3",
     "embla-carousel-react": "8.6.0",
     "input-otp": "1.4.2",
     "lucide-react": "0.487.0",

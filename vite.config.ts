@@ -18,13 +18,14 @@ export default defineConfig({
     },
   },
   server: {
+    port: 5173,
     proxy: {
-      "/api": {
-        target: "http://localhost:8000",
+      '/api': {
+        target: 'http://localhost:8000',
         changeOrigin: true,
-        rewrite: (path) => path.replace(/^\/api/, ""),
-      },
-    },
+        rewrite: (path) => path.replace(/^\/api/, '/api')
+      }
+    }
   },
 
   // File types to support raw imports. Never add .css, .tsx, or .ts files to this.

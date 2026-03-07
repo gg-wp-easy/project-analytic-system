@@ -1,13 +1,13 @@
 ﻿import { useEffect, useMemo, useRef, useState } from "react";
 import { Download, GitBranch, ImageDown, Play, Settings, Trophy } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, PieChart, Pie } from "recharts";
-import { EmbeddedMarkowitz } from "./EmbeddedMarkowitz";
 import { useFundamentals } from "../context/FundamentalsContext";
 import { useAppSettings } from "../context/AppSettingsContext";
 import { OptimizerSettingsFields } from "./OptimizerSettingsFields";
 import { submitOptimizerSettings, useOptimizerSettings } from "./optimizerSettings";
 import { AnalysisRunningIndicator } from "./AnalysisRunningIndicator";
 import { formatMetricDisplay, localizeMetricLabel } from "./metricDisplay";
+import { API_BASE_URL } from "../../config/api";
 
 type MetricItem = {
   label: string;
@@ -443,7 +443,7 @@ export function DecisionTreeAnalysis() {
 
     try {
       await submitOptimizerSettings(optimizerSettings);
-      const response = await fetch("/api/tree-solver-analysis", {
+      const response = await fetch(`${API_BASE_URL}/tree-solver-analysis`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ data: requestData }),

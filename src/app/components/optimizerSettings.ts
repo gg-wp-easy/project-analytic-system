@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { API_BASE_URL } from "../../config/api";
 
 export type OptimizerSettings = {
   minWeight: string;
@@ -89,7 +90,7 @@ export async function submitOptimizerSettings(settings: OptimizerSettings): Prom
     portfolio_assets_count: portfolioAssetsCount,
   };
 
-  const response = await fetch("/api/optimizer-settings", {
+  const response = await fetch(`${API_BASE_URL}/optimizer-settings`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),

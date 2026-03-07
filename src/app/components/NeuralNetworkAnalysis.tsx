@@ -15,13 +15,13 @@ import {
   Line,
   Legend,
 } from "recharts";
-import { EmbeddedMarkowitz } from "./EmbeddedMarkowitz";
 import { useFundamentals } from "../context/FundamentalsContext";
 import { useAppSettings } from "../context/AppSettingsContext";
 import { OptimizerSettingsFields } from "./OptimizerSettingsFields";
 import { submitOptimizerSettings, useOptimizerSettings } from "./optimizerSettings";
 import { AnalysisRunningIndicator } from "./AnalysisRunningIndicator";
 import { formatMetricDisplay, localizeMetricLabel } from "./metricDisplay";
+import { API_BASE_URL } from "../../config/api";
 
 type MetricItem = {
   label: string;
@@ -469,7 +469,7 @@ export function NeuralNetworkAnalysis() {
 
     try {
       await submitOptimizerSettings(optimizerSettings);
-      const response = await fetch("/api/ai-analysis", {
+      const response = await fetch(`${API_BASE_URL}/ai-analysis`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ data: requestData }),
