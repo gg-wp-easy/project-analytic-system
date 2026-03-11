@@ -8,3 +8,6 @@ build/
 *.zip
 *.log
 .idea/
+release/
+*.exe
+server-analytic-system/

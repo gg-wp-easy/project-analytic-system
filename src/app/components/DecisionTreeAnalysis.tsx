@@ -6,7 +6,8 @@ import { useAppSettings } from "../context/AppSettingsContext";
 import { OptimizerSettingsFields } from "./OptimizerSettingsFields";
 import { submitOptimizerSettings, useOptimizerSettings } from "./optimizerSettings";
 import { AnalysisRunningIndicator } from "./AnalysisRunningIndicator";
-import { formatMetricDisplay, localizeMetricLabel } from "./metricDisplay";
+import { MetricTooltip } from "./MetricTooltip";
+import { formatMetricDisplay, getMetricTooltip, localizeMetricLabel } from "./metricDisplay";
 import { API_BASE_URL } from "../../config/api";
 
 type MetricItem = {
@@ -32,6 +33,8 @@ type PortfolioPosition = {
   expectedReturn: number;
   risk: number;
   predictedText: string;
+  sortino?: number;
+  value_at_risk?: number;
 };
 
 type SectorAllocationItem = {
@@ -63,13 +66,13 @@ function downloadPortfolioAsExcel(rows: PortfolioPosition[], filename: string): 
   const tableRows = rows
     .map(
       (row) =>
-        `<tr><td>${escapeHtml(row.ticker)}</td><td>${escapeHtml(row.name || "")}</td><td>${escapeHtml(row.sector || "")}</td><td>${row.weight.toFixed(4)}</td><td>${Number.isFinite(row.expectedReturn) ? row.expectedReturn.toFixed(6) : ""}</td><td>${Number.isFinite(row.risk) ? row.risk.toFixed(6) : ""}</td><td>${escapeHtml(row.predictedText || "")}</td></tr>`,
+        `<tr><td>${escapeHtml(row.ticker)}</td><td>${escapeHtml(row.name || "")}</td><td>${escapeHtml(row.sector || "")}</td><td>${row.weight.toFixed(4)}</td><td>${Number.isFinite(row.expectedReturn) ? row.expectedReturn.toFixed(6) : ""}</td><td>${Number.isFinite(row.risk) ? row.risk.toFixed(6) : ""}</td><td>${Number.isFinite(row.sortino) ? row.sortino?.toFixed(6) : ""}</td><td>${Number.isFinite(row.value_at_risk) ? row.value_at_risk?.toFixed(6) : ""}</td><td>${escapeHtml(row.predictedText || "")}</td></tr>`,
     )
     .join("");
 
   const html =
     `\uFEFF<html><head><meta charset="utf-8"></head><body>` +
-    `<table border="1"><tr><th>Ticker</th><th>Name</th><th>Sector</th><th>Weight, %</th><th>Expected Return</th><th>Risk</th><th>Prediction</th></tr>${tableRows}</table>` +
+    `<table border="1"><tr><th>Ticker</th><th>Name</th><th>Sector</th><th>Weight, %</th><th>Expected Return</th><th>Risk</th><th>Sortino</th><th>VaR</th><th>Prediction</th></tr>${tableRows}</table>` +
     `</body></html>`;
 
   const blob = new Blob([html], { type: "application/vnd.ms-excel;charset=utf-8;" });
@@ -148,6 +151,14 @@ function formatMetricPercentOrNumber(value: number): string {
     return `${(value * 100).toFixed(2)}%`;
   }
   return value.toFixed(4);
+}
+
+function formatVarPercent(value: number): string {
+  if (!Number.isFinite(value)) {
+    return "-";
+  }
+  const normalized = Math.abs(value) <= 1 ? value * 100 : value;
+  return `${normalized.toFixed(2)}%`;
 }
 
 function extractMetrics(parsed: Record<string, unknown>): MetricItem[] {
@@ -269,19 +280,41 @@ function extractPortfolioMetrics(parsed: Record<string, unknown>): MetricItem[] 
     { key: "expected_return", label: "Expected Return" },
     { key: "risk", label: "Risk" },
     { key: "sharpe_ratio", label: "Sharpe Ratio" },
+    { key: "sortino_ratio", label: "Sortino Ratio" },
+    { key: "sortino", label: "Sortino" },
+    { key: "value_at_risk", label: "VaR" },
+    { key: "var", label: "VaR" },
     { key: "diversification_score", label: "Diversification" },
   ];
 
   return mapping
     .filter((item) => item.key in source)
-    .map((item) => ({
-      label: item.label,
-      value: formatMetricPercentOrNumber(numberOr(source[item.key], NaN)),
-    }));
+    .map((item) => {
+      const value = numberOr(source[item.key], NaN);
+      if (!Number.isFinite(value)) {
+        return { label: item.label, value: "-" };
+      }
+      if (item.label === "VaR") {
+        return { label: item.label, value: formatVarPercent(value) };
+      }
+      if (item.label === "Sortino" || item.label === "Sortino Ratio") {
+        return { label: item.label, value: value.toFixed(4) };
+      }
+      return { label: item.label, value: formatMetricPercentOrNumber(value) };
+    });
 }
 
 function extractPortfolioPositions(parsed: Record<string, unknown>): PortfolioPosition[] {
   const portfolio = (parsed.portfolio as Record<string, unknown> | undefined) ?? {};
+  const portfolioMetrics = (portfolio.metrics as Record<string, unknown> | undefined) ?? {};
+  const stats = (parsed.stats as Record<string, unknown> | undefined) ?? {};
+  const summary = (parsed.summary as Record<string, unknown> | undefined) ?? {};
+  const summaryKeyMetrics = (summary.key_metrics as Record<string, unknown> | undefined) ?? {};
+  const metricsSource = Object.keys(portfolioMetrics).length
+    ? portfolioMetrics
+    : Object.keys(summaryKeyMetrics).length
+      ? summaryKeyMetrics
+      : stats;
   const positions = Array.isArray(portfolio.positions) ? portfolio.positions : [];
 
   const rows = positions.map((item, idx) => {
@@ -293,6 +326,14 @@ function extractPortfolioPositions(parsed: Record<string, unknown>): PortfolioPo
       weight: numberOr(row.weights, numberOr(row.weight, 0)),
       expectedReturn: numberOr(row["Ожидаемая_доходность"], numberOr(row.expected_return, NaN)),
       risk: numberOr(row["Риск"], numberOr(row.risk, NaN)),
+      sortino: numberOr(
+        row.sortino,
+        numberOr(row.sortino_ratio, numberOr(metricsSource.sortino, numberOr(metricsSource.sortino_ratio, NaN))),
+      ),
+      value_at_risk: numberOr(
+        row.value_at_risk,
+        numberOr(row.var, numberOr(metricsSource.value_at_risk, numberOr(metricsSource.var, NaN))),
+      ),
       predictedText: String(row["Predicted_Оценка_текст"] ?? row.predicted_text ?? "-"),
     } satisfies PortfolioPosition;
   });
@@ -594,7 +635,12 @@ export function DecisionTreeAnalysis() {
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
               {metrics.map((m) => (
                 <div key={m.label} className="bg-white rounded-xl p-4 shadow-sm border border-slate-200">
-                  <div className="text-sm text-slate-600 mb-1">{localizeMetricLabel(m.label, isEn)}</div>
+                  <div className="text-sm text-slate-600 mb-1 flex items-center gap-1">
+                    <span>{localizeMetricLabel(m.label, isEn)}</span>
+                    {getMetricTooltip(m.label, isEn) && (
+                      <MetricTooltip text={getMetricTooltip(m.label, isEn) ?? ""} />
+                    )}
+                  </div>
                   <div className="text-2xl font-semibold text-slate-900">{formatMetricDisplay(m.label, m.value)}</div>
                 </div>
               ))}
@@ -672,7 +718,7 @@ export function DecisionTreeAnalysis() {
                   </ResponsiveContainer>
                 </div>
                 <div className="overflow-x-auto">
-                  <table className="w-full min-w-[780px] text-sm [&_th]:whitespace-nowrap [&_td]:whitespace-nowrap">
+                  <table className="w-full min-w-[920px] text-sm [&_th]:whitespace-nowrap [&_td]:whitespace-nowrap">
                     <thead>
                       <tr className="text-left border-b border-slate-200">
                         <th className="py-2 pr-3">Ticker</th>
@@ -681,6 +727,8 @@ export function DecisionTreeAnalysis() {
                         <th className="py-2 pr-3">{isEn ? "Weight, %" : "Вес, %"}</th>
                         <th className="py-2 pr-3">{isEn ? "Expected Return" : "Ожид. доходность"}</th>
                         <th className="py-2 pr-3">{isEn ? "Risk" : "Риск"}</th>
+                        <th className="py-2 pr-3">{isEn ? "Sortino" : "Сортино"}</th>
+                        <th className="py-2 pr-3">VaR</th>
                         <th className="py-2 pr-3">{isEn ? "Prediction" : "Оценка"}</th>
                       </tr>
                     </thead>
@@ -696,6 +744,12 @@ export function DecisionTreeAnalysis() {
                           </td>
                           <td className="py-2 pr-3 text-slate-700">
                             {Number.isFinite(row.risk) ? row.risk.toFixed(4) : "-"}
+                          </td>
+                          <td className="py-2 pr-3 text-slate-700">
+                            {Number.isFinite(row.sortino) ? row.sortino?.toFixed(4) : "-"}
+                          </td>
+                          <td className="py-2 pr-3 text-slate-700">
+                            {formatVarPercent(numberOr(row.value_at_risk, NaN))}
                           </td>
                           <td className="py-2 pr-3 text-slate-700">{row.predictedText}</td>
                         </tr>

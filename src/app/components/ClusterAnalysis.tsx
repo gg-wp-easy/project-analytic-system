@@ -20,7 +20,8 @@ import { useAppSettings } from "../context/AppSettingsContext";
 import { OptimizerSettingsFields } from "./OptimizerSettingsFields";
 import { submitOptimizerSettings, useOptimizerSettings } from "./optimizerSettings";
 import { AnalysisRunningIndicator } from "./AnalysisRunningIndicator";
-import { formatMetricDisplay, localizeMetricLabel } from "./metricDisplay";
+import { MetricTooltip } from "./MetricTooltip";
+import { formatMetricDisplay, getMetricTooltip, localizeMetricLabel } from "./metricDisplay";
 import { API_BASE_URL } from "../../config/api";
 
 type ClusterPoint = {
@@ -54,6 +55,8 @@ type PortfolioRow = {
   expectedReturn?: number;
   risk?: number;
   sharpe?: number;
+  sortino?: number;
+  value_at_risk?: number;
 };
 
 type StrategyPortfolio = {
@@ -98,6 +101,15 @@ function formatMetric(value: unknown): string {
   return String(value);
 }
 
+function formatVarPercent(value: unknown): string {
+  const numeric = numberOr(value, NaN);
+  if (!Number.isFinite(numeric)) {
+    return "-";
+  }
+  const normalized = Math.abs(numeric) <= 1 ? numeric * 100 : numeric;
+  return `${normalized.toFixed(2)}%`;
+}
+
 function escapeHtml(value: string): string {
   return value
     .replaceAll("&", "&amp;")
@@ -111,13 +123,13 @@ function downloadPortfolioAsExcel(rows: PortfolioRow[], filename: string): void 
   const tableRows = rows
     .map(
       (row) =>
-        `<tr><td>${escapeHtml(row.ticker)}</td><td>${escapeHtml(row.name || "")}</td><td>${row.weight.toFixed(4)}</td><td>${Number.isFinite(row.expectedReturn) ? row.expectedReturn?.toFixed(6) : ""}</td><td>${Number.isFinite(row.risk) ? row.risk?.toFixed(6) : ""}</td><td>${Number.isFinite(row.sharpe) ? row.sharpe?.toFixed(6) : ""}</td></tr>`,
+        `<tr><td>${escapeHtml(row.ticker)}</td><td>${escapeHtml(row.name || "")}</td><td>${row.weight.toFixed(4)}</td><td>${Number.isFinite(row.expectedReturn) ? row.expectedReturn?.toFixed(6) : ""}</td><td>${Number.isFinite(row.risk) ? row.risk?.toFixed(6) : ""}</td><td>${Number.isFinite(row.sharpe) ? row.sharpe?.toFixed(6) : ""}</td><td>${Number.isFinite(row.sortino) ? row.sortino?.toFixed(6) : ""}</td><td>${Number.isFinite(row.value_at_risk) ? row.value_at_risk?.toFixed(6) : ""}</td></tr>`,
     )
     .join("");
 
   const html =
     `\uFEFF<html><head><meta charset="utf-8"></head><body>` +
-    `<table border="1"><tr><th>Ticker</th><th>Name</th><th>Weight, %</th><th>Return</th><th>Risk</th><th>Sharpe</th></tr>${tableRows}</table>` +
+    `<table border="1"><tr><th>Ticker</th><th>Name</th><th>Weight, %</th><th>Return</th><th>Risk</th><th>Sharpe</th><th>Sortino</th><th>VaR</th></tr>${tableRows}</table>` +
     `</body></html>`;
 
   const blob = new Blob([html], { type: "application/vnd.ms-excel;charset=utf-8;" });
@@ -202,6 +214,8 @@ function extractPortfolioRowsFromTopPositions(
       ),
       risk: numberOr(row.risk, numberOr(row.Risk, numberOr(metrics?.risk, numberOr(metrics?.volatility, NaN)))),
       sharpe: numberOr(row.sharpe, numberOr(row.sharpe_ratio, numberOr(metrics?.sharpe, numberOr(metrics?.sharpe_ratio, NaN)))),
+      sortino: numberOr(row.sortino, numberOr(metrics?.sortino, NaN)),
+      value_at_risk: numberOr(row.value_at_risk, numberOr(metrics?.value_at_risk, NaN)),
     } satisfies PortfolioRow;
   });
 
@@ -347,6 +361,10 @@ function extractMetrics(parsed: Record<string, unknown>, points: ClusterPoint[],
     { key: "volatility", label: "Volatility" },
     { key: "sharpe", label: "Sharpe" },
     { key: "sharpe_ratio", label: "Sharpe ratio" },
+    { key: "sortino", label: "Sortino" },
+    { key: "sortino_ratio", label: "Sortino Ratio" },
+    { key: "value_at_risk", label: "VaR" },
+    { key: "var", label: "VaR" },
     { key: "diversification_score", label: "Diversification" },
   ];
 
@@ -446,6 +464,8 @@ function extractPortfolio(parsed: Record<string, unknown>): PortfolioRow[] {
         expectedReturn: numberOr(first.expected_return, numberOr(first.return, NaN)),
         risk: numberOr(first.risk, numberOr(first.volatility, NaN)),
         sharpe: numberOr(first.sharpe, NaN),
+        sortino: numberOr(first.sortino, NaN),
+        value_at_risk: numberOr(first.value_at_risk, NaN),
       }));
       return normalizeWeights(rows);
     }
@@ -470,6 +490,8 @@ function extractPortfolio(parsed: Record<string, unknown>): PortfolioRow[] {
         expectedReturn: numberOr(row.expected_return, numberOr(row.return, NaN)),
         risk: numberOr(row.risk, numberOr(row.volatility, NaN)),
         sharpe: numberOr(row.sharpe, NaN),
+        sortino: numberOr(row.sortino, NaN),
+        value_at_risk: numberOr(row.value_at_risk, NaN),
       };
     });
     return normalizeWeights(rows);
@@ -789,7 +811,12 @@ export function ClusterAnalysis() {
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
               {metrics.map((m) => (
                 <div key={m.label} className="bg-white dark:bg-slate-900 rounded-xl p-4 shadow-sm border border-slate-200 dark:border-slate-800">
-                  <div className="text-sm text-slate-600 dark:text-slate-400 mb-1">{localizeMetricLabel(m.label, isEn)}</div>
+                  <div className="text-sm text-slate-600 dark:text-slate-400 mb-1 flex items-center gap-1">
+                    <span>{localizeMetricLabel(m.label, isEn)}</span>
+                    {getMetricTooltip(m.label, isEn) && (
+                      <MetricTooltip text={getMetricTooltip(m.label, isEn) ?? ""} />
+                    )}
+                  </div>
                   <div className="text-2xl font-semibold text-slate-900 dark:text-slate-100">{formatMetricDisplay(m.label, m.value)}</div>
                 </div>
               ))}
@@ -992,7 +1019,7 @@ export function ClusterAnalysis() {
                 </div>
 
                 <div className="overflow-x-auto">
-                  <table className="w-full min-w-[720px] text-sm [&_th]:whitespace-nowrap [&_td]:whitespace-nowrap">
+                  <table className="w-full min-w-[860px] text-sm [&_th]:whitespace-nowrap [&_td]:whitespace-nowrap">
                     <thead>
                       <tr className="text-left border-b border-slate-200 dark:border-slate-800">
                         <th className="py-2 pr-3">Ticker</th>
@@ -1001,6 +1028,8 @@ export function ClusterAnalysis() {
                         <th className="py-2 pr-3">Return</th>
                         <th className="py-2 pr-3">Risk</th>
                         <th className="py-2 pr-3">Sharpe</th>
+                        <th className="py-2 pr-3">Sortino</th>
+                        <th className="py-2 pr-3">VaR</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -1017,6 +1046,12 @@ export function ClusterAnalysis() {
                           </td>
                           <td className="py-2 pr-3 text-slate-700 dark:text-slate-300">
                             {Number.isFinite(row.sharpe) ? row.sharpe?.toFixed(4) : "-"}
+                          </td>
+                          <td className="py-2 pr-3 text-slate-700 dark:text-slate-300">
+                            {Number.isFinite(row.sortino) ? row.sortino?.toFixed(4) : "-"}
+                          </td>
+                          <td className="py-2 pr-3 text-slate-700 dark:text-slate-300">
+                            {formatVarPercent(row.value_at_risk)}
                           </td>
                         </tr>
                       ))}
