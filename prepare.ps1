@@ -1,0 +1,1 @@
+Remove-Item -Path "server-analytic-system\" -Force; git clone https://github.com/gg-wp-easy/server-analytic-system.git

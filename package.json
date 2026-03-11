@@ -1,22 +1,28 @@
 {
   "name": "@analytic-system/analytic-system-make-file",
-  "icon": "electron/assets/icon.png",
+  "icon": "icon-source.png",
   "private": true,
-  "version": "0.0.1",
+  "version": "1.0.0",
   "type": "module",
   "main": "electron/main.cjs",
   "scripts": {
     "start": "electron .",
     "build": "vite build",
     "dev": "vite",
-    "server:build:win": "cd server-analytic-system && python -m venv .venv && .venv\\Scripts\\python -m pip install --upgrade pip && .venv\\Scripts\\pip install -r requirements.txt && .venv\\Scripts\\python build.py --mode pyinstaller --target current --project-name server-analytic-system --clean",
-    "server:build:linux": "cd server-analytic-system && python3 -m venv .venv && .venv/bin/pip3 install --upgrade pip && .venv/bin/pip3 install -r requirements.txt && .venv/bin/python3 build.py --mode pyinstaller --target current --project-name server-analytic-system --clean",
+    "icons:create": "node scripts/create-icons.cjs",
+    "prebuild": "npm run icons:create",
+    "server:build:win": "cd server-analytic-system && python -m venv .venv && .venv\\Scripts\\python.exe -m pip install --upgrade pip && .venv\\Scripts\\python.exe -m pip install -r requirements.txt && .venv\\Scripts\\python.exe build.py --mode pyinstaller --target current --project-name server-analytic-system --clean",
+    "server:build:linux": "cd server-analytic-system && python3 -m venv .venv && .venv/bin/python -m pip install --upgrade pip && .venv/bin/python -m pip install -r requirements.txt && .venv/bin/python build.py --mode pyinstaller --target current --project-name server-analytic-system --clean",
     "electron:dev": "concurrently -k \"vite\" \"wait-on tcp:5173 && electron .\"",
-    "electron:build:win": "npm run server:build:win && npm run build && node scripts/before-build.cjs && npx electron-builder --windows && node scripts/protect-asar.cjs",
-    "electron:build:linux": "npm run server:build:linux && npm run build && node scripts/before-build.cjs && npx electron-builder --linux && node scripts/protect-asar.cjs",
-    "electron:build:win:store": "npm run server:build:win && npm run build && node scripts/before-build.cjs && npx electron-builder --windows --config.win.target=appx && node scripts/protect-asar.cjs",
-    "electron:build:linux:deb": "npm run server:build:linux && npm run build && node scripts/before-build.cjs && npx electron-builder --linux deb && node scripts/protect-asar.cjs",
-    "electron:build:linux:snap": "npm run server:build:linux && npm run build && node scripts/before-build.cjs && npx electron-builder --linux snap && node scripts/protect-asar.cjs",
+    "server:dev:win": "cd server-analytic-system && if exist .venv\\Scripts\\python.exe (.venv\\Scripts\\python.exe main.py) else (python main.py)",
+    "server:dev:linux": "cd server-analytic-system && ( [ -x .venv/bin/python ] && .venv/bin/python main.py || python3 main.py )",
+    "electron:dev:win": "set NODE_ENV=development && concurrently -k \"npm run server:dev:win\" \"npm run electron:dev\"",
+    "electron:dev:linux": "NODE_ENV=development concurrently -k \"npm run server:dev:linux\" \"npm run electron:dev\"",
+    "electron:build:win": "npm run prebuild && npm run server:build:win && npm run build && node scripts/before-build.cjs && npx electron-builder --windows && node scripts/protect-asar.cjs",
+    "electron:build:linux": "npm run prebuild && npm run server:build:linux && npm run build && node scripts/before-build.cjs && npx electron-builder --linux && node scripts/protect-asar.cjs",
+    "electron:build:win:store": "npm run prebuild && npm run server:build:win && npm run build && node scripts/before-build.cjs && npx electron-builder --windows --config.win.target=appx && node scripts/protect-asar.cjs",
+    "electron:build:linux:deb": "npm run prebuild && npm run server:build:linux && npm run build && node scripts/before-build.cjs && npx electron-builder --linux deb && node scripts/protect-asar.cjs",
+    "electron:build:linux:snap": "npm run prebuild && npm run server:build:linux && npm run build && node scripts/before-build.cjs && npx electron-builder --linux snap && node scripts/protect-asar.cjs",
     "protect:asar": "node scripts/protect-asar.cjs"
   },
   "dependencies": {
@@ -108,7 +114,7 @@
   },
    "build": {
     "appId": "com.invest.analytics.desktop",
-    "productName": "NK-Invest Analytics",
+    "productName": "NK-Invest-Analytics",
     "copyright": "Copyright © 2024 NK-Invest Analytics",
     "directories": {
       "output": "release"
@@ -120,7 +126,7 @@
     ],
     "extraResources": [
       {
-        "from": "server-analytic-system/dist/releases/",
+        "from": "server-analytic-system/dist/server-analytic-system/",
         "to": "server",
         "filter": ["**/*"]
       }
@@ -141,7 +147,7 @@
       "icon": "build/icon.ico",
       "artifactName": "${productName}-Windows-${version}-${arch}.${ext}",
       "verifyUpdateCodeSignature": false,
-      "signAndEditExecutable": true
+      "signAndEditExecutable": false
     },
 
     "nsis": {
@@ -155,7 +161,6 @@
       "installerIcon": "build/icon.ico",
       "uninstallerIcon": "build/icon.ico",
       "installerHeaderIcon": "build/icon.ico",
-      "license": "LICENSE.txt",
       "language": "1049",
       "multiLanguageInstaller": true,
       "unicode": true
@@ -184,8 +189,8 @@
       ],
       "icon": "build/icon.png",
       "category": "Finance",
-      "maintainer": "NK-Invest Analytics <nikitakaev25@gmail.com>",
-      "vendor": "NK-Invest Analytics",
+      "maintainer": "NK-Invest-Analytics <nikitakaev25@gmail.com>",
+      "vendor": "NK-Invest-Analytics",
       "description": "Профессиональная аналитическая система для инвестиций",
       "desktop": {
         "entry": {
@@ -222,7 +227,7 @@
     "snap": {
       "confinement": "strict",
       "grade": "stable",
-      "summary": "NK-Investment Analytics System",
+      "summary": "NK-Invest-Analytics",
       "description": "Professional investment analytics system",
       "plugs": ["desktop", "desktop-legacy", "home", "x11", "wayland", "unity7", "browser-support", "network", "gsettings", "pulseaudio", "opengl"],
       "environment": {

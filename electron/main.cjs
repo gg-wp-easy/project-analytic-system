@@ -3,24 +3,44 @@ const { spawn } = require("child_process");
 const fs = require("fs");
 const http = require("http");
 const path = require("path");
-const log = require('electron-log/main');
-
-// **Важно:** Вызовите initialize для поддержки логирования из процессов рендерера
-log.initialize();
+let log;
+try {
+  log = require('electron-log');
+  // **Важно:** Вызовите initialize для поддержки логирования из процессов рендерера
+  if (typeof log.initialize === 'function') {
+    log.initialize();
+  }
+} catch (error) {
+  // Фоллбек, чтобы приложение не падало при отсутствии electron-log в сборке
+  console.error('electron-log is unavailable, using console fallback.', error);
+  log = {
+    transports: {
+      console: { level: 'debug', format: '{text}' },
+      file: { level: 'info', format: '{text}' },
+    },
+    info: (...args) => console.log(...args),
+    warn: (...args) => console.warn(...args),
+    error: (...args) => console.error(...args),
+    debug: (...args) => console.debug(...args),
+  };
+}
 
 // --- Настройка транспортов (куда отправлять логи) ---
+if (log.transports && log.transports.console) {
+  // 1. Настройка вывода в консоль
+  // Уровень 'debug' будет показывать всё в режиме разработки
+  log.transports.console.level = 'debug';
+  // Можно задать свой формат для консоли
+  log.transports.console.format = '[{h}:{i}:{s}.{ms}] › {text}';
+}
 
-// 1. Настройка вывода в консоль
-// Уровень 'debug' будет показывать всё в режиме разработки
-log.transports.console.level = 'debug';
-// Можно задать свой формат для консоли
-log.transports.console.format = '[{h}:{i}:{s}.{ms}] › {text}';
-
-// 2. Настройка сохранения в файл
-// Уровень 'info' — в файл пишутся события info, warn, error и выше
-log.transports.file.level = 'info';
-// Кастомный формат для файла с датой
-log.transports.file.format = '[{y}-{m}-{d} {h}:{i}:{s}.{ms}] [{level}] {text}';
+if (log.transports && log.transports.file) {
+  // 2. Настройка сохранения в файл
+  // Уровень 'info' — в файл пишутся события info, warn, error и выше
+  log.transports.file.level = 'info';
+  // Кастомный формат для файла с датой
+  log.transports.file.format = '[{y}-{m}-{d} {h}:{i}:{s}.{ms}] [{level}] {text}';
+}
 
 app.commandLine.appendSwitch('ignore-certificate-errors');
 
@@ -71,7 +91,9 @@ async function waitForServerHealth(timeoutMs = 60000, intervalMs = 600) {
 }
 
 function resolveServerExecutablePath() {
-  const exeName = "server-analytic-system.exe";
+  const exeName = process.platform === "win32"
+    ? "server-analytic-system.exe"
+    : "server-analytic-system";
 
   if (app.isPackaged) {
     const packagedExePath = path.join(process.resourcesPath, "server", exeName);
@@ -223,7 +245,7 @@ function createMainWindow() {
     minHeight: 700,
     show: false,
     autoHideMenuBar: true,
-    icon: path.join(__dirname, 'assets/icon.png'),
+    icon: path.join(__dirname, 'icon.png'),
     webPreferences: {
       preload: path.join(__dirname, "preload.cjs"),
       contextIsolation: true,
