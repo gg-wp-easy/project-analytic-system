@@ -108,7 +108,7 @@
   },
    "build": {
     "appId": "com.invest.analytics.desktop",
-    "productName": "Аналитическая система инвестиций",
+    "productName": "NK-Invest Analytics",
     "copyright": "Copyright © 2024 NK-Invest Analytics",
     "directories": {
       "output": "release"
@@ -180,11 +180,7 @@
     "linux": {
       "target": [
         { "target": "deb", "arch": ["x64", "arm64"] },
-        { "target": "AppImage", "arch": ["x64"] },
-        { "target": "snap", "arch": ["x64", "arm64"] },
-        { "target": "rpm", "arch": ["x64"] },
-        { "target": "pacman", "arch": ["x64"] },
-        { "target": "apk", "arch": ["x64"] }
+        { "target": "AppImage", "arch": ["x64"] }
       ],
       "icon": "build/icon.png",
       "category": "Finance",
