@@ -9,11 +9,15 @@
     "start": "electron .",
     "build": "vite build",
     "dev": "vite",
-    "server:build:win": "cd server-analytic-system && python -m venv .venv && .venv\\Scripts\\activate && pip install -r requirements.txt && python build.py --mode pyinstaller --target current --project-name server-analytic-system --clean",
-    "server:build:linux": "cd server-analytic-system && python3 -m venv .venv && source .venv/bin/activate && pip install -r requirements.txt && python build.py --mode pyinstaller --target current --project-name server-analytic-system --clean",
+    "server:build:win": "cd server-analytic-system && python -m venv .venv && .venv\\Scripts\\python -m pip install --upgrade pip && .venv\\Scripts\\pip install -r requirements.txt && .venv\\Scripts\\python build.py --mode pyinstaller --target current --project-name server-analytic-system --clean",
+    "server:build:linux": "cd server-analytic-system && python3 -m venv .venv && .venv/bin/pip3 install --upgrade pip && .venv/bin/pip3 install -r requirements.txt && .venv/bin/python3 build.py --mode pyinstaller --target current --project-name server-analytic-system --clean",
     "electron:dev": "concurrently -k \"vite\" \"wait-on tcp:5173 && electron .\"",
-    "electron:build:win": "npm run server:build:win && npm run build && electron-builder",
-    "electron:build:linux": "npm run server:build:linux && npm run build && electron-builder"
+    "electron:build:win": "npm run server:build:win && npm run build && node scripts/before-build.cjs && npx electron-builder --windows && node scripts/protect-asar.cjs",
+    "electron:build:linux": "npm run server:build:linux && npm run build && node scripts/before-build.cjs && npx electron-builder --linux && node scripts/protect-asar.cjs",
+    "electron:build:win:store": "npm run server:build:win && npm run build && node scripts/before-build.cjs && npx electron-builder --windows --config.win.target=appx && node scripts/protect-asar.cjs",
+    "electron:build:linux:deb": "npm run server:build:linux && npm run build && node scripts/before-build.cjs && npx electron-builder --linux deb && node scripts/protect-asar.cjs",
+    "electron:build:linux:snap": "npm run server:build:linux && npm run build && node scripts/before-build.cjs && npx electron-builder --linux snap && node scripts/protect-asar.cjs",
+    "protect:asar": "node scripts/protect-asar.cjs"
   },
   "dependencies": {
     "@emotion/react": "11.14.0",
@@ -52,6 +56,7 @@
     "cmdk": "1.1.1",
     "date-fns": "3.6.0",
     "electron-log": "^5.4.3",
+    "electron-updater": "^6.3.9",
     "embla-carousel-react": "8.6.0",
     "input-otp": "1.4.2",
     "lucide-react": "0.487.0",
@@ -78,6 +83,8 @@
     "concurrently": "^9.2.1",
     "electron": "^37.10.3",
     "electron-builder": "^26.0.12",
+    "electron-builder-squirrel-windows": "^26.0.12",
+    "electron-notarize": "^1.2.2",
     "tailwindcss": "4.1.12",
     "vite": "6.3.5",
     "wait-on": "^8.0.5"
@@ -99,9 +106,10 @@
       "vite": "6.3.5"
     }
   },
-  "build": {
+   "build": {
     "appId": "com.invest.analytics.desktop",
-    "productName": "Invest Analytics",
+    "productName": "Аналитическая система инвестиций",
+    "copyright": "Copyright © 2024 NK-Invest Analytics",
     "directories": {
       "output": "release"
     },
@@ -112,12 +120,132 @@
     ],
     "extraResources": [
       {
-        "from": "server-analytic-system/dist/server-analytic-system",
-        "to": "server"
+        "from": "server-analytic-system/dist/releases/",
+        "to": "server",
+        "filter": ["**/*"]
       }
     ],
+    "asar": true,
+    "asarUnpack": [
+      "node_modules/@*/**/*.node",
+      "server/**/*"
+    ],
+
     "win": {
-      "target": "nsis"
-    }
+      "target": [
+        { "target": "nsis", "arch": ["x64", "ia32"] },
+        { "target": "portable", "arch": ["x64"] },
+        { "target": "appx", "arch": ["x64", "arm64"] },
+        { "target": "msi", "arch": ["x64"] }
+      ],
+      "icon": "build/icon.ico",
+      "artifactName": "${productName}-Windows-${version}-${arch}.${ext}",
+      "verifyUpdateCodeSignature": false,
+      "signAndEditExecutable": true
+    },
+
+    "nsis": {
+      "oneClick": false,
+      "perMachine": true,
+      "allowToChangeInstallationDirectory": true,
+      "deleteAppDataOnUninstall": false,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Инвестиционная аналитика",
+      "installerIcon": "build/icon.ico",
+      "uninstallerIcon": "build/icon.ico",
+      "installerHeaderIcon": "build/icon.ico",
+      "license": "LICENSE.txt",
+      "language": "1049",
+      "multiLanguageInstaller": true,
+      "unicode": true
+    },
+
+    "portable": {
+      "artifactName": "${productName}-Windows-${version}-portable-${arch}.${ext}",
+      "splashImage": "build/splash.bmp",
+      "unpackDirName": "data"
+    },
+
+    "appx": {
+      "applicationId": "InvestAnalytics.Desktop",
+      "identityName": "42694InvestAnalytics.InvestAnalytics",
+      "publisher": "CN=AAAAAAAA-AAAA-AAAA-AAAA-AAAAAAAAAAAA",
+      "publisherDisplayName": "Invest Analytics",
+      "languages": ["ru-RU", "en-US"],
+      "showNameOnTiles": true,
+      "backgroundColor": "#2D2D30"
+    },
+
+    "linux": {
+      "target": [
+        { "target": "deb", "arch": ["x64", "arm64"] },
+        { "target": "AppImage", "arch": ["x64"] },
+        { "target": "snap", "arch": ["x64", "arm64"] },
+        { "target": "rpm", "arch": ["x64"] },
+        { "target": "pacman", "arch": ["x64"] },
+        { "target": "apk", "arch": ["x64"] }
+      ],
+      "icon": "build/icon.png",
+      "category": "Finance",
+      "maintainer": "NK-Invest Analytics <nikitakaev25@gmail.com>",
+      "vendor": "NK-Invest Analytics",
+      "description": "Профессиональная аналитическая система для инвестиций",
+      "desktop": {
+        "entry": {
+          "Categories": "Finance;Office;",
+          "StartupWMClass": "invest-analytics",
+          "MimeType": "x-scheme-handler/invest-analytics"
+        }
+      },
+      "artifactName": "${productName}-Linux-${version}-${arch}.${ext}",
+      "synopsis": "NK-Investment Analytics Desktop Application",
+      "executableArgs": []
+    },
+
+    "deb": {
+      "priority": "optional",
+      "packageCategory": "utils",
+      "depends": [
+        "libgtk-3-0",
+        "libnotify4",
+        "libnss3",
+        "libxss1",
+        "libxtst6",
+        "xdg-utils",
+        "libatspi2.0-0",
+        "libuuid1",
+        "libsecret-1-0",
+        "libappindicator3-1"
+      ],
+      "recommends": ["python3", "python3-pip"],
+      "afterInstall": "build/linux/after-install.sh",
+      "afterRemove": "build/linux/after-remove.sh"
+    },
+
+    "snap": {
+      "confinement": "strict",
+      "grade": "stable",
+      "summary": "NK-Investment Analytics System",
+      "description": "Professional investment analytics system",
+      "plugs": ["desktop", "desktop-legacy", "home", "x11", "wayland", "unity7", "browser-support", "network", "gsettings", "pulseaudio", "opengl"],
+      "environment": {
+        "DISABLE_WAYLAND": "1"
+      }
+    },
+
+    "rpm": {
+      "depends": ["gtk3", "libnotify", "nss", "libXScrnSaver", "libXtst", "xdg-utils", "at-spi2-core", "libuuid"]
+    },
+
+    "publish": [
+      {
+        "provider": "github",
+        "releaseType": "release"
+      }
+    ],
+
+    "afterPack": "scripts/after-pack.cjs",
+    "beforeBuild": "scripts/before-build.cjs"
   }
 }
