@@ -120,10 +120,27 @@ function resolveServerExecutablePath() {
 function resolveServerCommand() {
   const exePath = resolveServerExecutablePath();
   if (exePath) {
+    const userDataDir = app.getPath("userData");
+    const serverDataDir = path.join(userDataDir, "server-data");
+    try {
+      fs.mkdirSync(userDataDir, { recursive: true });
+    } catch (err) {
+      log.warn("Failed to ensure userData directory:", err);
+    }
+    try {
+      fs.mkdirSync(serverDataDir, { recursive: true });
+    } catch (err) {
+      log.warn("Failed to ensure server data directory:", err);
+    }
     return {
       command: exePath,
       args: [],
       cwd: path.dirname(exePath),
+      env: {
+        ...process.env,
+        ANALYTIC_LOG_DIR: userDataDir,
+        ANALYTIC_DATA_DIR: serverDataDir,
+      },
     };
   }
 
@@ -195,6 +212,7 @@ async function ensureServerService() {
 
   serverProcess = spawn(runConfig.command, runConfig.args, {
     cwd: runConfig.cwd,
+    env: runConfig.env,
     stdio: "ignore",
     windowsHide: true,
   });

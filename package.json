@@ -115,7 +115,7 @@
    "build": {
     "appId": "com.invest.analytics.desktop",
     "productName": "NK-Invest-Analytics",
-    "copyright": "Copyright © 2024 NK-Invest Analytics",
+    "copyright": "Copyright © 2024 NK-Invest-Analytics",
     "directories": {
       "output": "release"
     },
@@ -132,10 +132,11 @@
       }
     ],
     "asar": true,
-    "asarUnpack": [
+   "asarUnpack": [
       "node_modules/@*/**/*.node",
       "server/**/*"
     ],
+    "executableName": "nk-invest-analytics",
 
     "win": {
       "target": [
