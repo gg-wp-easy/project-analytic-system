@@ -15,7 +15,6 @@ import {
   Line,
   Legend,
 } from "recharts";
-import { EmbeddedMarkowitz } from "./EmbeddedMarkowitz";
 import { useFundamentals } from "../context/FundamentalsContext";
 import { useAppSettings } from "../context/AppSettingsContext";
 import { OptimizerSettingsFields } from "./OptimizerSettingsFields";
