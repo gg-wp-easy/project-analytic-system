@@ -2,10 +2,12 @@ import { useEffect, useMemo, useState } from "react";
 import { Database, Download, RefreshCw, Trash2 } from "lucide-react";
 import { useAppSettings } from "../../../app/context/AppSettingsContext";
 import { useFundamentals } from "../../../entities/fundamentals";
+import { Link } from "react-router-dom";
 
 export function FundamentalsPage() {
   const { cache, isLoading, hasData, error, loadFundamentals, clearCache } = useFundamentals();
-  const { t } = useAppSettings();
+  const { t, locale } = useAppSettings();
+  const isEn = locale === "en";
   const [page, setPage] = useState(1);
   const pageSize = 20;
 
@@ -113,11 +115,12 @@ export function FundamentalsPage() {
       {hasData && !isLoading && (
         <div className="bg-white dark:bg-slate-900 rounded-xl p-6 shadow-sm border border-slate-200 dark:border-slate-800 overflow-x-auto">
           <h2 className="font-semibold text-slate-900 dark:text-slate-100 mb-4">{t("fund.sampleTitle")}</h2>
-          <table className="w-full min-w-[700px] text-sm">
+          <table className="w-full min-w-[760px] text-sm">
             <thead>
               <tr className="text-left border-b border-slate-200 dark:border-slate-800">
                 <th className="py-2 pr-4">{t("fund.table.ticker")}</th>
                 <th className="py-2 pr-4">{t("fund.table.name")}</th>
+                <th className="py-2 pr-4">{isEn ? "Details" : "Подробно"}</th>
                 <th className="py-2 pr-4">{t("fund.table.marketCap")}</th>
                 <th className="py-2 pr-4">{t("fund.table.pe")}</th>
                 <th className="py-2 pr-4">{t("fund.table.pb")}</th>
@@ -137,6 +140,14 @@ export function FundamentalsPage() {
                   <tr key={share.figi} className="border-b border-slate-100 dark:border-slate-800">
                     <td className="py-2 pr-4 font-medium text-slate-900 dark:text-slate-100">{share.ticker}</td>
                     <td className="py-2 pr-4 text-slate-700 dark:text-slate-300">{share.name}</td>
+                    <td className="py-2 pr-4">
+                      <Link
+                        to={`/fundamentals/${share.figi}`}
+                        className="inline-flex items-center gap-1 rounded-md border border-slate-300 px-2 py-1 text-xs text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
+                      >
+                        {isEn ? "View" : "Смотреть"}
+                      </Link>
+                    </td>
                     <td className="py-2 pr-4 text-slate-700 dark:text-slate-300">{f?.marketCapBn ?? "-"}</td>
                     <td className="py-2 pr-4 text-slate-700 dark:text-slate-300">{f?.peRatio ?? "-"}</td>
                     <td className="py-2 pr-4 text-slate-700 dark:text-slate-300">{f?.pbRatio ?? "-"}</td>

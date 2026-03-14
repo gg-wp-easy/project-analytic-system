@@ -5,5 +5,6 @@ export {
 export type {
   ShareRecord,
   AssetFundamentalRecord,
+  ClosePricePoint,
   FundamentalsCache,
 } from "./model/fundamentals-context";

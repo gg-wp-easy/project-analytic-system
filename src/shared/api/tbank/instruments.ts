@@ -2,6 +2,10 @@ const SHARES_ENDPOINT =
   "https://invest-public-api.tbank.ru/rest/tinkoff.public.invest.api.contract.v1.InstrumentsService/Shares";
 const ASSET_FUNDAMENTALS_ENDPOINT =
   "https://invest-public-api.tbank.ru/rest/tinkoff.public.invest.api.contract.v1.InstrumentsService/GetAssetFundamentals";
+const CLOSE_PRICES_ENDPOINT =
+  "https://invest-public-api.tbank.ru/rest/tinkoff.public.invest.api.contract.v1.MarketDataService/GetClosePrices";
+const CANDLES_ENDPOINT =
+  "https://invest-public-api.tbank.ru/rest/tinkoff.public.invest.api.contract.v1.MarketDataService/GetCandles";
 const MAX_ASSETS_PER_REQUEST = 30;
 
 const TOKEN_STORAGE_KEY = "tbank_api_token";
@@ -34,6 +38,25 @@ export type TBankFundamental = {
   marketCapBn: number;
   beta: number;
   updatedAt: string;
+};
+
+export type TBankClosePrice = {
+  figi: string;
+  instrumentUid: string;
+  ticker: string;
+  classCode: string;
+  price: number;
+  time: string;
+};
+
+export type TBankCandle = {
+  figi: string;
+  time: string;
+  close: number;
+  open: number;
+  high: number;
+  low: number;
+  volume: number;
 };
 
 function pickString(source: AnyRecord, keys: string[]): string {
@@ -85,6 +108,21 @@ function pickTimestampIso(source: AnyRecord, keys: string[]): string {
   return "";
 }
 
+function quotationToNumber(value: unknown): number {
+  if (!value || typeof value !== "object") {
+    return 0;
+  }
+  const quote = value as AnyRecord;
+  const unitsRaw = quote.units;
+  const nanoRaw = quote.nano;
+  const units = typeof unitsRaw === "number" ? unitsRaw : Number(unitsRaw ?? 0);
+  const nano = typeof nanoRaw === "number" ? nanoRaw : Number(nanoRaw ?? 0);
+  if (!Number.isFinite(units) || !Number.isFinite(nano)) {
+    return 0;
+  }
+  return units + nano / 1_000_000_000;
+}
+
 function chunkArray<T>(source: T[], size: number): T[][] {
   const chunks: T[][] = [];
   for (let i = 0; i < source.length; i += size) {
@@ -121,6 +159,29 @@ function normalizeFundamentalItem(item: AnyRecord, nowIso: string): TBankFundame
       pickTimestampIso(item, ["fiscal_period_end_date", "ex_dividend_date"]) ||
       pickString(item, ["updatedAt", "updated_at", "date", "time"]) ||
       nowIso,
+  };
+}
+
+function normalizeClosePriceItem(item: AnyRecord, nowIso: string): TBankClosePrice {
+  return {
+    figi: pickString(item, ["figi", "instrumentFigi", "instrument_figi"]),
+    instrumentUid: pickString(item, ["instrument_uid", "instrumentUid", "uid"]),
+    ticker: pickString(item, ["ticker"]),
+    classCode: pickString(item, ["class_code", "classCode"]),
+    price: quotationToNumber(item.price),
+    time: pickTimestampIso(item, ["time", "timestamp", "date"]) || nowIso,
+  };
+}
+
+function normalizeCandleItem(item: AnyRecord, figi: string, nowIso: string): TBankCandle {
+  return {
+    figi,
+    time: pickTimestampIso(item, ["time", "timestamp", "date"]) || nowIso,
+    close: quotationToNumber(item.close),
+    open: quotationToNumber(item.open),
+    high: quotationToNumber(item.high),
+    low: quotationToNumber(item.low),
+    volume: pickNumber(item, ["volume"]),
   };
 }
 
@@ -255,12 +316,86 @@ export function createTBankInstrumentsApi(token?: string) {
     return result;
   }
 
+  async function fetchClosePrices(shares: TBankShare[]): Promise<Record<string, TBankClosePrice[]>> {
+    const authToken = ensureToken();
+    const instruments = shares
+      .map((share) => share.figi)
+      .filter((figi) => Boolean(figi))
+      .map((figi) => ({ instrumentId: figi }));
+
+    if (instruments.length === 0) {
+      return {};
+    }
+
+    const result: Record<string, TBankClosePrice[]> = {};
+    const chunks = chunkArray(instruments, MAX_ASSETS_PER_REQUEST);
+
+    for (const chunk of chunks) {
+      const payload = await requestJson<AnyRecord>(CLOSE_PRICES_ENDPOINT, authToken, {
+        instruments: chunk,
+      });
+
+      const rawItems =
+        (Array.isArray(payload.close_prices) && payload.close_prices) ||
+        (Array.isArray(payload.closePrices) && payload.closePrices) ||
+        (Array.isArray(payload.items) && payload.items) ||
+        (Array.isArray(payload.data) && payload.data) ||
+        [];
+
+      const nowIso = new Date().toISOString();
+      for (const raw of rawItems) {
+        const item = (raw ?? {}) as AnyRecord;
+        const normalized = normalizeClosePriceItem(item, nowIso);
+        const figi = normalized.figi;
+        if (!figi) {
+          continue;
+        }
+        if (!result[figi]) {
+          result[figi] = [];
+        }
+        result[figi].push({ ...normalized, figi });
+      }
+    }
+
+    return result;
+  }
+
+  async function fetchCandles(params: {
+    figi: string;
+    from: string;
+    to: string;
+    interval?: string;
+    limit?: number;
+  }): Promise<TBankCandle[]> {
+    const authToken = ensureToken();
+    const payload = await requestJson<AnyRecord>(CANDLES_ENDPOINT, authToken, {
+      instrumentId: params.figi,
+      from: params.from,
+      to: params.to,
+      interval: params.interval ?? "CANDLE_INTERVAL_DAY",
+      limit: params.limit,
+    });
+
+    const rawItems =
+      (Array.isArray(payload.candles) && payload.candles) ||
+      (Array.isArray(payload.items) && payload.items) ||
+      (Array.isArray(payload.data) && payload.data) ||
+      [];
+
+    const nowIso = new Date().toISOString();
+    return rawItems.map((raw) => normalizeCandleItem((raw ?? {}) as AnyRecord, params.figi, nowIso));
+  }
+
   return {
     fetchShares,
     fetchAssetFundamentals,
+    fetchClosePrices,
+    fetchCandles,
     endpoints: {
       shares: SHARES_ENDPOINT,
       assetFundamentals: ASSET_FUNDAMENTALS_ENDPOINT,
+      closePrices: CLOSE_PRICES_ENDPOINT,
+      candles: CANDLES_ENDPOINT,
     },
   };
 }

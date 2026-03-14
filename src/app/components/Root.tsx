@@ -1,4 +1,4 @@
-import { Outlet, Link, useLocation } from "react-router";
+import { Outlet, Link, useLocation } from "react-router-dom";
 import { TrendingUp, Network, GitBranch, Brain, Layers, Database, Menu, X, Sun, Moon } from "lucide-react";
 import { useState } from "react";
 import { useAppSettings } from "../context/AppSettingsContext";
