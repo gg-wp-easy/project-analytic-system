@@ -1,4 +1,4 @@
-import { Link } from "react-router";
+import { Link } from "react-router-dom";
 import { Network, GitBranch, Brain, Layers, Database, ArrowRight, TrendingUp, Activity } from "lucide-react";
 import { useAppSettings } from "../context/AppSettingsContext";
 

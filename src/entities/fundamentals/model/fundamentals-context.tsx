@@ -15,6 +15,8 @@ const SHARES_ENDPOINT =
   "https://invest-public-api.tbank.ru/rest/tinkoff.public.invest.api.contract.v1.InstrumentsService/Shares";
 const ASSET_FUNDAMENTALS_ENDPOINT =
   "https://invest-public-api.tbank.ru/rest/tinkoff.public.invest.api.contract.v1.InstrumentsService/GetAssetFundamentals";
+const CLOSE_PRICES_ENDPOINT =
+  "https://invest-public-api.tbank.ru/rest/tinkoff.public.invest.api.contract.v1.MarketDataService/GetClosePrices";
 
 export type ShareRecord = {
   figi: string;
@@ -43,13 +45,25 @@ export type AssetFundamentalRecord = {
   updatedAt: string;
 };
 
+export type ClosePricePoint = {
+  figi: string;
+  price: number;
+  time: string;
+  instrumentUid?: string;
+  ticker?: string;
+  classCode?: string;
+};
+
 export type FundamentalsCache = {
   shares: ShareRecord[];
   fundamentalsByFigi: Record<string, AssetFundamentalRecord>;
+  closePricesByFigi: Record<string, ClosePricePoint[]>;
+  closePricesMetaByFigi: Record<string, { lastUpdated: string }>;
   lastUpdated: string | null;
   source: {
     shares: string;
     assetFundamentals: string;
+    closePrices: string;
   };
 };
 
@@ -59,16 +73,20 @@ type FundamentalsContextValue = {
   hasData: boolean;
   error: string | null;
   loadFundamentals: () => Promise<void>;
+  loadClosePricesForFigi: (figi: string, force?: boolean) => Promise<void>;
   clearCache: () => void;
 };
 
 const emptyCache: FundamentalsCache = {
   shares: [],
   fundamentalsByFigi: {},
+  closePricesByFigi: {},
+  closePricesMetaByFigi: {},
   lastUpdated: null,
   source: {
     shares: SHARES_ENDPOINT,
     assetFundamentals: ASSET_FUNDAMENTALS_ENDPOINT,
+    closePrices: CLOSE_PRICES_ENDPOINT,
   },
 };
 
@@ -105,10 +123,20 @@ function loadCacheFromStorage(): FundamentalsCache {
         ts: new Date().toISOString(),
         sharesCount: parsed.shares.length,
         fundamentalsCount: Object.keys(parsed.fundamentalsByFigi).length,
+        closePricesCount: Object.keys(parsed.closePricesByFigi ?? {}).length,
         lastUpdated: parsed.lastUpdated,
       });
     }
-    return parsed;
+    return {
+      ...parsed,
+      closePricesByFigi: parsed.closePricesByFigi ?? {},
+      closePricesMetaByFigi: parsed.closePricesMetaByFigi ?? {},
+      source: {
+        shares: parsed.source?.shares ?? SHARES_ENDPOINT,
+        assetFundamentals: parsed.source?.assetFundamentals ?? ASSET_FUNDAMENTALS_ENDPOINT,
+        closePrices: parsed.source?.closePrices ?? CLOSE_PRICES_ENDPOINT,
+      },
+    };
   } catch {
     if (ENABLE_TEMP_LOGS) {
       console.error("[Fundamentals][Cache][Load][ParseError]", {
@@ -131,6 +159,7 @@ function saveCacheToStorage(cache: FundamentalsCache): void {
       key: FUNDAMENTALS_CACHE_KEY,
       sharesCount: cache.shares.length,
       fundamentalsCount: Object.keys(cache.fundamentalsByFigi).length,
+      closePricesCount: Object.keys(cache.closePricesByFigi).length,
       lastUpdated: cache.lastUpdated,
     });
   }
@@ -152,14 +181,18 @@ export function FundamentalsProvider({ children }: { children: ReactNode }) {
       const api = createTBankInstrumentsApi();
       const shares = await api.fetchShares();
       const fundamentalsByFigi = await api.fetchAssetFundamentals(shares);
+      const closePricesByFigi = await api.fetchClosePrices(shares);
 
       const nextCache: FundamentalsCache = {
         shares,
         fundamentalsByFigi,
+        closePricesByFigi,
+        closePricesMetaByFigi: {},
         lastUpdated: new Date().toISOString(),
         source: {
           shares: SHARES_ENDPOINT,
           assetFundamentals: ASSET_FUNDAMENTALS_ENDPOINT,
+          closePrices: CLOSE_PRICES_ENDPOINT,
         },
       };
 
@@ -171,6 +204,7 @@ export function FundamentalsProvider({ children }: { children: ReactNode }) {
           durationMs: Number((performance.now() - start).toFixed(1)),
           sharesCount: shares.length,
           fundamentalsCount: Object.keys(fundamentalsByFigi).length,
+          closePricesCount: Object.keys(closePricesByFigi).length,
           firstTickers: shares.slice(0, 5).map((s) => s.ticker),
         });
       }
@@ -182,6 +216,65 @@ export function FundamentalsProvider({ children }: { children: ReactNode }) {
       setIsLoading(false);
     }
   }, []);
+
+  const loadClosePricesForFigi = useCallback(
+    async (figi: string, force = false) => {
+      if (!figi) {
+        return;
+      }
+      const meta = cache.closePricesMetaByFigi?.[figi];
+      if (!force && meta?.lastUpdated) {
+        const last = new Date(meta.lastUpdated).getTime();
+        const ageMs = Date.now() - last;
+        if (Number.isFinite(ageMs) && ageMs < 60 * 60 * 1000) {
+          return;
+        }
+      }
+      try {
+        const api = createTBankInstrumentsApi();
+        const to = new Date();
+        const from = new Date();
+        from.setFullYear(to.getFullYear() - 1);
+
+        const candles = await api.fetchCandles({
+          figi,
+          from: from.toISOString(),
+          to: to.toISOString(),
+          interval: "CANDLE_INTERVAL_DAY",
+          limit: 400,
+        });
+
+        const points = candles
+          .filter((row) => Number.isFinite(row.close))
+          .map((row) => ({
+            figi: row.figi,
+            price: row.close,
+            time: row.time,
+          }));
+
+        setCache((prev) => {
+          const next: FundamentalsCache = {
+            ...prev,
+            closePricesByFigi: {
+              ...prev.closePricesByFigi,
+              [figi]: points,
+            },
+            closePricesMetaByFigi: {
+              ...prev.closePricesMetaByFigi,
+              [figi]: { lastUpdated: new Date().toISOString() },
+            },
+          };
+          saveCacheToStorage(next);
+          return next;
+        });
+      } catch (err) {
+        const message = err instanceof Error ? err.message : "Failed to load close prices";
+        setError(message);
+        console.error("Failed to load close prices from T-Bank API", err);
+      }
+    },
+    [cache.closePricesByFigi, cache.closePricesMetaByFigi],
+  );
 
   const clearCache = useCallback(() => {
     setCache(emptyCache);
@@ -204,9 +297,10 @@ export function FundamentalsProvider({ children }: { children: ReactNode }) {
       hasData: cache.shares.length > 0,
       error,
       loadFundamentals,
+      loadClosePricesForFigi,
       clearCache,
     }),
-    [cache, isLoading, error, loadFundamentals, clearCache],
+    [cache, isLoading, error, loadFundamentals, loadClosePricesForFigi, clearCache],
   );
 
   return <FundamentalsContext.Provider value={value}>{children}</FundamentalsContext.Provider>;
