@@ -22,155 +22,40 @@ import { submitOptimizerSettings, useOptimizerSettings } from "./optimizerSettin
 import { AnalysisRunningIndicator } from "./AnalysisRunningIndicator";
 import { MetricTooltip } from "./MetricTooltip";
 import { formatMetricDisplay, getMetricTooltip, localizeMetricLabel } from "./metricDisplay";
-
-type MetricItem = {
-  label: string;
-  value: string;
-};
-
-type FeatureImportanceItem = {
-  feature: string;
-  importance: number;
-};
-
-type PortfolioPosition = {
-  ticker: string;
-  name: string;
-  weight: number;
-  expectedReturn: number;
-  risk: number;
-  sharpe: number;
-  sortino?: number;
-  value_at_risk?: number;
-};
-
-type PortfolioStrategy = {
-  key: string;
-  name: string;
-  expectedReturn: number;
-  risk: number;
-  sharpe: number;
-  diversification: number;
-  assetsCount: number;
-  positions: PortfolioPosition[];
-};
-
-type TrainingPoint = {
-  epoch: number;
-  trainLoss: number;
-  valLoss: number;
-};
+import type {
+  NeuralFeatureImportanceItem as FeatureImportanceItem,
+  NeuralMetricItem as MetricItem,
+  NeuralPortfolioPosition as PortfolioPosition,
+  NeuralPortfolioStrategy as PortfolioStrategy,
+  NeuralTrainingPoint as TrainingPoint,
+} from "../../features/neural-analysis/model/types";
+import { numberOr } from "../../shared/lib/number/numberOr";
+import { formatPercentOrNumber, formatVarPercent } from "../../shared/lib/format/finance";
+import { downloadRowsAsExcel, downloadSvgAsPng } from "../../shared/lib/export/download";
 
 const ENABLE_TEMP_LOGS = true;
 const palette = ["#f97316", "#ea580c", "#fb923c", "#f59e0b", "#f43f5e", "#ef4444", "#facc15", "#fdba74"];
 const NEURAL_STATE_KEY = "neural-analysis-state-v1";
 
-function escapeHtml(value: string): string {
-  return value
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&#39;");
-}
-
 function downloadPortfolioAsExcel(rows: PortfolioPosition[], filename: string): void {
-  const tableRows = rows
-    .map(
-      (row) =>
-        `<tr><td>${escapeHtml(row.ticker)}</td><td>${escapeHtml(row.name || "")}</td><td>${row.weight.toFixed(4)}</td><td>${Number.isFinite(row.expectedReturn) ? row.expectedReturn.toFixed(6) : ""}</td><td>${Number.isFinite(row.risk) ? row.risk.toFixed(6) : ""}</td><td>${Number.isFinite(row.sharpe) ? row.sharpe.toFixed(6) : ""}</td><td>${Number.isFinite(row.sortino) ? row.sortino?.toFixed(6) : ""}</td><td>${Number.isFinite(row.value_at_risk) ? row.value_at_risk?.toFixed(6) : ""}</td></tr>`,
-    )
-    .join("");
-
-  const html =
-    `\uFEFF<html><head><meta charset="utf-8"></head><body>` +
-    `<table border="1"><tr><th>Ticker</th><th>Name</th><th>Weight, %</th><th>Expected Return</th><th>Risk</th><th>Sharpe</th><th>Sortino</th><th>VaR</th></tr>${tableRows}</table>` +
-    `</body></html>`;
-
-  const blob = new Blob([html], { type: "application/vnd.ms-excel;charset=utf-8;" });
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement("a");
-  link.href = url;
-  link.download = filename;
-  document.body.appendChild(link);
-  link.click();
-  link.remove();
-  URL.revokeObjectURL(url);
-}
-
-async function downloadSvgAsPng(svg: SVGSVGElement, filename: string): Promise<void> {
-  const xml = new XMLSerializer().serializeToString(svg);
-  const svgBlob = new Blob([xml], { type: "image/svg+xml;charset=utf-8" });
-  const url = URL.createObjectURL(svgBlob);
-
-  await new Promise<void>((resolve, reject) => {
-    const img = new Image();
-    img.onload = () => {
-      const width = Math.max(svg.clientWidth, 600);
-      const height = Math.max(svg.clientHeight, 400);
-      const canvas = document.createElement("canvas");
-      canvas.width = width * 2;
-      canvas.height = height * 2;
-
-      const ctx = canvas.getContext("2d");
-      if (!ctx) {
-        reject(new Error("Cannot create canvas context"));
-        return;
-      }
-
-      ctx.fillStyle = "#ffffff";
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
-      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-      canvas.toBlob((blob) => {
-        if (!blob) {
-          reject(new Error("Failed to create PNG blob"));
-          return;
-        }
-        const pngUrl = URL.createObjectURL(blob);
-        const link = document.createElement("a");
-        link.href = pngUrl;
-        link.download = filename;
-        document.body.appendChild(link);
-        link.click();
-        link.remove();
-        URL.revokeObjectURL(pngUrl);
-        resolve();
-      }, "image/png");
-    };
-    img.onerror = () => reject(new Error("Failed to render chart image"));
-    img.src = url;
-  });
-
-  URL.revokeObjectURL(url);
-}
-
-function numberOr(value: unknown, fallback = 0): number {
-  if (typeof value === "number" && Number.isFinite(value)) {
-    return value;
-  }
-  if (typeof value === "string") {
-    const parsed = Number(value);
-    return Number.isFinite(parsed) ? parsed : fallback;
-  }
-  return fallback;
+  downloadRowsAsExcel(
+    rows,
+    [
+      { header: "Ticker", render: (row) => row.ticker },
+      { header: "Name", render: (row) => row.name || "" },
+      { header: "Weight, %", render: (row) => row.weight.toFixed(4) },
+      { header: "Expected Return", render: (row) => (Number.isFinite(row.expectedReturn) ? row.expectedReturn.toFixed(6) : "") },
+      { header: "Risk", render: (row) => (Number.isFinite(row.risk) ? row.risk.toFixed(6) : "") },
+      { header: "Sharpe", render: (row) => (Number.isFinite(row.sharpe) ? row.sharpe.toFixed(6) : "") },
+      { header: "Sortino", render: (row) => (Number.isFinite(row.sortino) ? row.sortino?.toFixed(6) : "") },
+      { header: "VaR", render: (row) => (Number.isFinite(row.value_at_risk) ? row.value_at_risk?.toFixed(6) : "") },
+    ],
+    filename,
+  );
 }
 
 function formatMetricPercentOrNumber(value: number): string {
-  if (!Number.isFinite(value)) {
-    return "-";
-  }
-  if (value >= 0 && value <= 1) {
-    return `${(value * 100).toFixed(2)}%`;
-  }
-  return value.toFixed(4);
-}
-
-function formatVarPercent(value: number): string {
-  if (!Number.isFinite(value)) {
-    return "-";
-  }
-  const normalized = Math.abs(value) <= 1 ? value * 100 : value;
-  return `${normalized.toFixed(2)}%`;
+  return formatPercentOrNumber(value);
 }
 
 function formatMetricValue(value: unknown): string {

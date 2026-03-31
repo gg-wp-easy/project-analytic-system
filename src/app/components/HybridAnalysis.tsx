@@ -20,139 +20,42 @@ import { useFundamentals } from "../context/FundamentalsContext";
 import { useAppSettings } from "../context/AppSettingsContext";
 import { OptimizerSettingsFields } from "./OptimizerSettingsFields";
 import { submitOptimizerSettings, useOptimizerSettings } from "./optimizerSettings";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "./ui/dialog";
 import { AnalysisRunningIndicator } from "./AnalysisRunningIndicator";
 import { MetricTooltip } from "./MetricTooltip";
 import { formatMetricDisplay, getMetricTooltip, localizeMetricLabel } from "./metricDisplay";
-
-type MetricItem = {
-  label: string;
-  value: string;
-};
-
-type ModelScore = {
-  model: string;
-  score: number;
-};
-
-type PortfolioPosition = {
-  ticker: string;
-  name: string;
-  weight: number;
-  expectedReturn: number;
-  risk: number;
-  sharpe: number;
-  sortino?: number;
-  value_at_risk?: number;
-};
-
-type StrategyPortfolio = {
-  key: string;
-  name: string;
-  expectedReturn: number;
-  risk: number;
-  sharpe: number;
-  diversification: number;
-  assetsCount: number;
-};
-
-type TrainingPoint = {
-  epoch: number;
-  trainLoss: number;
-  valLoss: number;
-};
+import type {
+  HybridMetricItem as MetricItem,
+  HybridModelScore as ModelScore,
+  HybridPortfolioPosition as PortfolioPosition,
+  HybridStrategyPortfolio as StrategyPortfolio,
+  HybridTrainingPoint as TrainingPoint,
+} from "../../features/hybrid-analysis/model/types";
+import { numberOr } from "../../shared/lib/number/numberOr";
+import { formatVarPercent } from "../../shared/lib/format/finance";
+import { downloadRowsAsExcel, downloadSvgAsPng } from "../../shared/lib/export/download";
 
 const ENABLE_TEMP_LOGS = true;
 const palette = ["#0891b2", "#2563eb", "#f97316", "#16a34a", "#e11d48", "#a855f7", "#0ea5e9", "#f59e0b"];
 const HYBRID_STATE_KEY = "hybrid-analysis-state-v1";
-
-function escapeHtml(value: string): string {
-  return value
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&#39;");
-}
+const DEFAULT_SERVER_ERROR_RU = "Сервер вернул ошибку. Попробуйте повторить позже.";
+const DEFAULT_SERVER_ERROR_EN = "Server returned an error. Please try again later.";
 
 function downloadPortfolioAsExcel(rows: PortfolioPosition[], filename: string): void {
-  const tableRows = rows
-    .map(
-      (row) =>
-        `<tr><td>${escapeHtml(row.ticker)}</td><td>${escapeHtml(row.name || "")}</td><td>${row.weight.toFixed(4)}</td><td>${Number.isFinite(row.expectedReturn) ? row.expectedReturn.toFixed(6) : ""}</td><td>${Number.isFinite(row.risk) ? row.risk.toFixed(6) : ""}</td><td>${Number.isFinite(row.sharpe) ? row.sharpe.toFixed(6) : ""}</td><td>${Number.isFinite(row.sortino) ? row.sortino?.toFixed(6) : ""}</td><td>${Number.isFinite(row.value_at_risk) ? row.value_at_risk?.toFixed(6) : ""}</td></tr>`,
-    )
-    .join("");
-
-  const html =
-    `\uFEFF<html><head><meta charset="utf-8"></head><body>` +
-    `<table border="1"><tr><th>Ticker</th><th>Name</th><th>Weight, %</th><th>Expected Return</th><th>Risk</th><th>Sharpe</th><th>Sortino</th><th>VaR</th></tr>${tableRows}</table>` +
-    `</body></html>`;
-
-  const blob = new Blob([html], { type: "application/vnd.ms-excel;charset=utf-8;" });
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement("a");
-  link.href = url;
-  link.download = filename;
-  document.body.appendChild(link);
-  link.click();
-  link.remove();
-  URL.revokeObjectURL(url);
-}
-
-async function downloadSvgAsPng(svg: SVGSVGElement, filename: string): Promise<void> {
-  const xml = new XMLSerializer().serializeToString(svg);
-  const svgBlob = new Blob([xml], { type: "image/svg+xml;charset=utf-8" });
-  const url = URL.createObjectURL(svgBlob);
-
-  await new Promise<void>((resolve, reject) => {
-    const img = new Image();
-    img.onload = () => {
-      const width = Math.max(svg.clientWidth, 600);
-      const height = Math.max(svg.clientHeight, 400);
-      const canvas = document.createElement("canvas");
-      canvas.width = width * 2;
-      canvas.height = height * 2;
-
-      const ctx = canvas.getContext("2d");
-      if (!ctx) {
-        reject(new Error("Cannot create canvas context"));
-        return;
-      }
-
-      ctx.fillStyle = "#ffffff";
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
-      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-      canvas.toBlob((blob) => {
-        if (!blob) {
-          reject(new Error("Failed to create PNG blob"));
-          return;
-        }
-        const pngUrl = URL.createObjectURL(blob);
-        const link = document.createElement("a");
-        link.href = pngUrl;
-        link.download = filename;
-        document.body.appendChild(link);
-        link.click();
-        link.remove();
-        URL.revokeObjectURL(pngUrl);
-        resolve();
-      }, "image/png");
-    };
-    img.onerror = () => reject(new Error("Failed to render chart image"));
-    img.src = url;
-  });
-
-  URL.revokeObjectURL(url);
-}
-
-function numberOr(value: unknown, fallback = 0): number {
-  if (typeof value === "number" && Number.isFinite(value)) {
-    return value;
-  }
-  if (typeof value === "string") {
-    const parsed = Number(value);
-    return Number.isFinite(parsed) ? parsed : fallback;
-  }
-  return fallback;
+  downloadRowsAsExcel(
+    rows,
+    [
+      { header: "Ticker", render: (row) => row.ticker },
+      { header: "Name", render: (row) => row.name || "" },
+      { header: "Weight, %", render: (row) => row.weight.toFixed(4) },
+      { header: "Expected Return", render: (row) => (Number.isFinite(row.expectedReturn) ? row.expectedReturn.toFixed(6) : "") },
+      { header: "Risk", render: (row) => (Number.isFinite(row.risk) ? row.risk.toFixed(6) : "") },
+      { header: "Sharpe", render: (row) => (Number.isFinite(row.sharpe) ? row.sharpe.toFixed(6) : "") },
+      { header: "Sortino", render: (row) => (Number.isFinite(row.sortino) ? row.sortino?.toFixed(6) : "") },
+      { header: "VaR", render: (row) => (Number.isFinite(row.value_at_risk) ? row.value_at_risk?.toFixed(6) : "") },
+    ],
+    filename,
+  );
 }
 
 function formatMetric(value: number): string {
@@ -163,14 +66,6 @@ function formatMetric(value: number): string {
     return `${(value * 100).toFixed(2)}%`;
   }
   return value.toFixed(4);
-}
-
-function formatVarPercent(value: number): string {
-  if (!Number.isFinite(value)) {
-    return "-";
-  }
-  const normalized = Math.abs(value) <= 1 ? value * 100 : value;
-  return `${normalized.toFixed(2)}%`;
 }
 
 function extractModelScores(parsed: Record<string, unknown>, fallbackWeights: { cluster: number; tree: number; neural: number }): ModelScore[] {
@@ -365,6 +260,39 @@ function extractTrainingHistory(parsed: Record<string, unknown>): TrainingPoint[
   })).filter((row) => Number.isFinite(row.trainLoss) || Number.isFinite(row.valLoss));
 }
 
+function safeParseJsonObject(text: string): Record<string, unknown> | null {
+  if (!text.trim()) {
+    return null;
+  }
+  try {
+    const parsed = JSON.parse(text) as unknown;
+    if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+      return parsed as Record<string, unknown>;
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+function extractErrorText(payload: Record<string, unknown> | null): string | null {
+  if (!payload) {
+    return null;
+  }
+  const direct = payload.error ?? payload.message ?? payload.detail;
+  if (typeof direct === "string" && direct.trim()) {
+    return direct.trim();
+  }
+  const nestedDetail = payload.detail;
+  if (nestedDetail && typeof nestedDetail === "object" && !Array.isArray(nestedDetail)) {
+    const detailMessage = (nestedDetail as Record<string, unknown>).message;
+    if (typeof detailMessage === "string" && detailMessage.trim()) {
+      return detailMessage.trim();
+    }
+  }
+  return null;
+}
+
 export function HybridAnalysis() {
   const { hasData, cache } = useFundamentals();
   const { locale } = useAppSettings();
@@ -374,6 +302,7 @@ export function HybridAnalysis() {
 
   const [isRunning, setIsRunning] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [serverErrorModal, setServerErrorModal] = useState<string | null>(null);
   const [weights, setWeights] = useState({
     clusterWeight: "30",
     treeWeight: "30",
@@ -471,6 +400,42 @@ export function HybridAnalysis() {
     window.localStorage.setItem(HYBRID_STATE_KEY, JSON.stringify(payload));
   }, [weights, modelComparison, metrics, portfolioStrategies, portfolio, trainingHistory, portfolioAssetsCount, error]);
 
+  const resetAnalysisResults = () => {
+    setModelComparison([]);
+    setMetrics([]);
+    setPortfolioStrategies([]);
+    setPortfolio([]);
+    setTrainingHistory([]);
+    setPortfolioAssetsCount(0);
+  };
+
+  const openServerErrorModal = (message: string) => {
+    setError(message);
+    setServerErrorModal(message);
+  };
+
+  const formatHttpError = (response: Response, text: string): string => {
+    const payload = safeParseJsonObject(text);
+    const serverMessage = extractErrorText(payload);
+    if (serverMessage) {
+      return `HTTP ${response.status}: ${serverMessage}`;
+    }
+    const fallback = isEn ? DEFAULT_SERVER_ERROR_EN : DEFAULT_SERVER_ERROR_RU;
+    const statusText = response.statusText?.trim();
+    if (statusText) {
+      return `HTTP ${response.status} ${statusText}`;
+    }
+    return `HTTP ${response.status}: ${fallback}`;
+  };
+
+  const parseHybridResponse = async (response: Response): Promise<Record<string, unknown>> => {
+    const text = await response.text();
+    if (!response.ok) {
+      throw new Error(formatHttpError(response, text));
+    }
+    return safeParseJsonObject(text) ?? {};
+  };
+
   const runHybridAnalysis = async () => {
     setError(null);
     setIsRunning(true);
@@ -491,13 +456,7 @@ export function HybridAnalysis() {
           weights: numericWeights,
         }),
       });
-
-      const text = await response.text();
-      const parsed = text ? (JSON.parse(text) as Record<string, unknown>) : {};
-
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}${text ? `: ${text}` : ""}`);
-      }
+      const parsed = await parseHybridResponse(response);
 
       const parsedScores = extractModelScores(parsed, numericWeights);
       const parsedMetrics = extractMetrics(parsed);
@@ -526,14 +485,10 @@ export function HybridAnalysis() {
         });
       }
     } catch (e) {
-      const message = e instanceof Error ? e.message : tx("Не удалось выполнить гибридный анализ", "Failed to run hybrid analysis");
-      setError(message);
-      setModelComparison([]);
-      setMetrics([]);
-      setPortfolioStrategies([]);
-      setPortfolio([]);
-      setTrainingHistory([]);
-      setPortfolioAssetsCount(0);
+      const fallback = tx("Не удалось выполнить гибридный анализ", "Failed to run hybrid analysis");
+      const message = e instanceof Error ? e.message : fallback;
+      resetAnalysisResults();
+      openServerErrorModal(message);
     } finally {
       setIsRunning(false);
     }
@@ -590,30 +545,6 @@ export function HybridAnalysis() {
               settings={optimizerSettings}
               onChange={setOptimizerSettings}
             />
-            <label className="block text-sm text-slate-700 dark:text-slate-300">
-              {isEn ? "Cluster Weight (%)" : "Вес Cluster (%)"}
-              <input
-                className="mt-1 w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2"
-                value={weights.clusterWeight}
-                onChange={(e) => setWeights((v) => ({ ...v, clusterWeight: e.target.value }))}
-              />
-            </label>
-            <label className="block text-sm text-slate-700 dark:text-slate-300">
-              {isEn ? "Tree Weight (%)" : "Вес Tree (%)"}
-              <input
-                className="mt-1 w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2"
-                value={weights.treeWeight}
-                onChange={(e) => setWeights((v) => ({ ...v, treeWeight: e.target.value }))}
-              />
-            </label>
-            <label className="block text-sm text-slate-700 dark:text-slate-300">
-              {isEn ? "Neural Weight (%)" : "Вес Neural (%)"}
-              <input
-                className="mt-1 w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2"
-                value={weights.neuralWeight}
-                onChange={(e) => setWeights((v) => ({ ...v, neuralWeight: e.target.value }))}
-              />
-            </label>
             {error && (
               <div className="bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-900 rounded-lg p-3">
                 <p className="text-sm text-red-700 dark:text-red-300 break-words">{error}</p>
@@ -817,6 +748,26 @@ export function HybridAnalysis() {
           )}
         </div>
       </div>
+
+      <Dialog open={Boolean(serverErrorModal)} onOpenChange={(open) => !open && setServerErrorModal(null)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>{tx("Ошибка сервера", "Server Error")}</DialogTitle>
+            <DialogDescription className="break-words">
+              {serverErrorModal}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <button
+              type="button"
+              onClick={() => setServerErrorModal(null)}
+              className="inline-flex items-center justify-center rounded-md bg-slate-900 px-4 py-2 text-sm font-medium text-white"
+            >
+              {tx("Закрыть", "Close")}
+            </button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

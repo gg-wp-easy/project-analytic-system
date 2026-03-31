@@ -9,13 +9,22 @@ export function FundamentalsPage() {
   const { t, locale } = useAppSettings();
   const isEn = locale === "en";
   const [page, setPage] = useState(1);
+  const [searchQuery, setSearchQuery] = useState("");
   const pageSize = 20;
 
-  const pageCount = Math.max(1, Math.ceil(cache.shares.length / pageSize));
+  const filteredShares = useMemo(() => {
+    const query = searchQuery.trim().toLowerCase();
+    if (!query) {
+      return cache.shares;
+    }
+    return cache.shares.filter((share) => share.name.toLowerCase().includes(query));
+  }, [cache.shares, searchQuery]);
+
+  const pageCount = Math.max(1, Math.ceil(filteredShares.length / pageSize));
   const visibleShares = useMemo(() => {
     const start = (page - 1) * pageSize;
-    return cache.shares.slice(start, start + pageSize);
-  }, [cache.shares, page]);
+    return filteredShares.slice(start, start + pageSize);
+  }, [filteredShares, page]);
 
   useEffect(() => {
     setPage((prev) => Math.min(prev, pageCount));
@@ -24,6 +33,10 @@ export function FundamentalsPage() {
   useEffect(() => {
     setPage(1);
   }, [cache.lastUpdated]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [searchQuery]);
 
   return (
     <div className="space-y-6">
@@ -114,7 +127,16 @@ export function FundamentalsPage() {
 
       {hasData && !isLoading && (
         <div className="bg-white dark:bg-slate-900 rounded-xl p-6 shadow-sm border border-slate-200 dark:border-slate-800 overflow-x-auto">
-          <h2 className="font-semibold text-slate-900 dark:text-slate-100 mb-4">{t("fund.sampleTitle")}</h2>
+          <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+            <h2 className="font-semibold text-slate-900 dark:text-slate-100">{t("fund.sampleTitle")}</h2>
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(event) => setSearchQuery(event.target.value)}
+              placeholder={isEn ? "Search stocks by name" : "Поиск акций по названию"}
+              className="w-full md:w-80 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
+            />
+          </div>
           <table className="w-full min-w-[760px] text-sm">
             <thead>
               <tr className="text-left border-b border-slate-200 dark:border-slate-800">
@@ -134,33 +156,41 @@ export function FundamentalsPage() {
               </tr>
             </thead>
             <tbody>
-              {visibleShares.map((share) => {
-                const f = cache.fundamentalsByFigi[share.figi];
-                return (
-                  <tr key={share.figi} className="border-b border-slate-100 dark:border-slate-800">
-                    <td className="py-2 pr-4 font-medium text-slate-900 dark:text-slate-100">{share.ticker}</td>
-                    <td className="py-2 pr-4 text-slate-700 dark:text-slate-300">{share.name}</td>
-                    <td className="py-2 pr-4">
-                      <Link
-                        to={`/fundamentals/${share.figi}`}
-                        className="inline-flex items-center gap-1 rounded-md border border-slate-300 px-2 py-1 text-xs text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
-                      >
-                        {isEn ? "View" : "Смотреть"}
-                      </Link>
-                    </td>
-                    <td className="py-2 pr-4 text-slate-700 dark:text-slate-300">{f?.marketCapBn ?? "-"}</td>
-                    <td className="py-2 pr-4 text-slate-700 dark:text-slate-300">{f?.peRatio ?? "-"}</td>
-                    <td className="py-2 pr-4 text-slate-700 dark:text-slate-300">{f?.pbRatio ?? "-"}</td>
-                    <td className="py-2 pr-4 text-slate-700 dark:text-slate-300">{f?.roe ?? "-"}</td>
-                    <td className="py-2 pr-4 text-slate-700 dark:text-slate-300">{f?.dividendYield ?? "-"}%</td>
-                    <td className="py-2 pr-4 text-slate-700 dark:text-slate-300">{f?.beta ?? "-"}</td>
-                    <td className="py-2 pr-4 text-slate-700 dark:text-slate-300">{f?.roa ?? "-"}</td>
-                    <td className="py-2 pr-4 text-slate-700 dark:text-slate-300">{f?.netMargin ?? "-"}%</td>
-                    <td className="py-2 pr-4 text-slate-700 dark:text-slate-300">{f?.netDebtToEbitda ?? "-"}</td>
-                    <td className="py-2 pr-4 text-slate-700 dark:text-slate-300">{f?.totalDebt ?? "-"}</td>
-                  </tr>
-                );
-              })}
+              {visibleShares.length === 0 ? (
+                <tr>
+                  <td colSpan={13} className="py-4 text-center text-slate-500 dark:text-slate-400">
+                    {isEn ? "No stocks found by this name" : "Акции по такому названию не найдены"}
+                  </td>
+                </tr>
+              ) : (
+                visibleShares.map((share) => {
+                  const f = cache.fundamentalsByFigi[share.figi];
+                  return (
+                    <tr key={share.figi} className="border-b border-slate-100 dark:border-slate-800">
+                      <td className="py-2 pr-4 font-medium text-slate-900 dark:text-slate-100">{share.ticker}</td>
+                      <td className="py-2 pr-4 text-slate-700 dark:text-slate-300">{share.name}</td>
+                      <td className="py-2 pr-4">
+                        <Link
+                          to={`/fundamentals/${share.figi}`}
+                          className="inline-flex items-center gap-1 rounded-md border border-slate-300 px-2 py-1 text-xs text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
+                        >
+                          {isEn ? "View" : "Смотреть"}
+                        </Link>
+                      </td>
+                      <td className="py-2 pr-4 text-slate-700 dark:text-slate-300">{f?.marketCapBn ?? "-"}</td>
+                      <td className="py-2 pr-4 text-slate-700 dark:text-slate-300">{f?.peRatio ?? "-"}</td>
+                      <td className="py-2 pr-4 text-slate-700 dark:text-slate-300">{f?.pbRatio ?? "-"}</td>
+                      <td className="py-2 pr-4 text-slate-700 dark:text-slate-300">{f?.roe ?? "-"}</td>
+                      <td className="py-2 pr-4 text-slate-700 dark:text-slate-300">{f?.dividendYield ?? "-"}%</td>
+                      <td className="py-2 pr-4 text-slate-700 dark:text-slate-300">{f?.beta ?? "-"}</td>
+                      <td className="py-2 pr-4 text-slate-700 dark:text-slate-300">{f?.roa ?? "-"}</td>
+                      <td className="py-2 pr-4 text-slate-700 dark:text-slate-300">{f?.netMargin ?? "-"}%</td>
+                      <td className="py-2 pr-4 text-slate-700 dark:text-slate-300">{f?.netDebtToEbitda ?? "-"}</td>
+                      <td className="py-2 pr-4 text-slate-700 dark:text-slate-300">{f?.totalDebt ?? "-"}</td>
+                    </tr>
+                  );
+                })
+              )}
             </tbody>
           </table>
           <div className="mt-4 flex items-center justify-between gap-3">
