@@ -65,6 +65,8 @@
     "electron-updater": "^6.3.9",
     "embla-carousel-react": "8.6.0",
     "input-otp": "1.4.2",
+    "jspdf": "^4.2.1",
+    "jspdf-autotable": "^5.0.7",
     "lucide-react": "0.487.0",
     "motion": "12.23.24",
     "next-themes": "0.4.6",
@@ -82,7 +84,8 @@
     "sonner": "2.0.3",
     "tailwind-merge": "3.2.0",
     "tw-animate-css": "1.3.8",
-    "vaul": "1.1.2"
+    "vaul": "1.1.2",
+    "xlsx": "^0.18.5"
   },
   "devDependencies": {
     "@tailwindcss/vite": "4.1.12",
@@ -91,6 +94,7 @@
     "electron": "^37.10.3",
     "electron-builder": "^26.0.12",
     "electron-builder-squirrel-windows": "^26.0.12",
+    "electron-icon-builder": "^2.0.1",
     "electron-notarize": "^1.2.2",
     "tailwindcss": "4.1.12",
     "vite": "6.3.5",
@@ -113,7 +117,7 @@
       "vite": "6.3.5"
     }
   },
-   "build": {
+  "build": {
     "appId": "com.invest.analytics.desktop",
     "productName": "NK-Invest-Analytics",
     "copyright": "Copyright © 2024 NK-Invest-Analytics",
@@ -129,29 +133,51 @@
       {
         "from": "server-analytic-system/dist/server-analytic-system/",
         "to": "server",
-        "filter": ["**/*"]
+        "filter": [
+          "**/*"
+        ]
       }
     ],
     "asar": true,
-   "asarUnpack": [
+    "asarUnpack": [
       "node_modules/@*/**/*.node",
       "server/**/*"
     ],
     "executableName": "nk-invest-analytics",
-
     "win": {
       "target": [
-        { "target": "nsis", "arch": ["x64", "ia32"] },
-        { "target": "portable", "arch": ["x64"] },
-        { "target": "appx", "arch": ["x64", "arm64"] },
-        { "target": "msi", "arch": ["x64"] }
+        {
+          "target": "nsis",
+          "arch": [
+            "x64",
+            "ia32"
+          ]
+        },
+        {
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "appx",
+          "arch": [
+            "x64",
+            "arm64"
+          ]
+        },
+        {
+          "target": "msi",
+          "arch": [
+            "x64"
+          ]
+        }
       ],
-      "icon": "build/icon.ico",
+      "icon": "build/icons/icon.ico",
       "artifactName": "${productName}-Windows-${version}-${arch}.${ext}",
       "verifyUpdateCodeSignature": false,
       "signAndEditExecutable": false
     },
-
     "nsis": {
       "oneClick": false,
       "perMachine": true,
@@ -160,36 +186,47 @@
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
       "shortcutName": "Инвестиционная аналитика",
-      "installerIcon": "build/icon.ico",
-      "uninstallerIcon": "build/icon.ico",
-      "installerHeaderIcon": "build/icon.ico",
+      "installerIcon": "build/icons/icon.ico",
+      "uninstallerIcon": "build/icons/icon.ico",
+      "installerHeaderIcon": "build/icons/icon.ico",
       "language": "1049",
       "multiLanguageInstaller": true,
       "unicode": true
     },
-
     "portable": {
       "artifactName": "${productName}-Windows-${version}-portable-${arch}.${ext}",
       "splashImage": "build/splash.bmp",
       "unpackDirName": "data"
     },
-
     "appx": {
       "applicationId": "InvestAnalytics.Desktop",
       "identityName": "42694InvestAnalytics.InvestAnalytics",
       "publisher": "CN=AAAAAAAA-AAAA-AAAA-AAAA-AAAAAAAAAAAA",
       "publisherDisplayName": "Invest Analytics",
-      "languages": ["ru-RU", "en-US"],
+      "languages": [
+        "ru-RU",
+        "en-US"
+      ],
       "showNameOnTiles": true,
       "backgroundColor": "#2D2D30"
     },
-
     "linux": {
       "target": [
-        { "target": "deb", "arch": ["x64", "arm64"] },
-        { "target": "AppImage", "arch": ["x64"] }
+        {
+          "target": "deb",
+          "arch": [
+            "x64",
+            "arm64"
+          ]
+        },
+        {
+          "target": "AppImage",
+          "arch": [
+            "x64"
+          ]
+        }
       ],
-      "icon": "build/icon.png",
+      "icon": "build/icons",
       "category": "Finance",
       "maintainer": "NK-Invest-Analytics <nikitakaev25@gmail.com>",
       "vendor": "NK-Invest-Analytics",
@@ -205,7 +242,6 @@
       "synopsis": "NK-Investment Analytics Desktop Application",
       "executableArgs": []
     },
-
     "deb": {
       "priority": "optional",
       "packageCategory": "utils",
@@ -221,33 +257,53 @@
         "libsecret-1-0",
         "libappindicator3-1"
       ],
-      "recommends": ["python3", "python3-pip"],
+      "recommends": [
+        "python3",
+        "python3-pip"
+      ],
       "afterInstall": "build/linux/after-install.sh",
       "afterRemove": "build/linux/after-remove.sh"
     },
-
     "snap": {
       "confinement": "strict",
       "grade": "stable",
       "summary": "NK-Invest-Analytics",
       "description": "Professional investment analytics system",
-      "plugs": ["desktop", "desktop-legacy", "home", "x11", "wayland", "unity7", "browser-support", "network", "gsettings", "pulseaudio", "opengl"],
+      "plugs": [
+        "desktop",
+        "desktop-legacy",
+        "home",
+        "x11",
+        "wayland",
+        "unity7",
+        "browser-support",
+        "network",
+        "gsettings",
+        "pulseaudio",
+        "opengl"
+      ],
       "environment": {
         "DISABLE_WAYLAND": "1"
       }
     },
-
     "rpm": {
-      "depends": ["gtk3", "libnotify", "nss", "libXScrnSaver", "libXtst", "xdg-utils", "at-spi2-core", "libuuid"]
+      "depends": [
+        "gtk3",
+        "libnotify",
+        "nss",
+        "libXScrnSaver",
+        "libXtst",
+        "xdg-utils",
+        "at-spi2-core",
+        "libuuid"
+      ]
     },
-
     "publish": [
       {
         "provider": "github",
         "releaseType": "release"
       }
     ],
-
     "afterPack": "scripts/after-pack.cjs",
     "beforeBuild": "scripts/before-build.cjs"
   }

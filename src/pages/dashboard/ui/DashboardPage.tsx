@@ -1,6 +1,6 @@
 import { Link } from "react-router-dom";
 import { Network, GitBranch, Brain, Layers, Database, ArrowRight, TrendingUp, Activity } from "lucide-react";
-import { useAppSettings } from "../context/AppSettingsContext";
+import { useAppSettings } from "../../../app/context/AppSettingsContext";
 
 export function Dashboard() {
   const { t } = useAppSettings();

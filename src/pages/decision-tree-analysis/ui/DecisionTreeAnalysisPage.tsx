@@ -1,54 +1,11 @@
 ﻿import { useEffect, useMemo, useRef, useState } from "react";
-import { Download, GitBranch, ImageDown, Play, Settings, Trophy } from "lucide-react";
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, PieChart, Pie } from "recharts";
-import { useFundamentals } from "../context/FundamentalsContext";
-import { useAppSettings } from "../context/AppSettingsContext";
-import { OptimizerSettingsFields } from "./OptimizerSettingsFields";
-import { submitOptimizerSettings, useOptimizerSettings } from "./optimizerSettings";
-import { AnalysisRunningIndicator } from "./AnalysisRunningIndicator";
-import { MetricTooltip } from "./MetricTooltip";
-import { formatMetricDisplay, getMetricTooltip, localizeMetricLabel } from "./metricDisplay";
-import { API_BASE_URL } from "../../config/api";
-
-type MetricItem = {
-  label: string;
-  value: string;
-};
-
-type FeatureImportanceItem = {
-  feature: string;
-  importance: number;
-};
-
-type ConfusionMatrixData = {
-  labels: string[];
-  matrix: number[][];
-};
-
-type PortfolioPosition = {
-  ticker: string;
-  name: string;
-  sector: string;
-  weight: number;
-  expectedReturn: number;
-  risk: number;
-  predictedText: string;
-  sortino?: number;
-  value_at_risk?: number;
-};
-
-type SectorAllocationItem = {
-  sector: string;
-  weight: number;
-};
-
-type NumericSummaryItem = {
-  metric: string;
-  mean: number;
-  median: number;
-  min: number;
-  max: number;
-};
+import { FileSpreadsheet, FileText, GitBranch, ImageDown, Play, Settings } from "lucide-react";
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from "recharts";
+import { useFundamentals } from "../../../app/context/FundamentalsContext";
+import { useAppSettings } from "../../../app/context/AppSettingsContext";
+import { OptimizerSettingsFields } from "../../../features/optimizer-settings/ui/OptimizerSettingsFields";
+import { submitOptimizerSettings, useOptimizerSettings } from "../../../features/optimizer-settings/model/optimizerSettings";
+import { API_BASE_URL } from "../../../config/api";
 import type {
   DecisionTreeConfusionMatrixData as ConfusionMatrixData,
   DecisionTreeFeatureImportanceItem as FeatureImportanceItem,
@@ -56,32 +13,32 @@ import type {
   DecisionTreeNumericSummaryItem as NumericSummaryItem,
   DecisionTreePortfolioPosition as PortfolioPosition,
   DecisionTreeSectorAllocationItem as SectorAllocationItem,
-} from "../../features/decision-tree-analysis/model/types";
-import { numberOr } from "../../shared/lib/number/numberOr";
-import { formatPercentOrNumber, formatVarPercent } from "../../shared/lib/format/finance";
-import { downloadRowsAsExcel, downloadSvgAsPng } from "../../shared/lib/export/download";
+} from "../../../features/decision-tree-analysis/model/types";
+import { formatMetricDisplay, getMetricTooltip, localizeMetricLabel } from "../../../shared/lib/analysis/metric-display";
+import {
+  downloadAnalysisResultsAsPdf,
+  downloadAnalysisResultsAsXlsx,
+  downloadSvgAsPng,
+  getPortfolioHoldingColumns,
+} from "../../../shared/lib/export/download";
+import { formatPercentOrNumber, formatVarPercent } from "../../../shared/lib/format/finance";
+import { numberOr } from "../../../shared/lib/number/numberOr";
+import {
+  AnalysisPageFrame,
+  AnalysisSidebarCard,
+  MetricCard,
+  MetricGrid,
+  PageHero,
+  SectionCard,
+} from "../../../shared/ui/analysis-shell";
+import { AppErrorDialog } from "../../../shared/ui/app-error-dialog";
+import { AnalysisRunningIndicator } from "../../../shared/ui/analysis/AnalysisRunningIndicator";
+import { MetricTooltip } from "../../../shared/ui/analysis/MetricTooltip";
+import { PortfolioHoldingsPanel } from "../../../shared/ui/analysis/PortfolioHoldingsPanel";
 
 const ENABLE_TEMP_LOGS = true;
 const palette = ["#10b981", "#059669", "#34d399", "#0ea5a4", "#22c55e", "#84cc16", "#14b8a6", "#2dd4bf"];
 const TREE_STATE_KEY = "decision-tree-analysis-state-v1";
-
-function downloadPortfolioAsExcel(rows: PortfolioPosition[], filename: string): void {
-  downloadRowsAsExcel(
-    rows,
-    [
-      { header: "Ticker", render: (row) => row.ticker },
-      { header: "Name", render: (row) => row.name || "" },
-      { header: "Sector", render: (row) => row.sector || "" },
-      { header: "Weight, %", render: (row) => row.weight.toFixed(4) },
-      { header: "Expected Return", render: (row) => (Number.isFinite(row.expectedReturn) ? row.expectedReturn.toFixed(6) : "") },
-      { header: "Risk", render: (row) => (Number.isFinite(row.risk) ? row.risk.toFixed(6) : "") },
-      { header: "Sortino", render: (row) => (Number.isFinite(row.sortino) ? row.sortino?.toFixed(6) : "") },
-      { header: "VaR", render: (row) => (Number.isFinite(row.value_at_risk) ? row.value_at_risk?.toFixed(6) : "") },
-      { header: "Prediction", render: (row) => row.predictedText || "" },
-    ],
-    filename,
-  );
-}
 
 function formatMetricPercentOrNumber(value: number): string {
   return formatPercentOrNumber(value);
@@ -314,6 +271,7 @@ export function DecisionTreeAnalysis() {
   const { settings: optimizerSettings, setSettings: setOptimizerSettings } = useOptimizerSettings();
   const [isRunning, setIsRunning] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [errorDialogMessage, setErrorDialogMessage] = useState<string | null>(null);
   const [metrics, setMetrics] = useState<MetricItem[]>([]);
   const [featureImportance, setFeatureImportance] = useState<FeatureImportanceItem[]>([]);
   const [confusionMatrix, setConfusionMatrix] = useState<ConfusionMatrixData | null>(null);
@@ -323,6 +281,10 @@ export function DecisionTreeAnalysis() {
   const [portfolioAssetsCount, setPortfolioAssetsCount] = useState(0);
   const [serverKeys, setServerKeys] = useState<string[]>([]);
   const portfolioChartRef = useRef<HTMLDivElement | null>(null);
+  const showErrorDialog = (message: string) => {
+    setError(message);
+    setErrorDialogMessage(message);
+  };
   useEffect(() => {
     try {
       const raw = window.localStorage.getItem(TREE_STATE_KEY);
@@ -406,6 +368,7 @@ export function DecisionTreeAnalysis() {
 
   const runAnalysis = async () => {
     setError(null);
+    setErrorDialogMessage(null);
     setIsRunning(true);
 
     try {
@@ -454,7 +417,7 @@ export function DecisionTreeAnalysis() {
       }
     } catch (e) {
       const message = e instanceof Error ? e.message : isEn ? "Failed to run decision tree analysis" : "Не удалось выполнить анализ дерева решений";
-      setError(message);
+      showErrorDialog(message);
       setMetrics([]);
       setFeatureImportance([]);
       setConfusionMatrix(null);
@@ -475,11 +438,23 @@ export function DecisionTreeAnalysis() {
     }
   };
 
-  const exportPortfolioToExcel = () => {
+  const exportPortfolioToXlsx = async () => {
     if (!portfolioPositions.length) {
       return;
     }
-    downloadPortfolioAsExcel(portfolioPositions, "tree-optimal-portfolio.xls");
+    await downloadAnalysisResultsAsXlsx({
+      title: isEn ? "Optimal Portfolio from Decision Tree" : "Оптимальный портфель из дерева решений",
+      filename: "tree-optimal-portfolio.xlsx",
+      rows: portfolioPositions,
+      columns: getPortfolioHoldingColumns<PortfolioPosition>({
+        name: isEn ? "Stock" : "Акция",
+        weight: isEn ? "Weight, %" : "Вес, %",
+      }),
+      metrics: metrics.map((item) => ({
+        label: localizeMetricLabel(item.label, isEn),
+        value: formatMetricDisplay(item.label, item.value),
+      })),
+    });
   };
 
   const savePortfolioChartPng = async () => {
@@ -491,64 +466,90 @@ export function DecisionTreeAnalysis() {
       await downloadSvgAsPng(svg as SVGSVGElement, "tree-optimal-portfolio.png");
     } catch (e) {
       const message = e instanceof Error ? e.message : isEn ? "Failed to save PNG" : "Не удалось сохранить PNG";
-      setError(message);
+      showErrorDialog(message);
+    }
+  };
+
+  const exportPortfolioToPdf = async () => {
+    if (!portfolioPositions.length) {
+      return;
+    }
+    try {
+      await downloadAnalysisResultsAsPdf({
+        title: isEn ? "Optimal Portfolio from Decision Tree" : "Оптимальный портфель из дерева решений",
+        filename: "tree-optimal-portfolio.pdf",
+        rows: portfolioPositions,
+        columns: getPortfolioHoldingColumns<PortfolioPosition>({
+          name: isEn ? "Stock" : "Акция",
+          weight: isEn ? "Weight, %" : "Вес, %",
+        }),
+        metrics: metrics.map((item) => ({
+          label: localizeMetricLabel(item.label, isEn),
+          value: formatMetricDisplay(item.label, item.value),
+        })),
+        chartSvg: portfolioChartRef.current?.querySelector("svg"),
+      });
+    } catch (e) {
+      const message = e instanceof Error ? e.message : isEn ? "Failed to save PDF" : "Не удалось сохранить PDF";
+      showErrorDialog(message);
     }
   };
 
   return (
-    <div className="space-y-6">
-      <div className="bg-gradient-to-r from-green-600 to-emerald-600 rounded-xl p-6 text-white shadow-lg">
-        <div className="flex items-center gap-3 mb-2">
-          <GitBranch className="w-8 h-8" />
-          <h1 className="text-3xl font-bold">{isEn ? "Decision Tree Analysis" : "Анализ дерева решений"}</h1>
-        </div>
-        <p className="text-green-100">{isEn ? "Model and hyperparameters are selected on the server." : "Модель и гиперпараметры автоматически подбираются на сервере."}</p>
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-        <div className="lg:col-span-1">
-          <div className="bg-white rounded-xl p-6 shadow-sm border border-slate-200">
-            <div className="flex items-center gap-2 mb-6">
-              <Settings className="w-5 h-5 text-green-600" />
-              <h2 className="font-semibold text-slate-900">{isEn ? "Run Analysis" : "Запуск анализа"}</h2>
+    <>
+      <AnalysisPageFrame
+      hero={(
+        <PageHero
+          icon={GitBranch}
+          title={isEn ? "Decision Tree Analysis" : "Анализ дерева решений"}
+          description={isEn ? "Model and hyperparameters are selected on the server." : "Модель и гиперпараметры автоматически подбираются на сервере."}
+          badge={isEn ? "Server-side training" : "Серверное обучение"}
+          accent="emerald"
+        />
+      )}
+      sidebar={(
+        <AnalysisSidebarCard
+          icon={Settings}
+          title={isEn ? "Run Analysis" : "Запуск анализа"}
+          description={
+            isEn
+              ? "Shared optimizer inputs and cached fundamentals feed the tree model."
+              : "Общие настройки оптимизатора и кэш фундаментальных данных используются для дерева решений."
+          }
+          accent="emerald"
+        >
+          <div className="space-y-4">
+            <div className="ui-surface-muted">
+              <p className="text-sm text-slate-700 dark:text-slate-300">{isEn ? "Source: fundamentals cache" : "Источник: кэш фундаментальных данных"}</p>
+              <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">{isEn ? "Records" : "Записей"}: {requestData.length}</p>
             </div>
 
-            <div className="space-y-4">
-              <div className="rounded-lg border border-slate-200 p-3 bg-slate-50">
-                <p className="text-sm text-slate-700">{isEn ? "Source: fundamentals cache" : "Источник: кэш фундаментальных данных"}</p>
-                <p className="text-xs text-slate-500 mt-1">{isEn ? "Records" : "Записей"}: {requestData.length}</p>
+            <OptimizerSettingsFields
+              isEn={isEn}
+              settings={optimizerSettings}
+              onChange={setOptimizerSettings}
+            />
+
+            {!hasData && (
+              <div className="rounded-2xl border border-amber-200 bg-amber-50 p-3 dark:border-amber-900 dark:bg-amber-950/20">
+                <p className="text-sm text-amber-800 dark:text-amber-300">
+                  {isEn ? "Cache is empty. Load fundamentals first." : "Кэш пуст. Сначала загрузите фундаментальные данные."}
+                </p>
               </div>
-              <OptimizerSettingsFields
-                isEn={isEn}
-                settings={optimizerSettings}
-                onChange={setOptimizerSettings}
-              />
+            )}
 
-              {!hasData && (
-                <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
-                  <p className="text-sm text-amber-800">{isEn ? "Cache is empty. Load fundamentals first." : "Кэш пуст. Сначала загрузите фундаментальные данные."}</p>
-                </div>
-              )}
-
-              {error && (
-                <div className="bg-red-50 border border-red-200 rounded-lg p-3">
-                  <p className="text-sm text-red-700 break-words">{error}</p>
-                </div>
-              )}
-
-              <button
-                onClick={runAnalysis}
-                disabled={!hasData || !requestData.length || isRunning}
-                className="w-full bg-gradient-to-r from-green-600 to-emerald-600 text-white py-3 rounded-lg font-medium hover:from-green-700 hover:to-emerald-700 transition-all shadow-md hover:shadow-lg flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                <Play className="w-5 h-5" />
-                {isRunning ? (isEn ? "Running..." : "Выполняется...") : (isEn ? "Run Analysis" : "Запустить анализ")}
-              </button>
-            </div>
+            <button
+              onClick={runAnalysis}
+              disabled={!hasData || !requestData.length || isRunning}
+              className="ui-primary-button w-full bg-gradient-to-r from-emerald-600 to-green-600 hover:from-emerald-700 hover:to-green-700"
+            >
+              <Play className="h-5 w-5" />
+              {isRunning ? (isEn ? "Running..." : "Выполняется...") : (isEn ? "Run Analysis" : "Запустить анализ")}
+            </button>
           </div>
-        </div>
-
-        <div className="lg:col-span-3 space-y-6">
+        </AnalysisSidebarCard>
+      )}
+    >
           {isRunning && (
             <AnalysisRunningIndicator
               title={isEn ? "Running decision tree analysis" : "Выполняем анализ дерева решений"}
@@ -558,31 +559,36 @@ export function DecisionTreeAnalysis() {
           )}
 
           {!!metrics.length && (
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <MetricGrid>
               {metrics.map((m) => (
-                <div key={m.label} className="bg-white rounded-xl p-4 shadow-sm border border-slate-200">
-                  <div className="text-sm text-slate-600 mb-1 flex items-center gap-1">
-                    <span>{localizeMetricLabel(m.label, isEn)}</span>
-                    {getMetricTooltip(m.label, isEn) && (
-                      <MetricTooltip text={getMetricTooltip(m.label, isEn) ?? ""} />
-                    )}
-                  </div>
-                  <div className="text-2xl font-semibold text-slate-900">{formatMetricDisplay(m.label, m.value)}</div>
-                </div>
+                <MetricCard
+                  key={m.label}
+                  label={(
+                    <>
+                      <span>{localizeMetricLabel(m.label, isEn)}</span>
+                      {getMetricTooltip(m.label, isEn) && (
+                        <MetricTooltip text={getMetricTooltip(m.label, isEn) ?? ""} />
+                      )}
+                    </>
+                  )}
+                  value={formatMetricDisplay(m.label, m.value)}
+                />
               ))}
-            </div>
+            </MetricGrid>
           )}
 
           {portfolioAssetsCount > 0 && (
-            <div className="bg-white rounded-xl p-4 shadow-sm border border-slate-200">
-              <p className="text-sm text-slate-600">{isEn ? "Assets in optimal portfolio" : "Активов в оптимальном портфеле"}</p>
-              <p className="text-2xl font-semibold text-slate-900">{portfolioAssetsCount}</p>
-            </div>
+            <MetricGrid className="xl:grid-cols-1">
+              <MetricCard
+                label={isEn ? "Assets in optimal portfolio" : "Активов в оптимальном портфеле"}
+                value={portfolioAssetsCount}
+                className="max-w-xs"
+              />
+            </MetricGrid>
           )}
 
           {!!sectorAllocation.length && (
-            <div className="bg-white rounded-xl p-6 shadow-sm border border-slate-200">
-              <h3 className="font-semibold text-slate-900 mb-4">{isEn ? "Sector Allocation" : "Распределение по секторам"}</h3>
+            <SectionCard title={isEn ? "Sector Allocation" : "Распределение по секторам"}>
               <ResponsiveContainer width="100%" height={320}>
                 <BarChart data={sectorAllocation} layout="vertical" margin={{ top: 5, right: 30, left: 130, bottom: 5 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
@@ -592,134 +598,82 @@ export function DecisionTreeAnalysis() {
                   <Bar dataKey="weight" fill="#10b981" radius={[0, 4, 4, 0]} />
                 </BarChart>
               </ResponsiveContainer>
-            </div>
+            </SectionCard>
           )}
 
           {!!portfolioPositions.length && (
-            <div className="bg-white rounded-xl p-6 shadow-sm border border-slate-200">
-              <div className="flex items-center justify-between gap-3 mb-4">
+            <SectionCard
+              title={isEn ? "Optimal Portfolio from Decision Tree" : "Оптимальный портфель из дерева решений"}
+              action={(
                 <div className="flex items-center gap-2">
-                  <Trophy className="w-5 h-5 text-amber-500" />
-                  <h3 className="font-semibold text-slate-900">{isEn ? "Optimal Portfolio from Decision Tree" : "Оптимальный портфель из дерева решений"}</h3>
-                </div>
-                <div className="flex items-center gap-2">
+                  <button
+                    onClick={exportPortfolioToXlsx}
+                    disabled={!portfolioPositions.length}
+                    className="ui-secondary-button px-3 py-2 text-xs"
+                  >
+                    <FileSpreadsheet className="h-4 w-4" />
+                    XLSX
+                  </button>
+                  <button
+                    onClick={exportPortfolioToPdf}
+                    disabled={!portfolioPositions.length}
+                    className="ui-secondary-button px-3 py-2 text-xs"
+                  >
+                    <FileText className="h-4 w-4" />
+                    PDF
+                  </button>
                   <button
                     onClick={savePortfolioChartPng}
                     disabled={!portfolioPositions.length}
-                    className="inline-flex items-center gap-1 px-3 py-2 text-xs rounded-md border border-slate-300 text-slate-700 disabled:opacity-50"
+                    className="ui-secondary-button px-3 py-2 text-xs"
                   >
-                    <ImageDown className="w-4 h-4" />
+                    <ImageDown className="h-4 w-4" />
                     PNG
                   </button>
-                  <button
-                    onClick={exportPortfolioToExcel}
-                    disabled={!portfolioPositions.length}
-                    className="inline-flex items-center gap-1 px-3 py-2 text-xs rounded-md border border-slate-300 text-slate-700 disabled:opacity-50"
-                  >
-                    <Download className="w-4 h-4" />
-                    Excel
-                  </button>
                 </div>
-              </div>
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                <div className="h-72" ref={portfolioChartRef}>
-                  <ResponsiveContainer width="100%" height="100%">
-                    <PieChart>
-                      <Pie
-                        data={portfolioPositions}
-                        dataKey="weight"
-                        nameKey="ticker"
-                        cx="50%"
-                        cy="50%"
-                        outerRadius={105}
-                        labelLine={false}
-                        label={({ ticker, weight }) => (Number(weight) >= 6 ? `${ticker}: ${Number(weight).toFixed(1)}%` : "")}
-                      >
-                        {portfolioPositions.map((row, idx) => (
-                          <Cell key={row.ticker} fill={palette[idx % palette.length]} />
-                        ))}
-                      </Pie>
-                      <Tooltip formatter={(v: number) => `${Number(v).toFixed(2)}%`} />
-                    </PieChart>
-                  </ResponsiveContainer>
-                </div>
-                <div className="overflow-x-auto">
-                  <table className="w-full min-w-[920px] text-sm [&_th]:whitespace-nowrap [&_td]:whitespace-nowrap">
-                    <thead>
-                      <tr className="text-left border-b border-slate-200">
-                        <th className="py-2 pr-3">Ticker</th>
-                        <th className="py-2 pr-3">{isEn ? "Company" : "Компания"}</th>
-                        <th className="py-2 pr-3">{isEn ? "Sector" : "Сектор"}</th>
-                        <th className="py-2 pr-3">{isEn ? "Weight, %" : "Вес, %"}</th>
-                        <th className="py-2 pr-3">{isEn ? "Expected Return" : "Ожид. доходность"}</th>
-                        <th className="py-2 pr-3">{isEn ? "Risk" : "Риск"}</th>
-                        <th className="py-2 pr-3">{isEn ? "Sortino" : "Сортино"}</th>
-                        <th className="py-2 pr-3">VaR</th>
-                        <th className="py-2 pr-3">{isEn ? "Prediction" : "Оценка"}</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {portfolioPositions.map((row) => (
-                        <tr key={`${row.ticker}-${row.name}`} className="border-b border-slate-100">
-                          <td className="py-2 pr-3 font-medium text-slate-900">{row.ticker}</td>
-                          <td className="py-2 pr-3 text-slate-700">{row.name}</td>
-                          <td className="py-2 pr-3 text-slate-700">{row.sector}</td>
-                          <td className="py-2 pr-3 text-slate-700">{row.weight.toFixed(2)}</td>
-                          <td className="py-2 pr-3 text-slate-700">
-                            {Number.isFinite(row.expectedReturn) ? row.expectedReturn.toFixed(4) : "-"}
-                          </td>
-                          <td className="py-2 pr-3 text-slate-700">
-                            {Number.isFinite(row.risk) ? row.risk.toFixed(4) : "-"}
-                          </td>
-                          <td className="py-2 pr-3 text-slate-700">
-                            {Number.isFinite(row.sortino) ? row.sortino?.toFixed(4) : "-"}
-                          </td>
-                          <td className="py-2 pr-3 text-slate-700">
-                            {formatVarPercent(numberOr(row.value_at_risk, NaN))}
-                          </td>
-                          <td className="py-2 pr-3 text-slate-700">{row.predictedText}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            </div>
+              )}
+            >
+              <PortfolioHoldingsPanel
+                rows={portfolioPositions}
+                palette={palette}
+                chartRef={portfolioChartRef}
+                companyLabel={isEn ? "Stock" : "Акция"}
+                weightLabel={isEn ? "Weight, %" : "Вес, %"}
+              />
+            </SectionCard>
           )}
 
           {!!numericSummary.length && (
-            <div className="bg-white rounded-xl p-6 shadow-sm border border-slate-200">
-              <h3 className="font-semibold text-slate-900 mb-4">{isEn ? "Numeric Features Summary" : "Сводка по числовым признакам"}</h3>
-              <div className="overflow-x-auto">
-                <table className="w-full min-w-[620px] text-sm [&_th]:whitespace-nowrap [&_td]:whitespace-nowrap">
+            <SectionCard title={isEn ? "Numeric Features Summary" : "Сводка по числовым признакам"}>
+              <div className="ui-table-shell overflow-x-auto">
+                <table className="ui-data-table">
                   <thead>
-                    <tr className="text-left border-b border-slate-200">
-                      <th className="py-2 pr-3">{isEn ? "Metric" : "Метрика"}</th>
-                      <th className="py-2 pr-3">Mean</th>
-                      <th className="py-2 pr-3">Median</th>
-                      <th className="py-2 pr-3">Min</th>
-                      <th className="py-2 pr-3">Max</th>
+                    <tr>
+                      <th>{isEn ? "Metric" : "Метрика"}</th>
+                      <th>Mean</th>
+                      <th>Median</th>
+                      <th>Min</th>
+                      <th>Max</th>
                     </tr>
                   </thead>
                   <tbody>
                     {numericSummary.map((row) => (
-                      <tr key={row.metric} className="border-b border-slate-100">
-                        <td className="py-2 pr-3 font-medium text-slate-900">{row.metric}</td>
-                        <td className="py-2 pr-3 text-slate-700">{row.mean.toFixed(4)}</td>
-                        <td className="py-2 pr-3 text-slate-700">{row.median.toFixed(4)}</td>
-                        <td className="py-2 pr-3 text-slate-700">{row.min.toFixed(4)}</td>
-                        <td className="py-2 pr-3 text-slate-700">{row.max.toFixed(4)}</td>
+                      <tr key={row.metric}>
+                        <td className="font-medium text-slate-900 dark:text-slate-100">{row.metric}</td>
+                        <td>{row.mean.toFixed(4)}</td>
+                        <td>{row.median.toFixed(4)}</td>
+                        <td>{row.min.toFixed(4)}</td>
+                        <td>{row.max.toFixed(4)}</td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
               </div>
-            </div>
+            </SectionCard>
           )}
 
           {!!featureImportance.length && (
-            <div className="bg-white rounded-xl p-6 shadow-sm border border-slate-200">
-              <h3 className="font-semibold text-slate-900 mb-4">{isEn ? "Feature Importance" : "Важность признаков"}</h3>
+            <SectionCard title={isEn ? "Feature Importance" : "Важность признаков"}>
               <ResponsiveContainer width="100%" height={300}>
                 <BarChart data={featureImportance} layout="vertical" margin={{ top: 5, right: 30, left: 90, bottom: 5 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
@@ -733,19 +687,18 @@ export function DecisionTreeAnalysis() {
                   </Bar>
                 </BarChart>
               </ResponsiveContainer>
-            </div>
+            </SectionCard>
           )}
 
           {confusionMatrix && (
-            <div className="bg-white rounded-xl p-6 shadow-sm border border-slate-200">
-              <h3 className="font-semibold text-slate-900 mb-4">{isEn ? "Confusion Matrix" : "Матрица ошибок"}</h3>
+            <SectionCard title={isEn ? "Confusion Matrix" : "Матрица ошибок"}>
               <div className="max-w-2xl overflow-x-auto">
-                <table className="w-full min-w-[520px] text-sm border-collapse [&_th]:whitespace-nowrap [&_td]:whitespace-nowrap">
+                <table className="ui-data-table">
                   <thead>
                     <tr>
-                      <th className="p-2 border border-slate-200 bg-slate-50"></th>
+                      <th className="bg-slate-50 p-2 text-left dark:bg-slate-800"></th>
                       {confusionMatrix.labels.map((label) => (
-                        <th key={`pred-${label}`} className="p-2 border border-slate-200 bg-slate-50 text-left">
+                        <th key={`pred-${label}`} className="bg-slate-50 p-2 text-left dark:bg-slate-800">
                           {isEn ? "Predicted" : "Прогноз"}: {label}
                         </th>
                       ))}
@@ -754,9 +707,9 @@ export function DecisionTreeAnalysis() {
                   <tbody>
                     {confusionMatrix.matrix.map((row, rowIndex) => (
                       <tr key={`row-${rowIndex}`}>
-                        <td className="p-2 border border-slate-200 bg-slate-50 font-medium">{isEn ? "Actual" : "Факт"}: {confusionMatrix.labels[rowIndex] ?? `Class ${rowIndex + 1}`}</td>
+                        <td className="bg-slate-50 p-2 font-medium dark:bg-slate-800">{isEn ? "Actual" : "Факт"}: {confusionMatrix.labels[rowIndex] ?? `Class ${rowIndex + 1}`}</td>
                         {row.map((value, colIndex) => (
-                          <td key={`cell-${rowIndex}-${colIndex}`} className="p-2 border border-slate-200 text-center font-semibold text-slate-900">
+                          <td key={`cell-${rowIndex}-${colIndex}`} className="p-2 text-center font-semibold text-slate-900 dark:text-slate-100">
                             {value}
                           </td>
                         ))}
@@ -765,7 +718,7 @@ export function DecisionTreeAnalysis() {
                   </tbody>
                 </table>
               </div>
-            </div>
+            </SectionCard>
           )}
 
           {/*{!!serverKeys.length && (
@@ -773,9 +726,20 @@ export function DecisionTreeAnalysis() {
               <p className="text-sm text-slate-600">{isEn ? "Server response keys" : "Ключи ответа сервера"}: {serverKeys.join(", ")}</p>
             </div>
           )}*/}
-        </div>
-      </div>
-    </div>
+      </AnalysisPageFrame>
+
+      <AppErrorDialog
+        message={errorDialogMessage}
+        onClose={() => setErrorDialogMessage(null)}
+        title={isEn ? "Analysis Error" : "Ошибка анализа"}
+        description={
+          isEn
+            ? "The request could not be completed. Check the input data and try again."
+            : "Не удалось обработать запрос. Проверьте данные и попробуйте ещё раз."
+        }
+        closeLabel={isEn ? "Close" : "Закрыть"}
+      />
+    </>
   );
 }
 

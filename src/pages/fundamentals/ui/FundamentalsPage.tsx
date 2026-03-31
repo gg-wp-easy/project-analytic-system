@@ -1,8 +1,12 @@
-import { useEffect, useMemo, useState } from "react";
+﻿import { useEffect, useMemo, useState } from "react";
 import { Database, Download, RefreshCw, Trash2 } from "lucide-react";
+import { useRef } from "react";
 import { useAppSettings } from "../../../app/context/AppSettingsContext";
 import { useFundamentals } from "../../../entities/fundamentals";
 import { Link } from "react-router-dom";
+import { MetricCard, MetricGrid, PageHero, SectionCard } from "../../../shared/ui/analysis-shell";
+import { formatFundamentalMetricValue } from "../../../shared/lib/format/fundamentals";
+import { AppErrorDialog } from "../../../shared/ui/app-error-dialog";
 
 export function FundamentalsPage() {
   const { cache, isLoading, hasData, error, loadFundamentals, clearCache } = useFundamentals();
@@ -10,6 +14,8 @@ export function FundamentalsPage() {
   const isEn = locale === "en";
   const [page, setPage] = useState(1);
   const [searchQuery, setSearchQuery] = useState("");
+  const [errorDialogMessage, setErrorDialogMessage] = useState<string | null>(null);
+  const prevErrorRef = useRef<string | null>(null);
   const pageSize = 20;
 
   const filteredShares = useMemo(() => {
@@ -38,15 +44,22 @@ export function FundamentalsPage() {
     setPage(1);
   }, [searchQuery]);
 
+  useEffect(() => {
+    if (error && error !== prevErrorRef.current) {
+      setErrorDialogMessage(error);
+    }
+    prevErrorRef.current = error;
+  }, [error]);
+
   return (
     <div className="space-y-6">
-      <div className="bg-gradient-to-r from-slate-800 to-slate-600 rounded-xl p-6 text-white shadow-lg">
-        <div className="flex items-center gap-3 mb-2">
-          <Database className="w-8 h-8" />
-          <h1 className="text-3xl font-bold">{t("fund.title")}</h1>
-        </div>
-        <p className="text-slate-200">{t("fund.description")}</p>
-      </div>
+      <PageHero
+        icon={Database}
+        title={t("fund.title")}
+        description={t("fund.description")}
+        badge={isEn ? "Fundamentals cache" : "Кэш фундаментала"}
+        accent="slate"
+      />
 
       {/*<div className="bg-white dark:bg-slate-900 rounded-xl p-6 shadow-sm border border-slate-200 dark:border-slate-800">
         <h2 className="font-semibold text-slate-900 dark:text-slate-100 mb-4">{t("fund.sourcesTitle")}</h2>
@@ -63,7 +76,7 @@ export function FundamentalsPage() {
       </div>*/}
 
       {isLoading && (
-        <div className="bg-white dark:bg-slate-900 rounded-xl p-8 shadow-sm border border-slate-200 dark:border-slate-800">
+        <SectionCard>
           <div className="flex flex-col items-center justify-center gap-3 text-center" role="status" aria-live="polite">
             <RefreshCw className="w-8 h-8 animate-spin text-slate-700 dark:text-slate-200" />
             <div className="text-base font-semibold text-slate-900 dark:text-slate-100">{t("fund.loading")}</div>
@@ -71,22 +84,16 @@ export function FundamentalsPage() {
               Fetching shares and asset fundamentals from T-Bank API
             </div>
           </div>
-        </div>
+        </SectionCard>
       )}
 
-      {!!error && (
-        <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700 dark:border-red-900 dark:bg-red-950/20 dark:text-red-300">
-          {error}
-        </div>
-      )}
-
-      <div className="bg-white dark:bg-slate-900 rounded-xl p-6 shadow-sm border border-slate-200 dark:border-slate-800">
+      <SectionCard>
         <div className="flex flex-wrap items-center gap-3 mb-4">
           <button
             type="button"
             onClick={loadFundamentals}
             disabled={isLoading}
-            className="inline-flex items-center gap-2 rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-50"
+            className="ui-primary-button bg-slate-900 hover:bg-slate-950"
           >
             {isLoading ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
             {isLoading ? t("fund.loading") : t("fund.loadCache")}
@@ -95,7 +102,7 @@ export function FundamentalsPage() {
             type="button"
             onClick={clearCache}
             disabled={isLoading}
-            className="inline-flex items-center gap-2 rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 disabled:cursor-not-allowed disabled:opacity-50"
+            className="ui-secondary-button"
           >
             <Trash2 className="w-4 h-4" />
             {t("fund.clearCache")}
@@ -105,94 +112,84 @@ export function FundamentalsPage() {
           </div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div className="rounded-lg border border-slate-200 dark:border-slate-800 p-4">
-            <div className="text-sm text-slate-500 dark:text-slate-400">{t("fund.countShares")}</div>
-            <div className="text-2xl font-semibold text-slate-900 dark:text-slate-100">{cache.shares.length}</div>
-          </div>
-          <div className="rounded-lg border border-slate-200 dark:border-slate-800 p-4">
-            <div className="text-sm text-slate-500 dark:text-slate-400">{t("fund.countFundamentals")}</div>
-            <div className="text-2xl font-semibold text-slate-900 dark:text-slate-100">
-              {Object.keys(cache.fundamentalsByFigi).length}
-            </div>
-          </div>
-          <div className="rounded-lg border border-slate-200 dark:border-slate-800 p-4">
-            <div className="text-sm text-slate-500 dark:text-slate-400">{t("fund.lastUpdated")}</div>
-            <div className="text-sm font-medium text-slate-900 dark:text-slate-100">
-              {cache.lastUpdated ? new Date(cache.lastUpdated).toLocaleString() : t("fund.never")}
-            </div>
-          </div>
-        </div>
-      </div>
+        <MetricGrid className="xl:grid-cols-2">
+          <MetricCard label={t("fund.countShares")} value={cache.shares.length} />
+          <MetricCard
+            label={t("fund.lastUpdated")}
+            value={cache.lastUpdated ? new Date(cache.lastUpdated).toLocaleString() : t("fund.never")}
+          />
+        </MetricGrid>
+      </SectionCard>
 
       {hasData && !isLoading && (
-        <div className="bg-white dark:bg-slate-900 rounded-xl p-6 shadow-sm border border-slate-200 dark:border-slate-800 overflow-x-auto">
+        <SectionCard title={t("fund.sampleTitle")}>
           <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-            <h2 className="font-semibold text-slate-900 dark:text-slate-100">{t("fund.sampleTitle")}</h2>
             <input
               type="text"
               value={searchQuery}
               onChange={(event) => setSearchQuery(event.target.value)}
               placeholder={isEn ? "Search stocks by name" : "Поиск акций по названию"}
-              className="w-full md:w-80 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
+              className="ui-input md:w-80"
             />
           </div>
-          <table className="w-full min-w-[760px] text-sm">
-            <thead>
-              <tr className="text-left border-b border-slate-200 dark:border-slate-800">
-                <th className="py-2 pr-4">{t("fund.table.ticker")}</th>
-                <th className="py-2 pr-4">{t("fund.table.name")}</th>
-                <th className="py-2 pr-4">{isEn ? "Details" : "Подробно"}</th>
-                <th className="py-2 pr-4">{t("fund.table.marketCap")}</th>
-                <th className="py-2 pr-4">{t("fund.table.pe")}</th>
-                <th className="py-2 pr-4">{t("fund.table.pb")}</th>
-                <th className="py-2 pr-4">{t("fund.table.roe")}</th>
-                <th className="py-2 pr-4">{t("fund.table.divYield")}</th>
-                <th className="py-2 pr-4">{t("fund.table.beta")}</th>
-                <th className="py-2 pr-4">{t("fund.table.roa")}</th>
-                <th className="py-2 pr-4">{t("fund.table.netMargin")}</th>
-                <th className="py-2 pr-4">{t("fund.table.netDebtToEbitda")}</th>
-                <th className="py-2 pr-4">{t("fund.table.totalDebt")}</th>
-              </tr>
-            </thead>
-            <tbody>
-              {visibleShares.length === 0 ? (
+          <div className="ui-table-shell overflow-x-auto">
+            <table className="ui-data-table">
+              <thead>
                 <tr>
-                  <td colSpan={13} className="py-4 text-center text-slate-500 dark:text-slate-400">
-                    {isEn ? "No stocks found by this name" : "Акции по такому названию не найдены"}
-                  </td>
+                  <th>{t("fund.table.ticker")}</th>
+                  <th>{t("fund.table.name")}</th>
+                  <th>{isEn ? "Details" : "Подробно"}</th>
+                  <th>{t("fund.table.marketCap")}</th>
+                  <th>{t("fund.table.pe")}</th>
+                  <th>{t("fund.table.pb")}</th>
+                  <th>{t("fund.table.roe")}</th>
+                  <th>{t("fund.table.divYield")}</th>
+                  <th>{t("fund.table.beta")}</th>
+                  <th>{t("fund.table.roa")}</th>
+                  <th>{t("fund.table.netMargin")}</th>
+                  <th>{t("fund.table.netDebtToEbitda")}</th>
+                  <th>{t("fund.table.totalDebt")}</th>
                 </tr>
-              ) : (
-                visibleShares.map((share) => {
-                  const f = cache.fundamentalsByFigi[share.figi];
-                  return (
-                    <tr key={share.figi} className="border-b border-slate-100 dark:border-slate-800">
-                      <td className="py-2 pr-4 font-medium text-slate-900 dark:text-slate-100">{share.ticker}</td>
-                      <td className="py-2 pr-4 text-slate-700 dark:text-slate-300">{share.name}</td>
-                      <td className="py-2 pr-4">
-                        <Link
-                          to={`/fundamentals/${share.figi}`}
-                          className="inline-flex items-center gap-1 rounded-md border border-slate-300 px-2 py-1 text-xs text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
-                        >
-                          {isEn ? "View" : "Смотреть"}
-                        </Link>
-                      </td>
-                      <td className="py-2 pr-4 text-slate-700 dark:text-slate-300">{f?.marketCapBn ?? "-"}</td>
-                      <td className="py-2 pr-4 text-slate-700 dark:text-slate-300">{f?.peRatio ?? "-"}</td>
-                      <td className="py-2 pr-4 text-slate-700 dark:text-slate-300">{f?.pbRatio ?? "-"}</td>
-                      <td className="py-2 pr-4 text-slate-700 dark:text-slate-300">{f?.roe ?? "-"}</td>
-                      <td className="py-2 pr-4 text-slate-700 dark:text-slate-300">{f?.dividendYield ?? "-"}%</td>
-                      <td className="py-2 pr-4 text-slate-700 dark:text-slate-300">{f?.beta ?? "-"}</td>
-                      <td className="py-2 pr-4 text-slate-700 dark:text-slate-300">{f?.roa ?? "-"}</td>
-                      <td className="py-2 pr-4 text-slate-700 dark:text-slate-300">{f?.netMargin ?? "-"}%</td>
-                      <td className="py-2 pr-4 text-slate-700 dark:text-slate-300">{f?.netDebtToEbitda ?? "-"}</td>
-                      <td className="py-2 pr-4 text-slate-700 dark:text-slate-300">{f?.totalDebt ?? "-"}</td>
-                    </tr>
-                  );
-                })
-              )}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {visibleShares.length === 0 ? (
+                  <tr>
+                    <td colSpan={13} className="py-4 text-center text-slate-500 dark:text-slate-400">
+                      {isEn ? "No stocks found by this name" : "Акции по такому названию не найдены"}
+                    </td>
+                  </tr>
+                ) : (
+                  visibleShares.map((share) => {
+                    const f = cache.fundamentalsByFigi[share.figi];
+                    return (
+                      <tr key={share.figi}>
+                        <td className="ui-cell-number font-medium text-slate-900 dark:text-slate-100">{share.ticker}</td>
+                        <td className="ui-cell-name">{share.name}</td>
+                        <td className="ui-cell-action">
+                          <Link
+                            to={`/fundamentals/${share.figi}`}
+                            className="ui-secondary-button px-2.5 py-1.5 text-xs"
+                          >
+                            {isEn ? "View" : "Смотреть"}
+                          </Link>
+                        </td>
+                        <td className="ui-cell-number">{formatFundamentalMetricValue("marketCapBn", f?.marketCapBn, locale)}</td>
+                        <td className="ui-cell-number">{formatFundamentalMetricValue("peRatio", f?.peRatio, locale)}</td>
+                        <td className="ui-cell-number">{formatFundamentalMetricValue("pbRatio", f?.pbRatio, locale)}</td>
+                        <td className="ui-cell-number">{formatFundamentalMetricValue("roe", f?.roe, locale)}</td>
+                        <td className="ui-cell-number">{formatFundamentalMetricValue("dividendYield", f?.dividendYield, locale)}</td>
+                        <td className="ui-cell-number">{formatFundamentalMetricValue("beta", f?.beta, locale)}</td>
+                        <td className="ui-cell-number">{formatFundamentalMetricValue("roa", f?.roa, locale)}</td>
+                        <td className="ui-cell-number">{formatFundamentalMetricValue("netMargin", f?.netMargin, locale)}</td>
+                        <td className="ui-cell-number">{formatFundamentalMetricValue("netDebtToEbitda", f?.netDebtToEbitda, locale)}</td>
+                        <td className="ui-cell-number">{formatFundamentalMetricValue("totalDebt", f?.totalDebt, locale)}</td>
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
+          </div>
           <div className="mt-4 flex items-center justify-between gap-3">
             <div className="text-sm text-slate-600 dark:text-slate-300">
               Page {page} / {pageCount}
@@ -202,7 +199,7 @@ export function FundamentalsPage() {
                 type="button"
                 onClick={() => setPage((prev) => Math.max(1, prev - 1))}
                 disabled={page <= 1}
-                className="rounded-lg border border-slate-300 px-3 py-1.5 text-sm text-slate-700 disabled:cursor-not-allowed disabled:opacity-50 dark:border-slate-700 dark:text-slate-200"
+                className="ui-secondary-button px-3 py-1.5 text-sm"
               >
                 Prev
               </button>
@@ -210,14 +207,26 @@ export function FundamentalsPage() {
                 type="button"
                 onClick={() => setPage((prev) => Math.min(pageCount, prev + 1))}
                 disabled={page >= pageCount}
-                className="rounded-lg border border-slate-300 px-3 py-1.5 text-sm text-slate-700 disabled:cursor-not-allowed disabled:opacity-50 dark:border-slate-700 dark:text-slate-200"
+                className="ui-secondary-button px-3 py-1.5 text-sm"
               >
                 Next
               </button>
             </div>
           </div>
-        </div>
+        </SectionCard>
       )}
+
+      <AppErrorDialog
+        message={errorDialogMessage}
+        onClose={() => setErrorDialogMessage(null)}
+        title={isEn ? "Data Loading Error" : "Ошибка загрузки данных"}
+        description={
+          isEn
+            ? "The application could not load data from the API."
+            : "Приложение не смогло загрузить данные из API."
+        }
+        closeLabel={isEn ? "Close" : "Закрыть"}
+      />
     </div>
   );
 }

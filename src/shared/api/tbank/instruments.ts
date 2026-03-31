@@ -108,6 +108,26 @@ function pickTimestampIso(source: AnyRecord, keys: string[]): string {
   return "";
 }
 
+function roundTo(value: number, digits: number): number {
+  if (!Number.isFinite(value)) {
+    return 0;
+  }
+  const factor = 10 ** digits;
+  return Math.round(value * factor) / factor;
+}
+
+function normalizeScaledBillions(value: number): number {
+  return value > 0 ? roundTo(value / 1_000_000_000, 2) : 0;
+}
+
+function normalizeRatio(value: number): number {
+  return roundTo(value, 2);
+}
+
+function normalizeRate(value: number): number {
+  return roundTo(value, 4);
+}
+
 function quotationToNumber(value: unknown): number {
   if (!value || typeof value !== "object") {
     return 0;
@@ -143,18 +163,18 @@ function normalizeFundamentalItem(item: AnyRecord, nowIso: string): TBankFundame
 
   return {
     figi: pickString(item, ["figi", "instrumentFigi", "instrument_figi"]),
-    peRatio: pickNumber(item, ["pe_ratio_ttm", "peRatio", "pe_ratio", "peRatioTtm"]),
-    pbRatio: pickNumber(item, ["price_to_book_ttm", "pbRatio", "pb_ratio", "pb_ratio_ttm", "priceToBookTtm"]),
-    psRatio: pickNumber(item, ["price_to_sales_ttm", "psRatio", "ps_ratio", "priceToSalesTtm"]),
-    roe: pickNumber(item, ["roe", "roe_ttm"]),
-    roa: pickNumber(item, ["roa", "roa_ttm"]),
-    netMargin: pickNumber(item, ["net_margin", "netMarginMrq"]),
-    netDebtToEbitda: pickNumber(item, ["net_debt_to_ebitda", "netDebtToEbitda"]),
-    evToEbitda: pickNumber(item, ["ev_to_ebitda", "evToEbitdaMrq"]),
-    totalDebt: totalDebtRaw > 0 ? Number((totalDebtRaw / 1_000_000_000).toFixed(2)) : 0,
-    dividendYield: dividendYieldRaw > 0 ? Number(dividendYieldRaw.toFixed(2)) : 0,
-    marketCapBn: marketCapRaw > 0 ? Number((marketCapRaw / 1_000_000_000).toFixed(2)) : 0,
-    beta: pickNumber(item, ["beta", "five_years_beta"]).toFixed(2) as unknown as number,
+    peRatio: normalizeRatio(pickNumber(item, ["pe_ratio_ttm", "peRatio", "pe_ratio", "peRatioTtm"])),
+    pbRatio: normalizeRatio(pickNumber(item, ["price_to_book_ttm", "pbRatio", "pb_ratio", "pb_ratio_ttm", "priceToBookTtm"])),
+    psRatio: normalizeRatio(pickNumber(item, ["price_to_sales_ttm", "psRatio", "ps_ratio", "priceToSalesTtm"])),
+    roe: normalizeRate(pickNumber(item, ["roe", "roe_ttm"])),
+    roa: normalizeRate(pickNumber(item, ["roa", "roa_ttm"])),
+    netMargin: normalizeRate(pickNumber(item, ["net_margin", "netMarginMrq"])),
+    netDebtToEbitda: normalizeRatio(pickNumber(item, ["net_debt_to_ebitda", "netDebtToEbitda"])),
+    evToEbitda: normalizeRatio(pickNumber(item, ["ev_to_ebitda", "evToEbitdaMrq"])),
+    totalDebt: normalizeScaledBillions(totalDebtRaw),
+    dividendYield: normalizeRate(dividendYieldRaw),
+    marketCapBn: normalizeScaledBillions(marketCapRaw),
+    beta: normalizeRatio(pickNumber(item, ["beta", "five_years_beta"])),
     updatedAt:
       pickTimestampIso(item, ["fiscal_period_end_date", "ex_dividend_date"]) ||
       pickString(item, ["updatedAt", "updated_at", "date", "time"]) ||

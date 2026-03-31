@@ -1,11 +1,11 @@
 import { createElement } from "react";
 import { createBrowserRouter, createHashRouter } from "react-router-dom";
 import { Root } from "./components/Root";
-import { Dashboard } from "./components/Dashboard";
-import { ClusterAnalysis } from "./components/ClusterAnalysis";
-import { DecisionTreeAnalysis } from "./components/DecisionTreeAnalysis";
-import { NeuralNetworkAnalysis } from "./components/NeuralNetworkAnalysis";
-import { HybridAnalysis } from "./components/HybridAnalysis";
+import { Dashboard } from "../pages/dashboard";
+import { ClusterAnalysis } from "../pages/cluster-analysis";
+import { DecisionTreeAnalysis } from "../pages/decision-tree-analysis";
+import { NeuralNetworkAnalysis } from "../pages/neural-analysis";
+import { HybridAnalysis } from "../pages/hybrid-analysis";
 import { FundamentalsDetailsPage, FundamentalsPage } from "../pages/fundamentals";
 import { NotFound } from "./components/NotFound";
 import { RouteError } from "./components/RouteError";

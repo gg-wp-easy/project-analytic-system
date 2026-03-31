@@ -1,5 +1,5 @@
 ﻿import { useEffect, useMemo, useRef, useState } from "react";
-import { Download, ImageDown, Network, Play, Settings, Trophy } from "lucide-react";
+import { FileSpreadsheet, FileText, ImageDown, Network, Play, Settings } from "lucide-react";
 import {
   ScatterChart,
   Scatter,
@@ -15,66 +15,11 @@ import {
   PieChart,
   Pie,
 } from "recharts";
-import { useFundamentals } from "../context/FundamentalsContext";
-import { useAppSettings } from "../context/AppSettingsContext";
-import { OptimizerSettingsFields } from "./OptimizerSettingsFields";
-import { submitOptimizerSettings, useOptimizerSettings } from "./optimizerSettings";
-import { AnalysisRunningIndicator } from "./AnalysisRunningIndicator";
-import { MetricTooltip } from "./MetricTooltip";
-import { formatMetricDisplay, getMetricTooltip, localizeMetricLabel } from "./metricDisplay";
-import { API_BASE_URL } from "../../config/api";
-
-type ClusterPoint = {
-  ticker: string;
-  figi: string;
-  pe: number;
-  g: number;
-  cluster: number;
-  color: string;
-  label: string;
-};
-
-type ClusterGroup = {
-  name: string;
-  count: number;
-  avgPE: number;
-  avgG: number;
-  color: string;
-  description: string;
-};
-
-type MetricItem = {
-  label: string;
-  value: string;
-};
-
-type PortfolioRow = {
-  ticker: string;
-  name: string;
-  weight: number;
-  expectedReturn?: number;
-  risk?: number;
-  sharpe?: number;
-  sortino?: number;
-  value_at_risk?: number;
-};
-
-type StrategyPortfolio = {
-  name: string;
-  expectedReturn: number;
-  risk: number;
-  sharpe: number;
-  diversification: number;
-  rows: PortfolioRow[];
-  assetsCount: number;
-};
-
-type AnalysisSummary = {
-  companiesCount: number;
-  clustersCount: number;
-  portfoliosCount: number;
-  clusterDistribution: Array<{ cluster: string; count: number; color: string }>;
-};
+import { useFundamentals } from "../../../app/context/FundamentalsContext";
+import { useAppSettings } from "../../../app/context/AppSettingsContext";
+import { OptimizerSettingsFields } from "../../../features/optimizer-settings/ui/OptimizerSettingsFields";
+import { submitOptimizerSettings, useOptimizerSettings } from "../../../features/optimizer-settings/model/optimizerSettings";
+import { API_BASE_URL } from "../../../config/api";
 import type {
   ClusterAnalysisSummary as AnalysisSummary,
   ClusterGroup,
@@ -82,10 +27,27 @@ import type {
   ClusterPoint,
   ClusterPortfolioRow as PortfolioRow,
   ClusterStrategyPortfolio as StrategyPortfolio,
-} from "../../features/cluster-analysis/model/types";
-import { numberOr } from "../../shared/lib/number/numberOr";
-import { formatVarPercent } from "../../shared/lib/format/finance";
-import { downloadRowsAsExcel, downloadSvgAsPng } from "../../shared/lib/export/download";
+} from "../../../features/cluster-analysis/model/types";
+import { formatMetricDisplay, getMetricTooltip, localizeMetricLabel } from "../../../shared/lib/analysis/metric-display";
+import {
+  downloadAnalysisResultsAsPdf,
+  downloadAnalysisResultsAsXlsx,
+  downloadSvgAsPng,
+  getPortfolioHoldingColumns,
+} from "../../../shared/lib/export/download";
+import { numberOr } from "../../../shared/lib/number/numberOr";
+import {
+  AnalysisPageFrame,
+  AnalysisSidebarCard,
+  MetricCard,
+  MetricGrid,
+  PageHero,
+  SectionCard,
+} from "../../../shared/ui/analysis-shell";
+import { AppErrorDialog } from "../../../shared/ui/app-error-dialog";
+import { AnalysisRunningIndicator } from "../../../shared/ui/analysis/AnalysisRunningIndicator";
+import { MetricTooltip } from "../../../shared/ui/analysis/MetricTooltip";
+import { PortfolioHoldingsPanel } from "../../../shared/ui/analysis/PortfolioHoldingsPanel";
 
 const palette = ["#3b82f6", "#10b981", "#f59e0b", "#ef4444", "#8b5cf6", "#06b6d4", "#14b8a6", "#f97316"];
 const ENABLE_TEMP_LOGS = true;
@@ -99,23 +61,6 @@ function formatMetric(value: unknown): string {
     return value.toFixed(4);
   }
   return String(value);
-}
-
-function downloadPortfolioAsExcel(rows: PortfolioRow[], filename: string): void {
-  downloadRowsAsExcel(
-    rows,
-    [
-      { header: "Ticker", render: (row) => row.ticker },
-      { header: "Name", render: (row) => row.name || "" },
-      { header: "Weight, %", render: (row) => row.weight.toFixed(4) },
-      { header: "Return", render: (row) => (Number.isFinite(row.expectedReturn) ? row.expectedReturn?.toFixed(6) : "") },
-      { header: "Risk", render: (row) => (Number.isFinite(row.risk) ? row.risk?.toFixed(6) : "") },
-      { header: "Sharpe", render: (row) => (Number.isFinite(row.sharpe) ? row.sharpe?.toFixed(6) : "") },
-      { header: "Sortino", render: (row) => (Number.isFinite(row.sortino) ? row.sortino?.toFixed(6) : "") },
-      { header: "VaR", render: (row) => (Number.isFinite(row.value_at_risk) ? row.value_at_risk?.toFixed(6) : "") },
-    ],
-    filename,
-  );
 }
 
 function firstObject(source: unknown[]): Record<string, unknown> {
@@ -454,6 +399,7 @@ export function ClusterAnalysis() {
   const { settings: optimizerSettings, setSettings: setOptimizerSettings } = useOptimizerSettings();
   const [isRunning, setIsRunning] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [errorDialogMessage, setErrorDialogMessage] = useState<string | null>(null);
   const [serverRaw, setServerRaw] = useState<Record<string, unknown> | null>(null);
   const [clusterData, setClusterData] = useState<ClusterPoint[]>([]);
   const [clusterGroups, setClusterGroups] = useState<ClusterGroup[]>([]);
@@ -463,6 +409,10 @@ export function ClusterAnalysis() {
   const [summaryInfo, setSummaryInfo] = useState<AnalysisSummary | null>(null);
   const [bestPortfolioAssetsCount, setBestPortfolioAssetsCount] = useState(0);
   const portfolioChartRef = useRef<HTMLDivElement | null>(null);
+  const showErrorDialog = (message: string) => {
+    setError(message);
+    setErrorDialogMessage(message);
+  };
 
   useEffect(() => {
     try {
@@ -557,11 +507,23 @@ export function ClusterAnalysis() {
     [cache.fundamentalsByFigi, cache.shares],
   );
 
-  const exportPortfolioToExcel = () => {
+  const exportPortfolioToXlsx = async () => {
     if (!displayPortfolio.length) {
       return;
     }
-    downloadPortfolioAsExcel(displayPortfolio, "optimal-portfolio.xls");
+    await downloadAnalysisResultsAsXlsx({
+      title: tx("Оптимальный портфель из кластерного анализа", "Optimal Portfolio from Cluster Analysis"),
+      filename: "optimal-portfolio.xlsx",
+      rows: displayPortfolio,
+      columns: getPortfolioHoldingColumns<PortfolioRow>({
+        name: tx("Акция", "Stock"),
+        weight: tx("Вес, %", "Weight, %"),
+      }),
+      metrics: metrics.map((item) => ({
+        label: localizeMetricLabel(item.label, isEn),
+        value: formatMetricDisplay(item.label, item.value),
+      })),
+    });
   };
 
   const savePortfolioChartPng = async () => {
@@ -573,7 +535,32 @@ export function ClusterAnalysis() {
       await downloadSvgAsPng(svg, "optimal-portfolio-chart.png");
     } catch (e) {
       const message = e instanceof Error ? e.message : "Failed to export PNG";
-      setError(message);
+      showErrorDialog(message);
+    }
+  };
+
+  const exportPortfolioToPdf = async () => {
+    if (!displayPortfolio.length) {
+      return;
+    }
+    try {
+      await downloadAnalysisResultsAsPdf({
+        title: tx("Оптимальный портфель из кластерного анализа", "Optimal Portfolio from Cluster Analysis"),
+        filename: "optimal-portfolio.pdf",
+        rows: displayPortfolio,
+        columns: getPortfolioHoldingColumns<PortfolioRow>({
+          name: tx("Акция", "Stock"),
+          weight: tx("Вес, %", "Weight, %"),
+        }),
+        metrics: metrics.map((item) => ({
+          label: localizeMetricLabel(item.label, isEn),
+          value: formatMetricDisplay(item.label, item.value),
+        })),
+        chartSvg: portfolioChartRef.current?.querySelector("svg"),
+      });
+    } catch (e) {
+      const message = e instanceof Error ? e.message : tx("Не удалось сохранить PDF", "Failed to save PDF");
+      showErrorDialog(message);
     }
   };
 
@@ -592,6 +579,7 @@ export function ClusterAnalysis() {
 
   const runClusterAnalysis = async () => {
     setError(null);
+    setErrorDialogMessage(null);
     setIsRunning(true);
     const startedAt = performance.now();
 
@@ -650,7 +638,7 @@ export function ClusterAnalysis() {
       }
     } catch (e) {
       const message = e instanceof Error ? e.message : tx("Не удалось выполнить кластеризацию", "Failed to run clustering");
-      setError(message);
+      showErrorDialog(message);
       setServerRaw(null);
       setClusterData([]);
       setClusterGroups([]);
@@ -673,61 +661,65 @@ export function ClusterAnalysis() {
   };
 
   return (
-    <div className="space-y-6">
-      <div className="bg-gradient-to-r from-purple-600 to-pink-600 rounded-xl p-6 text-white shadow-lg">
-        <div className="flex items-center gap-3 mb-2">
-          <Network className="w-8 h-8" />
-          <h1 className="text-3xl font-bold">{tx("Кластерный анализ", "Cluster Analysis")}</h1>
-        </div>
-        <p className="text-purple-100">
-          {tx("Кластеризация выполняется на сервере. По умолчанию используется алгоритм K-Means.", "Clustering is performed on the server. K-Means is used by default.")}
-        </p>
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-        <div className="lg:col-span-1">
-          <div className="bg-white dark:bg-slate-900 rounded-xl p-6 shadow-sm border border-slate-200 dark:border-slate-800">
-            <div className="flex items-center gap-2 mb-6">
-              <Settings className="w-5 h-5 text-purple-600" />
-              <h2 className="font-semibold text-slate-900 dark:text-slate-100">{tx("Параметры", "Parameters")}</h2>
+    <>
+      <AnalysisPageFrame
+      hero={(
+        <PageHero
+          icon={Network}
+          title={tx("Кластерный анализ", "Cluster Analysis")}
+          description={tx(
+            "Кластеризация выполняется на сервере. По умолчанию используется алгоритм K-Means.",
+            "Clustering is performed on the server. K-Means is used by default.",
+          )}
+          badge={tx("Серверный pipeline", "Server-side pipeline")}
+          accent="violet"
+        />
+      )}
+      sidebar={(
+        <AnalysisSidebarCard
+          icon={Settings}
+          title={tx("Параметры анализа", "Analysis Parameters")}
+          description={tx(
+            "Единый запуск на базе кэша фундаментальных данных и настроек оптимизатора.",
+            "Unified run based on fundamentals cache and shared optimizer settings.",
+          )}
+          accent="violet"
+        >
+          <div className="space-y-4">
+            <div className="ui-surface-muted">
+              <p className="text-sm text-slate-700 dark:text-slate-300">
+                {tx("Источник: кэш фундаментальных данных", "Source: fundamentals cache")}
+              </p>
+              <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                {tx("Записей", "Records")}: {requestData.length}
+              </p>
             </div>
+            <OptimizerSettingsFields
+              isEn={isEn}
+              settings={optimizerSettings}
+              onChange={setOptimizerSettings}
+            />
 
-            <div className="space-y-4">
-              <div className="rounded-lg border border-slate-200 dark:border-slate-700 p-3 bg-slate-50 dark:bg-slate-800/40">
-                <p className="text-sm text-slate-700 dark:text-slate-300">{tx("Источник: кэш фундаментальных данных", "Source: fundamentals cache")}</p>
-                <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">{tx("Записей", "Records")}: {requestData.length}</p>
+            {!hasData && (
+              <div className="rounded-2xl border border-amber-200 bg-amber-50 p-3 dark:border-amber-900 dark:bg-amber-950/20">
+                <p className="text-sm text-amber-800 dark:text-amber-300">
+                  {tx("Кэш пуст. Сначала загрузите фундаментальные данные.", "Cache is empty. Load fundamentals first.")}
+                </p>
               </div>
-              <OptimizerSettingsFields
-                isEn={isEn}
-                settings={optimizerSettings}
-                onChange={setOptimizerSettings}
-              />
+            )}
 
-              {!hasData && (
-                <div className="bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900 rounded-lg p-3">
-                  <p className="text-sm text-amber-800 dark:text-amber-300">{tx("Кэш пуст. Сначала загрузите фундаментальные данные.", "Cache is empty. Load fundamentals first.")}</p>
-                </div>
-              )}
-
-              {error && (
-                <div className="bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-900 rounded-lg p-3">
-                  <p className="text-sm text-red-700 dark:text-red-300 break-words">{error}</p>
-                </div>
-              )}
-
-              <button
-                onClick={runClusterAnalysis}
-                disabled={!hasData || !requestData.length || isRunning}
-                className="w-full bg-gradient-to-r from-purple-600 to-pink-600 text-white py-3 rounded-lg font-medium hover:from-purple-700 hover:to-pink-700 transition-all shadow-md hover:shadow-lg flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                <Play className="w-5 h-5" />
-                {isRunning ? tx("Выполняется...", "Running...") : tx("Запустить анализ", "Run Analysis")}
-              </button>
-            </div>
+            <button
+              onClick={runClusterAnalysis}
+              disabled={!hasData || !requestData.length || isRunning}
+              className="ui-primary-button w-full bg-gradient-to-r from-violet-600 to-fuchsia-600 hover:from-violet-700 hover:to-fuchsia-700"
+            >
+              <Play className="h-5 w-5" />
+              {isRunning ? tx("Выполняется...", "Running...") : tx("Запустить анализ", "Run Analysis")}
+            </button>
           </div>
-        </div>
-
-        <div className="lg:col-span-3 space-y-6">
+        </AnalysisSidebarCard>
+      )}
+    >
           {isRunning && (
             <AnalysisRunningIndicator
               title={tx("Выполняем кластеризацию", "Running clustering")}
@@ -737,123 +729,139 @@ export function ClusterAnalysis() {
           )}
 
           {!!metrics.length && (
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <MetricGrid>
               {metrics.map((m) => (
-                <div key={m.label} className="bg-white dark:bg-slate-900 rounded-xl p-4 shadow-sm border border-slate-200 dark:border-slate-800">
-                  <div className="text-sm text-slate-600 dark:text-slate-400 mb-1 flex items-center gap-1">
-                    <span>{localizeMetricLabel(m.label, isEn)}</span>
-                    {getMetricTooltip(m.label, isEn) && (
-                      <MetricTooltip text={getMetricTooltip(m.label, isEn) ?? ""} />
-                    )}
-                  </div>
-                  <div className="text-2xl font-semibold text-slate-900 dark:text-slate-100">{formatMetricDisplay(m.label, m.value)}</div>
-                </div>
+                <MetricCard
+                  key={m.label}
+                  label={(
+                    <>
+                      <span>{localizeMetricLabel(m.label, isEn)}</span>
+                      {getMetricTooltip(m.label, isEn) && (
+                        <MetricTooltip text={getMetricTooltip(m.label, isEn) ?? ""} />
+                      )}
+                    </>
+                  )}
+                  value={formatMetricDisplay(m.label, m.value)}
+                />
               ))}
-            </div>
+            </MetricGrid>
           )}
 
           {summaryInfo && (
-            <div className="bg-white dark:bg-slate-900 rounded-xl p-6 shadow-sm border border-slate-200 dark:border-slate-800 space-y-4">
-              <h3 className="font-semibold text-slate-900 dark:text-slate-100">{tx("Сводка по результату", "Result Summary")}</h3>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-sm">
-                <div className="rounded-lg border border-slate-200 dark:border-slate-700 p-3">
-                  <div className="text-slate-500 dark:text-slate-400">{tx("Компаний", "Companies")}</div>
-                  <div className="text-xl font-semibold text-slate-900 dark:text-slate-100">{summaryInfo.companiesCount}</div>
+            <SectionCard title={tx("Сводка по результату", "Result Summary")}>
+              <div className="space-y-5">
+                <div className="grid grid-cols-1 gap-3 text-sm md:grid-cols-3">
+                  <div className="ui-stat-card">
+                    <div className="text-slate-500 dark:text-slate-400">{tx("Компаний", "Companies")}</div>
+                    <div className="text-xl font-semibold text-slate-900 dark:text-slate-100">{summaryInfo.companiesCount}</div>
+                  </div>
+                  <div className="ui-stat-card">
+                    <div className="text-slate-500 dark:text-slate-400">{tx("Кластеров", "Clusters")}</div>
+                    <div className="text-xl font-semibold text-slate-900 dark:text-slate-100">{summaryInfo.clustersCount}</div>
+                  </div>
+                  <div className="ui-stat-card">
+                    <div className="text-slate-500 dark:text-slate-400">{tx("Портфелей", "Portfolios")}</div>
+                    <div className="text-xl font-semibold text-slate-900 dark:text-slate-100">{summaryInfo.portfoliosCount}</div>
+                  </div>
                 </div>
-                <div className="rounded-lg border border-slate-200 dark:border-slate-700 p-3">
-                  <div className="text-slate-500 dark:text-slate-400">{tx("Кластеров", "Clusters")}</div>
-                  <div className="text-xl font-semibold text-slate-900 dark:text-slate-100">{summaryInfo.clustersCount}</div>
-                </div>
-                <div className="rounded-lg border border-slate-200 dark:border-slate-700 p-3">
-                  <div className="text-slate-500 dark:text-slate-400">{tx("Портфелей", "Portfolios")}</div>
-                  <div className="text-xl font-semibold text-slate-900 dark:text-slate-100">{summaryInfo.portfoliosCount}</div>
-                </div>
-              </div>
 
-              {!!summaryInfo.clusterDistribution.length && (
-                <div className="h-64">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={summaryInfo.clusterDistribution}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                      <XAxis dataKey="cluster" stroke="#64748b" />
-                      <YAxis stroke="#64748b" />
-                      <Tooltip />
-                      <Bar dataKey="count">
-                        {summaryInfo.clusterDistribution.map((entry) => (
-                          <Cell key={entry.cluster} fill={entry.color} />
-                        ))}
-                      </Bar>
-                    </BarChart>
-                  </ResponsiveContainer>
-                </div>
-              )}
-            </div>
+                {!!summaryInfo.clusterDistribution.length && (
+                  <div className="h-64">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart data={summaryInfo.clusterDistribution}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                        <XAxis dataKey="cluster" stroke="#64748b" />
+                        <YAxis stroke="#64748b" />
+                        <Tooltip />
+                        <Bar dataKey="count">
+                          {summaryInfo.clusterDistribution.map((entry) => (
+                            <Cell key={entry.cluster} fill={entry.color} />
+                          ))}
+                        </Bar>
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+                )}
+              </div>
+            </SectionCard>
           )}
 
           {!!portfolioStrategies.length && (
-            <div className="bg-white dark:bg-slate-900 rounded-xl p-6 shadow-sm border border-slate-200 dark:border-slate-800">
-              <h3 className="font-semibold text-slate-900 dark:text-slate-100 mb-4">{tx("Стратегии портфелей", "Portfolio Strategies")}</h3>
-              <div className="overflow-x-auto">
-                <table className="w-full min-w-[720px] text-sm [&_th]:whitespace-nowrap [&_td]:whitespace-nowrap">
+            <SectionCard title={tx("Стратегии портфелей", "Portfolio Strategies")}>
+              <div className="ui-table-shell overflow-x-auto">
+                <table className="ui-data-table">
                   <thead>
-                    <tr className="text-left border-b border-slate-200 dark:border-slate-800">
-                      <th className="py-2 pr-3">{tx("Стратегия", "Strategy")}</th>
-                      <th className="py-2 pr-3">Expected return</th>
-                      <th className="py-2 pr-3">Risk</th>
-                      <th className="py-2 pr-3">Sharpe</th>
-                      <th className="py-2 pr-3">Diversification</th>
-                      <th className="py-2 pr-3">{tx("Позиций", "Positions")}</th>
+                    <tr>
+                      <th>{tx("Стратегия", "Strategy")}</th>
+                      <th>Expected return</th>
+                      <th>Risk</th>
+                      <th>Sharpe</th>
+                      <th>Diversification</th>
+                      <th>{tx("Позиций", "Positions")}</th>
                     </tr>
                   </thead>
                   <tbody>
                     {portfolioStrategies.map((row) => (
-                      <tr key={row.name} className="border-b border-slate-100 dark:border-slate-800">
-                        <td className="py-2 pr-3 font-medium text-slate-900 dark:text-slate-100">{row.name}</td>
-                        <td className="py-2 pr-3 text-slate-700 dark:text-slate-300">{row.expectedReturn.toFixed(4)}</td>
-                        <td className="py-2 pr-3 text-slate-700 dark:text-slate-300">{row.risk.toFixed(4)}</td>
-                        <td className="py-2 pr-3 text-slate-700 dark:text-slate-300">{row.sharpe.toFixed(4)}</td>
-                        <td className="py-2 pr-3 text-slate-700 dark:text-slate-300">{row.diversification.toFixed(4)}</td>
-                        <td className="py-2 pr-3 text-slate-700 dark:text-slate-300">{row.assetsCount}</td>
+                      <tr key={row.name}>
+                        <td className="font-medium text-slate-900 dark:text-slate-100">{row.name}</td>
+                        <td>{row.expectedReturn.toFixed(4)}</td>
+                        <td>{row.risk.toFixed(4)}</td>
+                        <td>{row.sharpe.toFixed(4)}</td>
+                        <td>{row.diversification.toFixed(4)}</td>
+                        <td>{row.assetsCount}</td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
               </div>
-            </div>
+            </SectionCard>
           )}
 
           {!!clusterGroups.length && (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {clusterGroups.map((cluster) => (
-                <div key={cluster.name} className="bg-white dark:bg-slate-900 rounded-xl p-5 shadow-sm border border-slate-200 dark:border-slate-800">
-                  <div className="flex items-center gap-3 mb-3">
-                    <div className="w-4 h-4 rounded-full" style={{ backgroundColor: cluster.color }} />
-                    <div>
-                      <h3 className="font-semibold text-slate-900 dark:text-slate-100">{cluster.name}</h3>
-                      <p className="text-xs text-slate-600 dark:text-slate-300">{cluster.description}</p>
+            <SectionCard
+              title={tx("Кластеры и профили", "Clusters and Profiles")}
+              description={tx(
+                "Краткий профиль по каждому найденному кластеру.",
+                "Quick profile for each detected cluster.",
+              )}
+            >
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                {clusterGroups.map((cluster) => (
+                  <div key={cluster.name} className="ui-metric-card">
+                    <div className="mb-3 flex items-center gap-3">
+                      <div className="h-4 w-4 rounded-full" style={{ backgroundColor: cluster.color }} />
+                      <div>
+                        <h3 className="font-semibold text-slate-900 dark:text-slate-100">{cluster.name}</h3>
+                        <p className="text-xs text-slate-600 dark:text-slate-300">{cluster.description}</p>
+                      </div>
+                    </div>
+                    <div className="space-y-2 text-sm">
+                      <div className="flex justify-between gap-4">
+                        <span className="text-slate-600 dark:text-slate-400">{tx("Компаний:", "Companies:")}</span>
+                        <span className="font-medium text-slate-900 dark:text-slate-100">{cluster.count}</span>
+                      </div>
+                      <div className="flex justify-between gap-4">
+                        <span className="text-slate-600 dark:text-slate-400">{tx("Средний P/E:", "Average P/E:")}</span>
+                        <span className="font-medium text-blue-600 dark:text-blue-400">{cluster.avgPE.toFixed(2)}</span>
+                      </div>
+                      <div className="flex justify-between gap-4">
+                        <span className="text-slate-600 dark:text-slate-400">{tx("Средний g:", "Average g:")}</span>
+                        <span className="font-medium text-green-600 dark:text-green-400">{cluster.avgG.toFixed(2)}%</span>
+                      </div>
                     </div>
                   </div>
-                  <div className="space-y-2 text-sm">
-                    <div className="flex justify-between">
-                      <span className="text-slate-600 dark:text-slate-400">{tx("Компаний:", "Companies:")}</span>
-                      <span className="font-medium text-slate-900 dark:text-slate-100">{cluster.count}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-slate-600 dark:text-slate-400">{tx("Средний P/E:", "Average P/E:")}</span>
-                      <span className="font-medium text-blue-600 dark:text-blue-400">{cluster.avgPE.toFixed(2)}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-slate-600 dark:text-slate-400">{tx("Средний g:", "Average g:")}</span>
-                      <span className="font-medium text-green-600 dark:text-green-400">{cluster.avgG.toFixed(2)}%</span>
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            </SectionCard>
           )}
 
-          <div className="bg-white dark:bg-slate-900 rounded-xl p-6 shadow-sm border border-slate-200 dark:border-slate-800">
-            <h3 className="font-semibold text-slate-900 dark:text-slate-100 mb-4">{tx("Визуализация кластеров (P/E vs g)", "Cluster Visualization (P/E vs g)")}</h3>
+          <SectionCard
+            title={tx("Визуализация кластеров (P/E vs g)", "Cluster Visualization (P/E vs g)")}
+            description={tx(
+              "Сравнение компаний по мультипликатору и темпу роста внутри найденных кластеров.",
+              "Compare companies by valuation and growth across the detected clusters.",
+            )}
+          >
             <ResponsiveContainer width="100%" height={460}>
               <ScatterChart margin={{ top: 20, right: 30, left: 20, bottom: 20 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
@@ -867,8 +875,8 @@ export function ClusterAnalysis() {
                     }
                     const data = payload[0].payload as ClusterPoint;
                     return (
-                      <div className="bg-white dark:bg-slate-900 p-3 rounded-lg shadow-lg border border-slate-200 dark:border-slate-700">
-                        <p className="text-sm font-medium text-slate-700 dark:text-slate-200 mb-1">{data.ticker}</p>
+                      <div className="rounded-2xl border border-slate-200 bg-white p-3 shadow-lg dark:border-slate-700 dark:bg-slate-900">
+                        <p className="mb-1 text-sm font-medium text-slate-700 dark:text-slate-200">{data.ticker}</p>
                         <p className="text-sm text-slate-600 dark:text-slate-300">P/E: {data.pe.toFixed(2)}</p>
                         <p className="text-sm text-slate-600 dark:text-slate-300">g: {data.g.toFixed(2)}%</p>
                         <p className="text-sm text-slate-600 dark:text-slate-300">{data.label}</p>
@@ -889,112 +897,75 @@ export function ClusterAnalysis() {
                 <Legend />
               </ScatterChart>
             </ResponsiveContainer>
-          </div>
+          </SectionCard>
 
           {(!!displayPortfolio.length || bestPortfolioAssetsCount > 0) && (
-            <div className="bg-white dark:bg-slate-900 rounded-xl p-6 shadow-sm border border-slate-200 dark:border-slate-800">
-              <div className="flex items-center justify-between gap-3 mb-4">
+            <SectionCard
+              title={tx("Оптимальный портфель из кластерного анализа", "Optimal Portfolio from Cluster Analysis")}
+              description={
+                bestPortfolioAssetsCount > 0
+                  ? (
+                      <>
+                        {tx("Количество активов в портфеле:", "Assets in portfolio:")}{" "}
+                        <span className="font-semibold text-slate-900 dark:text-slate-100">{bestPortfolioAssetsCount}</span>
+                      </>
+                    )
+                  : undefined
+              }
+              action={(
                 <div className="flex items-center gap-2">
-                  <Trophy className="w-5 h-5 text-amber-500" />
-                  <h3 className="font-semibold text-slate-900 dark:text-slate-100">{tx("Оптимальный портфель из кластерного анализа", "Optimal Portfolio from Cluster Analysis")}</h3>
-                </div>
-                <div className="flex items-center gap-2">
+                  <button
+                    onClick={exportPortfolioToXlsx}
+                    disabled={!displayPortfolio.length}
+                    className="ui-secondary-button px-3 py-2 text-xs"
+                  >
+                    <FileSpreadsheet className="h-4 w-4" />
+                    XLSX
+                  </button>
+                  <button
+                    onClick={exportPortfolioToPdf}
+                    disabled={!displayPortfolio.length}
+                    className="ui-secondary-button px-3 py-2 text-xs"
+                  >
+                    <FileText className="h-4 w-4" />
+                    PDF
+                  </button>
                   <button
                     onClick={savePortfolioChartPng}
                     disabled={!displayPortfolio.length}
-                    className="inline-flex items-center gap-1 px-3 py-2 text-xs rounded-md border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-200 disabled:opacity-50"
+                    className="ui-secondary-button px-3 py-2 text-xs"
                   >
-                    <ImageDown className="w-4 h-4" />
+                    <ImageDown className="h-4 w-4" />
                     PNG
                   </button>
-                  <button
-                    onClick={exportPortfolioToExcel}
-                    disabled={!displayPortfolio.length}
-                    className="inline-flex items-center gap-1 px-3 py-2 text-xs rounded-md border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-200 disabled:opacity-50"
-                  >
-                    <Download className="w-4 h-4" />
-                    Excel
-                  </button>
                 </div>
-              </div>
-
-              {bestPortfolioAssetsCount > 0 && (
-                <p className="text-sm text-slate-600 dark:text-slate-300 mb-4">
-                  {tx("Количество активов в портфеле:", "Assets in portfolio:")} <span className="font-semibold text-slate-900 dark:text-slate-100">{bestPortfolioAssetsCount}</span>
-                </p>
               )}
+            >
               {!!displayPortfolio.length && (
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                  <div className="h-72" ref={portfolioChartRef}>
-                    <ResponsiveContainer width="100%" height="100%">
-                      <PieChart>
-                        <Pie
-                          data={displayPortfolio}
-                          dataKey="weight"
-                          nameKey="ticker"
-                          cx="50%"
-                          cy="50%"
-                          outerRadius={105}
-                          labelLine={false}
-                          label={({ ticker, weight }) => (Number(weight) >= 6 ? `${ticker}: ${Number(weight).toFixed(1)}%` : "")}
-                        >
-                          {displayPortfolio.map((row, idx) => (
-                            <Cell key={row.ticker} fill={palette[idx % palette.length]} />
-                          ))}
-                        </Pie>
-                        <Tooltip formatter={(v: number) => `${Number(v).toFixed(2)}%`} />
-                      </PieChart>
-                  </ResponsiveContainer>
-                </div>
-
-                <div className="overflow-x-auto">
-                  <table className="w-full min-w-[860px] text-sm [&_th]:whitespace-nowrap [&_td]:whitespace-nowrap">
-                    <thead>
-                      <tr className="text-left border-b border-slate-200 dark:border-slate-800">
-                        <th className="py-2 pr-3">Ticker</th>
-                        <th className="py-2 pr-3">Name</th>
-                        <th className="py-2 pr-3">{tx("Вес, %", "Weight, %")}</th>
-                        <th className="py-2 pr-3">Return</th>
-                        <th className="py-2 pr-3">Risk</th>
-                        <th className="py-2 pr-3">Sharpe</th>
-                        <th className="py-2 pr-3">Sortino</th>
-                        <th className="py-2 pr-3">VaR</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {displayPortfolio.map((row) => (
-                        <tr key={row.ticker} className="border-b border-slate-100 dark:border-slate-800">
-                          <td className="py-2 pr-3 font-medium text-slate-900 dark:text-slate-100">{row.ticker}</td>
-                          <td className="py-2 pr-3 text-slate-700 dark:text-slate-300">{row.name || "-"}</td>
-                          <td className="py-2 pr-3 text-slate-700 dark:text-slate-300">{row.weight.toFixed(2)}</td>
-                          <td className="py-2 pr-3 text-slate-700 dark:text-slate-300">
-                            {Number.isFinite(row.expectedReturn) ? row.expectedReturn?.toFixed(4) : "-"}
-                          </td>
-                          <td className="py-2 pr-3 text-slate-700 dark:text-slate-300">
-                            {Number.isFinite(row.risk) ? row.risk?.toFixed(4) : "-"}
-                          </td>
-                          <td className="py-2 pr-3 text-slate-700 dark:text-slate-300">
-                            {Number.isFinite(row.sharpe) ? row.sharpe?.toFixed(4) : "-"}
-                          </td>
-                          <td className="py-2 pr-3 text-slate-700 dark:text-slate-300">
-                            {Number.isFinite(row.sortino) ? row.sortino?.toFixed(4) : "-"}
-                          </td>
-                          <td className="py-2 pr-3 text-slate-700 dark:text-slate-300">
-                            {formatVarPercent(numberOr(row.value_at_risk, NaN))}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-                </div>
+                <PortfolioHoldingsPanel
+                  rows={displayPortfolio}
+                  palette={palette}
+                  chartRef={portfolioChartRef}
+                  companyLabel={tx("Акция", "Stock")}
+                  weightLabel={tx("Вес, %", "Weight, %")}
+                />
               )}
-            </div>
+            </SectionCard>
           )}
 
-        </div>
-      </div>
-    </div>
+      </AnalysisPageFrame>
+
+      <AppErrorDialog
+        message={errorDialogMessage}
+        onClose={() => setErrorDialogMessage(null)}
+        title={tx("Ошибка анализа", "Analysis Error")}
+        description={tx(
+          "Не удалось обработать запрос. Проверьте данные и попробуйте ещё раз.",
+          "The request could not be completed. Check the input data and try again.",
+        )}
+        closeLabel={tx("Закрыть", "Close")}
+      />
+    </>
   );
 }
 

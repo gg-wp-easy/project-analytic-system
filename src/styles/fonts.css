@@ -1,0 +1,30 @@
+:root {
+  --app-font-sans:
+    "Segoe UI Variable Text",
+    "Segoe UI",
+    "Aptos",
+    "SF Pro Text",
+    "Inter",
+    "Roboto",
+    "Helvetica Neue",
+    Arial,
+    sans-serif;
+  --app-font-display:
+    "Segoe UI Variable Display",
+    "Segoe UI",
+    "Aptos Display",
+    "SF Pro Display",
+    "Inter",
+    "Roboto",
+    "Helvetica Neue",
+    Arial,
+    sans-serif;
+  --app-font-mono:
+    "JetBrains Mono",
+    "Cascadia Code",
+    "SFMono-Regular",
+    Consolas,
+    "Liberation Mono",
+    Menlo,
+    monospace;
+}

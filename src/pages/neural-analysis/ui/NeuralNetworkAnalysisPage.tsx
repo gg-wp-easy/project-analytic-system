@@ -1,5 +1,5 @@
 ﻿import { useEffect, useMemo, useRef, useState } from "react";
-import { Brain, Download, ImageDown, Play, Settings, Trophy } from "lucide-react";
+import { Brain, FileSpreadsheet, FileText, ImageDown, Play, Settings } from "lucide-react";
 import {
   BarChart,
   Bar,
@@ -9,51 +9,47 @@ import {
   Tooltip,
   ResponsiveContainer,
   Cell,
-  PieChart,
-  Pie,
   LineChart,
   Line,
   Legend,
 } from "recharts";
-import { useFundamentals } from "../context/FundamentalsContext";
-import { useAppSettings } from "../context/AppSettingsContext";
-import { OptimizerSettingsFields } from "./OptimizerSettingsFields";
-import { submitOptimizerSettings, useOptimizerSettings } from "./optimizerSettings";
-import { AnalysisRunningIndicator } from "./AnalysisRunningIndicator";
-import { API_BASE_URL } from "../../config/api";
-import { MetricTooltip } from "./MetricTooltip";
-import { formatMetricDisplay, getMetricTooltip, localizeMetricLabel } from "./metricDisplay";
+import { useFundamentals } from "../../../app/context/FundamentalsContext";
+import { useAppSettings } from "../../../app/context/AppSettingsContext";
+import { OptimizerSettingsFields } from "../../../features/optimizer-settings/ui/OptimizerSettingsFields";
+import { submitOptimizerSettings, useOptimizerSettings } from "../../../features/optimizer-settings/model/optimizerSettings";
+import { API_BASE_URL } from "../../../config/api";
 import type {
   NeuralFeatureImportanceItem as FeatureImportanceItem,
   NeuralMetricItem as MetricItem,
   NeuralPortfolioPosition as PortfolioPosition,
   NeuralPortfolioStrategy as PortfolioStrategy,
   NeuralTrainingPoint as TrainingPoint,
-} from "../../features/neural-analysis/model/types";
-import { numberOr } from "../../shared/lib/number/numberOr";
-import { formatPercentOrNumber, formatVarPercent } from "../../shared/lib/format/finance";
-import { downloadRowsAsExcel, downloadSvgAsPng } from "../../shared/lib/export/download";
+} from "../../../features/neural-analysis/model/types";
+import { formatMetricDisplay, getMetricTooltip, localizeMetricLabel } from "../../../shared/lib/analysis/metric-display";
+import {
+  downloadAnalysisResultsAsPdf,
+  downloadAnalysisResultsAsXlsx,
+  downloadSvgAsPng,
+  getPortfolioHoldingColumns,
+} from "../../../shared/lib/export/download";
+import { formatPercentOrNumber, formatVarPercent } from "../../../shared/lib/format/finance";
+import { numberOr } from "../../../shared/lib/number/numberOr";
+import {
+  AnalysisPageFrame,
+  AnalysisSidebarCard,
+  MetricCard,
+  MetricGrid,
+  PageHero,
+  SectionCard,
+} from "../../../shared/ui/analysis-shell";
+import { AppErrorDialog } from "../../../shared/ui/app-error-dialog";
+import { AnalysisRunningIndicator } from "../../../shared/ui/analysis/AnalysisRunningIndicator";
+import { MetricTooltip } from "../../../shared/ui/analysis/MetricTooltip";
+import { PortfolioHoldingsPanel } from "../../../shared/ui/analysis/PortfolioHoldingsPanel";
 
 const ENABLE_TEMP_LOGS = true;
 const palette = ["#f97316", "#ea580c", "#fb923c", "#f59e0b", "#f43f5e", "#ef4444", "#facc15", "#fdba74"];
 const NEURAL_STATE_KEY = "neural-analysis-state-v1";
-
-function downloadPortfolioAsExcel(rows: PortfolioPosition[], filename: string): void {
-  downloadRowsAsExcel(
-    rows,
-    [
-      { header: "Ticker", render: (row) => row.ticker },
-      { header: "Name", render: (row) => row.name || "" },
-      { header: "Weight, %", render: (row) => row.weight.toFixed(4) },
-      { header: "Expected Return", render: (row) => (Number.isFinite(row.expectedReturn) ? row.expectedReturn.toFixed(6) : "") },
-      { header: "Risk", render: (row) => (Number.isFinite(row.risk) ? row.risk.toFixed(6) : "") },
-      { header: "Sharpe", render: (row) => (Number.isFinite(row.sharpe) ? row.sharpe.toFixed(6) : "") },
-      { header: "Sortino", render: (row) => (Number.isFinite(row.sortino) ? row.sortino?.toFixed(6) : "") },
-      { header: "VaR", render: (row) => (Number.isFinite(row.value_at_risk) ? row.value_at_risk?.toFixed(6) : "") },
-    ],
-    filename,
-  );
-}
 
 function formatMetricPercentOrNumber(value: number): string {
   return formatPercentOrNumber(value);
@@ -295,6 +291,7 @@ export function NeuralNetworkAnalysis() {
   const { settings: optimizerSettings, setSettings: setOptimizerSettings } = useOptimizerSettings();
   const [isRunning, setIsRunning] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [errorDialogMessage, setErrorDialogMessage] = useState<string | null>(null);
   const [metrics, setMetrics] = useState<MetricItem[]>([]);
   const [featureImportance, setFeatureImportance] = useState<FeatureImportanceItem[]>([]);
   const [portfolioStrategies, setPortfolioStrategies] = useState<PortfolioStrategy[]>([]);
@@ -303,6 +300,10 @@ export function NeuralNetworkAnalysis() {
   const [portfolioAssetsCount, setPortfolioAssetsCount] = useState(0);
   const [serverKeys, setServerKeys] = useState<string[]>([]);
   const portfolioChartRef = useRef<HTMLDivElement | null>(null);
+  const showErrorDialog = (message: string) => {
+    setError(message);
+    setErrorDialogMessage(message);
+  };
   useEffect(() => {
     try {
       const raw = window.localStorage.getItem(NEURAL_STATE_KEY);
@@ -383,6 +384,7 @@ export function NeuralNetworkAnalysis() {
 
   const runAnalysis = async () => {
     setError(null);
+    setErrorDialogMessage(null);
     setIsRunning(true);
 
     try {
@@ -433,7 +435,7 @@ export function NeuralNetworkAnalysis() {
         : isEn
           ? "Failed to run neural network analysis"
           : "Не удалось выполнить нейросетевой анализ";
-      setError(message);
+      showErrorDialog(message);
       setMetrics([]);
       setFeatureImportance([]);
       setPortfolioStrategies([]);
@@ -453,11 +455,23 @@ export function NeuralNetworkAnalysis() {
     }
   };
 
-  const exportPortfolioToExcel = () => {
+  const exportPortfolioToXlsx = async () => {
     if (!portfolioPositions.length) {
       return;
     }
-    downloadPortfolioAsExcel(portfolioPositions, "ai-optimal-portfolio.xls");
+    await downloadAnalysisResultsAsXlsx({
+      title: isEn ? "Optimal Portfolio from Neural Analysis" : "Оптимальный портфель из нейросетевого анализа",
+      filename: "ai-optimal-portfolio.xlsx",
+      rows: portfolioPositions,
+      columns: getPortfolioHoldingColumns<PortfolioPosition>({
+        name: isEn ? "Stock" : "Акция",
+        weight: isEn ? "Weight, %" : "Вес, %",
+      }),
+      metrics: metrics.map((item) => ({
+        label: localizeMetricLabel(item.label, isEn),
+        value: formatMetricDisplay(item.label, item.value),
+      })),
+    });
   };
 
   const savePortfolioChartPng = async () => {
@@ -469,68 +483,89 @@ export function NeuralNetworkAnalysis() {
       await downloadSvgAsPng(svg as SVGSVGElement, "ai-optimal-portfolio.png");
     } catch (e) {
       const message = e instanceof Error ? e.message : isEn ? "Failed to save PNG" : "Не удалось сохранить PNG";
-      setError(message);
+      showErrorDialog(message);
+    }
+  };
+
+  const exportPortfolioToPdf = async () => {
+    if (!portfolioPositions.length) {
+      return;
+    }
+    try {
+      await downloadAnalysisResultsAsPdf({
+        title: isEn ? "Optimal Portfolio from Neural Analysis" : "Оптимальный портфель из нейросетевого анализа",
+        filename: "ai-optimal-portfolio.pdf",
+        rows: portfolioPositions,
+        columns: getPortfolioHoldingColumns<PortfolioPosition>({
+          name: isEn ? "Stock" : "Акция",
+          weight: isEn ? "Weight, %" : "Вес, %",
+        }),
+        metrics: metrics.map((item) => ({
+          label: localizeMetricLabel(item.label, isEn),
+          value: formatMetricDisplay(item.label, item.value),
+        })),
+        chartSvg: portfolioChartRef.current?.querySelector("svg"),
+      });
+    } catch (e) {
+      const message = e instanceof Error ? e.message : isEn ? "Failed to save PDF" : "Не удалось сохранить PDF";
+      showErrorDialog(message);
     }
   };
 
   return (
-    <div className="space-y-6">
-      <div className="bg-gradient-to-r from-orange-600 to-red-600 rounded-xl p-6 text-white shadow-lg">
-        <div className="flex items-center gap-3 mb-2">
-          <Brain className="w-8 h-8" />
-          <h1 className="text-3xl font-bold">{isEn ? "Neural Network Analysis" : "Анализ нейросети"}</h1>
-        </div>
-        <p className="text-orange-100">
-          {isEn ? "Neural model selection and training are performed on the server." : "Нейросетевая модель подбирается и обучается на сервере."}
-        </p>
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-        <div className="lg:col-span-1">
-          <div className="bg-white rounded-xl p-6 shadow-sm border border-slate-200">
-            <div className="flex items-center gap-2 mb-6">
-              <Settings className="w-5 h-5 text-orange-600" />
-              <h2 className="font-semibold text-slate-900">{isEn ? "Run Analysis" : "Запуск анализа"}</h2>
+    <>
+      <AnalysisPageFrame
+      hero={(
+        <PageHero
+          icon={Brain}
+          title={isEn ? "Neural Network Analysis" : "Анализ нейросети"}
+          description={isEn ? "Neural model selection and training are performed on the server." : "Нейросетевая модель подбирается и обучается на сервере."}
+          badge={isEn ? "Server-side training" : "Серверное обучение"}
+          accent="orange"
+        />
+      )}
+      sidebar={(
+        <AnalysisSidebarCard
+          icon={Settings}
+          title={isEn ? "Run Analysis" : "Запуск анализа"}
+          description={
+            isEn
+              ? "Cached fundamentals and shared optimizer settings feed the neural pipeline."
+              : "Кэш фундаментальных данных и общие настройки оптимизатора используются для нейросетевого пайплайна."
+          }
+          accent="orange"
+        >
+          <div className="space-y-4">
+            <div className="ui-surface-muted">
+              <p className="text-sm text-slate-700 dark:text-slate-300">{isEn ? "Source: fundamentals cache" : "Источник: кэш фундаментальных данных"}</p>
+              <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">{isEn ? "Records" : "Записей"}: {requestData.length}</p>
             </div>
+            <OptimizerSettingsFields
+              isEn={isEn}
+              settings={optimizerSettings}
+              onChange={setOptimizerSettings}
+            />
 
-            <div className="space-y-4">
-              <div className="rounded-lg border border-slate-200 p-3 bg-slate-50">
-                <p className="text-sm text-slate-700">{isEn ? "Source: fundamentals cache" : "Источник: кэш фундаментальных данных"}</p>
-                <p className="text-xs text-slate-500 mt-1">{isEn ? "Records" : "Записей"}: {requestData.length}</p>
+            {!hasData && (
+              <div className="rounded-2xl border border-amber-200 bg-amber-50 p-3 dark:border-amber-900 dark:bg-amber-950/20">
+                <p className="text-sm text-amber-800 dark:text-amber-300">
+                  {isEn ? "Cache is empty. Load fundamentals first." : "Кэш пуст. Сначала загрузите фундаментальные данные."}
+                </p>
               </div>
-              <OptimizerSettingsFields
-                isEn={isEn}
-                settings={optimizerSettings}
-                onChange={setOptimizerSettings}
-              />
+            )}
 
-              {!hasData && (
-                <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
-                  <p className="text-sm text-amber-800">
-                    {isEn ? "Cache is empty. Load fundamentals first." : "Кэш пуст. Сначала загрузите фундаментальные данные."}
-                  </p>
-                </div>
-              )}
-
-              {error && (
-                <div className="bg-red-50 border border-red-200 rounded-lg p-3">
-                  <p className="text-sm text-red-700 break-words">{error}</p>
-                </div>
-              )}
-
-              <button
-                onClick={runAnalysis}
-                disabled={!hasData || !requestData.length || isRunning}
-                className="w-full bg-gradient-to-r from-orange-600 to-red-600 text-white py-3 rounded-lg font-medium hover:from-orange-700 hover:to-red-700 transition-all shadow-md hover:shadow-lg flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                <Play className="w-5 h-5" />
-                {isRunning ? (isEn ? "Running..." : "Выполняется...") : (isEn ? "Run Analysis" : "Запустить анализ")}
-              </button>
-            </div>
+            <button
+              onClick={runAnalysis}
+              disabled={!hasData || !requestData.length || isRunning}
+              className="ui-primary-button w-full bg-gradient-to-r from-orange-600 to-red-600 hover:from-orange-700 hover:to-red-700"
+            >
+              <Play className="h-5 w-5" />
+              {isRunning ? (isEn ? "Running..." : "Выполняется...") : (isEn ? "Run Analysis" : "Запустить анализ")}
+            </button>
           </div>
-        </div>
-
-        <div className="lg:col-span-3 space-y-6">
+        </AnalysisSidebarCard>
+      )}
+    >
           {isRunning && (
             <AnalysisRunningIndicator
               title={isEn ? "Running neural network analysis" : "Выполняем нейросетевой анализ"}
@@ -540,24 +575,26 @@ export function NeuralNetworkAnalysis() {
           )}
 
           {!!metrics.length && (
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <MetricGrid>
               {metrics.map((m) => (
-                <div key={m.label} className="bg-white rounded-xl p-4 shadow-sm border border-slate-200">
-                  <div className="text-sm text-slate-600 mb-1 flex items-center gap-1">
-                    <span>{localizeMetricLabel(m.label, isEn)}</span>
-                    {getMetricTooltip(m.label, isEn) && (
-                      <MetricTooltip text={getMetricTooltip(m.label, isEn) ?? ""} />
-                    )}
-                  </div>
-                  <div className="text-2xl font-semibold text-slate-900">{formatMetricDisplay(m.label, m.value)}</div>
-                </div>
+                <MetricCard
+                  key={m.label}
+                  label={(
+                    <>
+                      <span>{localizeMetricLabel(m.label, isEn)}</span>
+                      {getMetricTooltip(m.label, isEn) && (
+                        <MetricTooltip text={getMetricTooltip(m.label, isEn) ?? ""} />
+                      )}
+                    </>
+                  )}
+                  value={formatMetricDisplay(m.label, m.value)}
+                />
               ))}
-            </div>
+            </MetricGrid>
           )}
 
           {!!trainingHistory.length && (
-            <div className="bg-white rounded-xl p-6 shadow-sm border border-slate-200">
-              <h3 className="font-semibold text-slate-900 mb-4">{isEn ? "Training History" : "История обучения"}</h3>
+            <SectionCard title={isEn ? "Training History" : "История обучения"}>
               <ResponsiveContainer width="100%" height={320}>
                 <LineChart data={trainingHistory}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
@@ -569,149 +606,96 @@ export function NeuralNetworkAnalysis() {
                   <Line type="monotone" dataKey="valLoss" name={isEn ? "Val Loss" : "Val Loss"} stroke="#ef4444" strokeWidth={2} dot={false} />
                 </LineChart>
               </ResponsiveContainer>
-            </div>
+            </SectionCard>
           )}
 
           {!!portfolioStrategies.length && (
-            <div className="bg-white rounded-xl p-6 shadow-sm border border-slate-200">
-              <h3 className="font-semibold text-slate-900 mb-4">{isEn ? "Portfolio Strategies" : "Стратегии портфеля"}</h3>
-              <div className="overflow-x-auto">
-                <table className="w-full min-w-[720px] text-sm [&_th]:whitespace-nowrap [&_td]:whitespace-nowrap">
+            <SectionCard title={isEn ? "Portfolio Strategies" : "Стратегии портфеля"}>
+              <div className="ui-table-shell overflow-x-auto">
+                <table className="ui-data-table">
                   <thead>
-                    <tr className="text-left border-b border-slate-200">
-                      <th className="py-2 pr-3">{isEn ? "Strategy" : "Стратегия"}</th>
-                      <th className="py-2 pr-3">Expected return</th>
-                      <th className="py-2 pr-3">Volatility</th>
-                      <th className="py-2 pr-3">Sharpe</th>
-                      <th className="py-2 pr-3">Diversification</th>
-                      <th className="py-2 pr-3">{isEn ? "Positions" : "Позиций"}</th>
+                    <tr>
+                      <th>{isEn ? "Strategy" : "Стратегия"}</th>
+                      <th>Expected return</th>
+                      <th>Volatility</th>
+                      <th>Sharpe</th>
+                      <th>Diversification</th>
+                      <th>{isEn ? "Positions" : "Позиций"}</th>
                     </tr>
                   </thead>
                   <tbody>
                     {portfolioStrategies.map((s) => (
-                      <tr key={s.key} className="border-b border-slate-100">
-                        <td className="py-2 pr-3 font-medium text-slate-900">{s.name}</td>
-                        <td className="py-2 pr-3 text-slate-700">{Number.isFinite(s.expectedReturn) ? s.expectedReturn.toFixed(4) : "-"}</td>
-                        <td className="py-2 pr-3 text-slate-700">{Number.isFinite(s.risk) ? s.risk.toFixed(4) : "-"}</td>
-                        <td className="py-2 pr-3 text-slate-700">{Number.isFinite(s.sharpe) ? s.sharpe.toFixed(4) : "-"}</td>
-                        <td className="py-2 pr-3 text-slate-700">{Number.isFinite(s.diversification) ? s.diversification.toFixed(4) : "-"}</td>
-                        <td className="py-2 pr-3 text-slate-700">{s.assetsCount}</td>
+                      <tr key={s.key}>
+                        <td className="font-medium text-slate-900 dark:text-slate-100">{s.name}</td>
+                        <td>{Number.isFinite(s.expectedReturn) ? s.expectedReturn.toFixed(4) : "-"}</td>
+                        <td>{Number.isFinite(s.risk) ? s.risk.toFixed(4) : "-"}</td>
+                        <td>{Number.isFinite(s.sharpe) ? s.sharpe.toFixed(4) : "-"}</td>
+                        <td>{Number.isFinite(s.diversification) ? s.diversification.toFixed(4) : "-"}</td>
+                        <td>{s.assetsCount}</td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
               </div>
-            </div>
+            </SectionCard>
           )}
 
           {(!!portfolioPositions.length || portfolioAssetsCount > 0) && (
-            <div className="bg-white rounded-xl p-6 shadow-sm border border-slate-200">
-              <div className="flex items-center justify-between gap-3 mb-4">
+            <SectionCard
+              title={isEn ? "Optimal Portfolio from Neural Analysis" : "Оптимальный портфель из нейросетевого анализа"}
+              description={
+                portfolioAssetsCount > 0
+                  ? (
+                      <>
+                        {isEn ? "Assets in portfolio" : "Количество активов в портфеле"}:{" "}
+                        <span className="font-semibold text-slate-900 dark:text-slate-100">{portfolioAssetsCount}</span>
+                      </>
+                    )
+                  : undefined
+              }
+              action={(
                 <div className="flex items-center gap-2">
-                  <Trophy className="w-5 h-5 text-amber-500" />
-                  <h3 className="font-semibold text-slate-900">
-                    {isEn ? "Optimal Portfolio from Neural Analysis" : "Оптимальный портфель из нейросетевого анализа"}
-                  </h3>
-                </div>
-                <div className="flex items-center gap-2">
+                  <button
+                    onClick={exportPortfolioToXlsx}
+                    disabled={!portfolioPositions.length}
+                    className="ui-secondary-button px-3 py-2 text-xs"
+                  >
+                    <FileSpreadsheet className="h-4 w-4" />
+                    XLSX
+                  </button>
+                  <button
+                    onClick={exportPortfolioToPdf}
+                    disabled={!portfolioPositions.length}
+                    className="ui-secondary-button px-3 py-2 text-xs"
+                  >
+                    <FileText className="h-4 w-4" />
+                    PDF
+                  </button>
                   <button
                     onClick={savePortfolioChartPng}
                     disabled={!portfolioPositions.length}
-                    className="inline-flex items-center gap-1 px-3 py-2 text-xs rounded-md border border-slate-300 text-slate-700 disabled:opacity-50"
+                    className="ui-secondary-button px-3 py-2 text-xs"
                   >
-                    <ImageDown className="w-4 h-4" />
+                    <ImageDown className="h-4 w-4" />
                     PNG
                   </button>
-                  <button
-                    onClick={exportPortfolioToExcel}
-                    disabled={!portfolioPositions.length}
-                    className="inline-flex items-center gap-1 px-3 py-2 text-xs rounded-md border border-slate-300 text-slate-700 disabled:opacity-50"
-                  >
-                    <Download className="w-4 h-4" />
-                    Excel
-                  </button>
                 </div>
-              </div>
-
-              {portfolioAssetsCount > 0 && (
-                <p className="text-sm text-slate-600 mb-4">
-                  {isEn ? "Assets in portfolio" : "Количество активов в портфеле"}:{" "}
-                  <span className="font-semibold text-slate-900">{portfolioAssetsCount}</span>
-                </p>
               )}
-
+            >
               {!!portfolioPositions.length && (
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                  <div className="h-72" ref={portfolioChartRef}>
-                    <ResponsiveContainer width="100%" height="100%">
-                      <PieChart>
-                        <Pie
-                          data={portfolioPositions}
-                          dataKey="weight"
-                          nameKey="ticker"
-                          cx="50%"
-                          cy="50%"
-                          outerRadius={105}
-                          labelLine={false}
-                          label={({ ticker, weight }) => (Number(weight) >= 6 ? `${ticker}: ${Number(weight).toFixed(1)}%` : "")}
-                        >
-                          {portfolioPositions.map((row, idx) => (
-                            <Cell key={row.ticker} fill={palette[idx % palette.length]} />
-                          ))}
-                        </Pie>
-                        <Tooltip formatter={(v: number) => `${Number(v).toFixed(2)}%`} />
-                      </PieChart>
-                    </ResponsiveContainer>
-                  </div>
-
-                  <div className="overflow-x-auto">
-                    <table className="w-full min-w-[860px] text-sm [&_th]:whitespace-nowrap [&_td]:whitespace-nowrap">
-                      <thead>
-                        <tr className="text-left border-b border-slate-200">
-                          <th className="py-2 pr-3">Ticker</th>
-                          <th className="py-2 pr-3">{isEn ? "Company" : "Компания"}</th>
-                          <th className="py-2 pr-3">{isEn ? "Weight, %" : "Вес, %"}</th>
-                          <th className="py-2 pr-3">Return</th>
-                          <th className="py-2 pr-3">Risk</th>
-                          <th className="py-2 pr-3">Sharpe</th>
-                          <th className="py-2 pr-3">Sortino</th>
-                          <th className="py-2 pr-3">VaR</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {portfolioPositions.map((row) => (
-                          <tr key={`${row.ticker}-${row.name}`} className="border-b border-slate-100">
-                            <td className="py-2 pr-3 font-medium text-slate-900">{row.ticker}</td>
-                            <td className="py-2 pr-3 text-slate-700">{row.name}</td>
-                            <td className="py-2 pr-3 text-slate-700">{row.weight.toFixed(2)}</td>
-                            <td className="py-2 pr-3 text-slate-700">
-                              {Number.isFinite(row.expectedReturn) ? row.expectedReturn.toFixed(4) : "-"}
-                            </td>
-                            <td className="py-2 pr-3 text-slate-700">
-                              {Number.isFinite(row.risk) ? row.risk.toFixed(4) : "-"}
-                            </td>
-                            <td className="py-2 pr-3 text-slate-700">
-                              {Number.isFinite(row.sharpe) ? row.sharpe.toFixed(4) : "-"}
-                            </td>
-                            <td className="py-2 pr-3 text-slate-700">
-                              {Number.isFinite(row.sortino) ? row.sortino?.toFixed(4) : "-"}
-                            </td>
-                            <td className="py-2 pr-3 text-slate-700">
-                              {formatVarPercent(numberOr(row.value_at_risk, NaN))}
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
+                <PortfolioHoldingsPanel
+                  rows={portfolioPositions}
+                  palette={palette}
+                  chartRef={portfolioChartRef}
+                  companyLabel={isEn ? "Stock" : "Акция"}
+                  weightLabel={isEn ? "Weight, %" : "Вес, %"}
+                />
               )}
-            </div>
+            </SectionCard>
           )}
 
           {!!featureImportance.length && (
-            <div className="bg-white rounded-xl p-6 shadow-sm border border-slate-200">
-              <h3 className="font-semibold text-slate-900 mb-4">{isEn ? "Feature Importance" : "Важность признаков"}</h3>
+            <SectionCard title={isEn ? "Feature Importance" : "Важность признаков"}>
               <ResponsiveContainer width="100%" height={300}>
                 <BarChart data={featureImportance} layout="vertical" margin={{ top: 5, right: 30, left: 90, bottom: 5 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
@@ -725,7 +709,7 @@ export function NeuralNetworkAnalysis() {
                   </Bar>
                 </BarChart>
               </ResponsiveContainer>
-            </div>
+            </SectionCard>
           )}
 
           {/*{!!serverKeys.length && (
@@ -735,9 +719,20 @@ export function NeuralNetworkAnalysis() {
               </p>
             </div>
           )}*/}
-        </div>
-      </div>
-    </div>
+      </AnalysisPageFrame>
+
+      <AppErrorDialog
+        message={errorDialogMessage}
+        onClose={() => setErrorDialogMessage(null)}
+        title={isEn ? "Analysis Error" : "Ошибка анализа"}
+        description={
+          isEn
+            ? "The request could not be completed. Check the input data and try again."
+            : "Не удалось обработать запрос. Проверьте данные и попробуйте ещё раз."
+        }
+        closeLabel={isEn ? "Close" : "Закрыть"}
+      />
+    </>
   );
 }
 

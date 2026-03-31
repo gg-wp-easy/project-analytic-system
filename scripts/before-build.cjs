@@ -1,72 +1,70 @@
-// scripts/before-build.js
-const fs = require('fs');
-const path = require('path');
-const { execSync } = require('child_process');
+const fs = require("fs");
+const path = require("path");
+const { execSync } = require("child_process");
 
-exports.default = async function(context) {
-  console.log('🔍 Проверка перед сборкой...');
-  
-  // Проверяем наличие серверного бинарника
+exports.default = async function beforeBuild() {
+  console.log("Checking project state before packaging...");
+
   await checkServerBinary();
-  
-  // Проверяем версии зависимостей
   await checkDependencies();
-  
-  // Проверяем иконки
   await checkIcons();
-  
-  console.log('✅ Проверки пройдены');
+
+  console.log("Pre-build checks completed.");
 };
 
+if (require.main === module) {
+  exports.default().catch((error) => {
+    console.error("Pre-build checks failed:", error.message);
+    process.exit(1);
+  });
+}
+
 async function checkServerBinary() {
-  const releasesDir = path.join(process.cwd(), 'server-analytic-system', 'dist', 'releases');
-  
+  const releasesDir = path.join(
+    process.cwd(),
+    "server-analytic-system",
+    "dist",
+    "releases",
+  );
+
   if (!fs.existsSync(releasesDir)) {
-    console.warn('⚠️  Директория сервера не найдена. Сервер не будет включен в сборку');
+    console.warn("Server releases directory was not found.");
     return;
   }
-  
+
   const files = fs.readdirSync(releasesDir);
   if (files.length === 0) {
-    console.warn('⚠️  Нет собранных серверных бинарников');
+    console.warn("No packaged server binaries were found.");
   } else {
-    console.log(`  ✓ Найдено ${files.length} серверных файлов`);
+    console.log(`  Found ${files.length} server release files.`);
   }
 }
 
 async function checkDependencies() {
-  const packageJson = JSON.parse(fs.readFileSync('package.json', 'utf8'));
-  const deps = { ...packageJson.dependencies, ...packageJson.devDependencies };
-  
-  console.log('  ✓ Проверка зависимостей');
-  
-  // Проверяем наличие уязвимостей
+  console.log("  Checking dependencies...");
+
   try {
-    execSync('npm audit --production', { stdio: 'pipe' });
-    console.log('  ✓ Уязвимостей не найдено');
-  } catch (error) {
-    console.warn('⚠️  Найдены уязвимости в зависимостях');
+    execSync("npm audit --production", { stdio: "pipe" });
+    console.log("  No production audit issues reported.");
+  } catch {
+    console.warn("  npm audit reported dependency issues.");
   }
 }
 
 async function checkIcons() {
-  const requiredIcons = {
-    win: 'build/icon.ico',
-    linux: 'build/icon.png',
-    appx: ['build/logo.png', 'build/store-logo.png']
-  };
-  
   const platform = process.platform;
-  
-  if (platform === 'win32' || platform === 'win64') {
-    if (!fs.existsSync(requiredIcons.win)) {
-      throw new Error(`❌ Иконка не найдена: ${requiredIcons.win}`);
-    }
-  } else if (platform === 'linux') {
-    if (!fs.existsSync(requiredIcons.linux)) {
-      throw new Error(`❌ Иконка не найдена: ${requiredIcons.linux}`);
+  const filesToCheck = [
+    "build/icons/icon.ico",
+    "electron/icon.png",
+    ...(platform === "win32" ? ["build/splash.bmp"] : []),
+    ...(platform === "linux" ? ["build/icons/256x256.png"] : []),
+  ];
+
+  for (const iconPath of filesToCheck) {
+    if (!fs.existsSync(iconPath)) {
+      throw new Error(`Required icon asset is missing: ${iconPath}`);
     }
   }
-  
-  console.log('  ✓ Иконки проверены');
+
+  console.log("  Icon assets are ready.");
 }
