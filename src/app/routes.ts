@@ -1,5 +1,5 @@
 import { createElement } from "react";
-import { createBrowserRouter } from "react-router-dom";
+import { createBrowserRouter, createHashRouter } from "react-router-dom";
 import { Root } from "./components/Root";
 import { Dashboard } from "./components/Dashboard";
 import { ClusterAnalysis } from "./components/ClusterAnalysis";
@@ -10,7 +10,7 @@ import { FundamentalsDetailsPage, FundamentalsPage } from "../pages/fundamentals
 import { NotFound } from "./components/NotFound";
 import { RouteError } from "./components/RouteError";
 
-export const router = createBrowserRouter([
+const routes = [
   {
     path: "/",
     Component: Root,
@@ -26,5 +26,12 @@ export const router = createBrowserRouter([
       { path: "*", Component: NotFound },
     ],
   },
-]);
+];
+
+const useHashRouter =
+  typeof window !== "undefined" && window.location.protocol === "file:";
+
+export const router = useHashRouter
+  ? createHashRouter(routes)
+  : createBrowserRouter(routes);
 
