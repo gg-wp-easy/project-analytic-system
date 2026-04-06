@@ -11,7 +11,10 @@ const crypto = require('crypto');
 async function protectAsar() {
   console.log('🔒 Запуск защиты приложения...');
   
-  const releaseDir = path.join(process.cwd(), 'release');
+  const releaseDir = process.env.ELECTRON_OUTPUT_DIR
+    ? path.resolve(process.env.ELECTRON_OUTPUT_DIR)
+    : path.join(process.cwd(), 'release');
+  console.log(`Using release directory: ${releaseDir}`);
   if (!fs.existsSync(releaseDir)) {
     console.log('❌ Директория release не найдена');
     return;

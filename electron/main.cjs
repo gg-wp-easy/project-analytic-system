@@ -48,10 +48,22 @@ const isDev = !app.isPackaged;
 const SERVER_HOST = "127.0.0.1";
 const SERVER_PORT = 8000;
 const SERVER_HEALTH_URL = `http://${SERVER_HOST}:${SERVER_PORT}/health`;
+const APP_ID = "com.invest.analytics.desktop";
 
 let splashWindow = null;
 let serverProcess = null;
 let serverManagedByApp = false;
+
+function resolveWindowIconPath() {
+  const iconName = process.platform === "win32"
+    ? "icon.ico"
+    : process.platform === "darwin"
+      ? "icon.icns"
+      : "icon.png";
+
+  const iconPath = path.join(__dirname, iconName);
+  return fs.existsSync(iconPath) ? iconPath : undefined;
+}
 
 function pingServerHealth() {
   return new Promise((resolve) => {
@@ -231,6 +243,7 @@ async function ensureServerService() {
 }
 
 function createSplashWindow() {
+  const iconPath = resolveWindowIconPath();
   splashWindow = new BrowserWindow({
     width: 520,
     height: 320,
@@ -242,6 +255,7 @@ function createSplashWindow() {
     alwaysOnTop: true,
     center: true,
     autoHideMenuBar: true,
+    icon: iconPath,
     webPreferences: {
       contextIsolation: true,
       nodeIntegration: false,
@@ -256,6 +270,7 @@ function createSplashWindow() {
 }
 
 function createMainWindow() {
+  const iconPath = resolveWindowIconPath();
   const win = new BrowserWindow({
     width: 1400,
     height: 900,
@@ -263,7 +278,7 @@ function createMainWindow() {
     minHeight: 700,
     show: false,
     autoHideMenuBar: true,
-    icon: path.join(__dirname, 'icon.png'),
+    icon: iconPath,
     webPreferences: {
       preload: path.join(__dirname, "preload.cjs"),
       contextIsolation: true,
@@ -293,6 +308,10 @@ function createMainWindow() {
 }
 
 app.whenReady().then(async () => {
+  if (process.platform === "win32") {
+    app.setAppUserModelId(APP_ID);
+  }
+
   createSplashWindow();
 
   try {

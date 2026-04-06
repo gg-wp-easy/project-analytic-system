@@ -11,6 +11,8 @@ const BUILD_DIR = path.join(PROJECT_ROOT, "build");
 const ICONS_DIR = path.join(BUILD_DIR, "icons");
 const ELECTRON_DIR = path.join(PROJECT_ROOT, "electron");
 const RUNTIME_ICON = path.join(ELECTRON_DIR, "icon.png");
+const WINDOWS_RUNTIME_ICON = path.join(ELECTRON_DIR, "icon.ico");
+const MAC_RUNTIME_ICON = path.join(ELECTRON_DIR, "icon.icns");
 const SPLASH_IMAGE = path.join(BUILD_DIR, "splash.bmp");
 
 const LEGACY_ICON_FILES = [
@@ -86,6 +88,8 @@ function validateGeneratedIcons() {
 
 function syncRuntimeIcon() {
   fs.copyFileSync(path.join(ICONS_DIR, "256x256.png"), RUNTIME_ICON);
+  fs.copyFileSync(path.join(ICONS_DIR, "icon.ico"), WINDOWS_RUNTIME_ICON);
+  fs.copyFileSync(path.join(ICONS_DIR, "icon.icns"), MAC_RUNTIME_ICON);
 }
 
 async function createSplashImage() {
@@ -109,6 +113,8 @@ function printSummary() {
     path.join(ICONS_DIR, "512x512.png"),
     path.join(ICONS_DIR, "1024x1024.png"),
     RUNTIME_ICON,
+    WINDOWS_RUNTIME_ICON,
+    MAC_RUNTIME_ICON,
     SPLASH_IMAGE,
   ];
 

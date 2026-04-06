@@ -56,6 +56,8 @@ async function checkIcons() {
   const filesToCheck = [
     "build/icons/icon.ico",
     "electron/icon.png",
+    ...(platform === "win32" ? ["electron/icon.ico"] : []),
+    ...(platform === "darwin" ? ["electron/icon.icns"] : []),
     ...(platform === "win32" ? ["build/splash.bmp"] : []),
     ...(platform === "linux" ? ["build/icons/256x256.png"] : []),
   ];

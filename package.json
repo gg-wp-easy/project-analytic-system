@@ -5,22 +5,27 @@
   "version": "1.0.0",
   "type": "module",
   "main": "electron/main.cjs",
+  "author": {
+    "name": "Nikita Kaev",
+    "email": "nikitakaev25@gmail.com"
+  },
   "scripts": {
     "start": "electron .",
-    "build": "vite build",
+    "build": "vite build --configLoader native",
     "dev": "vite",
     "icons:create": "node scripts/create-icons.cjs",
     "prebuild": "npm run icons:create",
-    "server:build:win": "cd server-analytic-system && python -m venv .venv && .venv\\Scripts\\python -m pip install --upgrade pip && .venv\\Scripts\\python -m pip install -r requirements.txt && .venv\\Scripts\\python build.py --mode pyinstaller --target current --project-name server-analytic-system --clean",
+    "server:build:win": "powershell -ExecutionPolicy Bypass -File scripts/server-build-win.ps1",
     "server:build:linux": "cd server-analytic-system && python3 -m venv .venv && .venv/bin/python -m pip install --upgrade pip && .venv/bin/python -m pip install -r requirements.txt && .venv/bin/python build.py --mode pyinstaller --target current --project-name server-analytic-system --clean",
     "electron:dev": "concurrently -k \"vite\" \"wait-on tcp:5173 && electron .\"",
     "server:dev:win": "cd server-analytic-system && if exist .venv\\Scripts\\python.exe (.venv\\Scripts\\python main.py) else (python -m venv .venv && .venv\\Scripts\\python main.py)",
     "server:dev:linux": "cd server-analytic-system && if [ -f .venv/bin/python ]; then .venv/bin/python main.py; else python3 -m venv .venv && .venv/bin/python main.py; fi",
     "electron:dev:win": "set NODE_ENV=development && concurrently -k \"npm run server:dev:win\" \"npm run electron:dev\"",
     "electron:dev:linux": "export NODE_ENV=development && concurrently -k \"npm run server:dev:linux\" \"npm run electron:dev\"",
-    "electron:build:win": "npm run prebuild && npm run server:build:win && npm run build && node scripts/before-build.cjs && npx electron-builder --windows && node scripts/protect-asar.cjs",
+    "electron:build:win": "powershell -ExecutionPolicy Bypass -File scripts/electron-build-win.ps1",
+    "electron:build:win:msi": "powershell -ExecutionPolicy Bypass -File scripts/electron-build-win.ps1 -Msi",
     "electron:build:linux": "npm run prebuild && npm run server:build:linux && npm run build && node scripts/before-build.cjs && npx electron-builder --linux && node scripts/protect-asar.cjs",
-    "electron:build:win:store": "npm run prebuild && npm run server:build:win && npm run build && node scripts/before-build.cjs && npx electron-builder --windows --config.win.target=appx && node scripts/protect-asar.cjs",
+    "electron:build:win:store": "powershell -ExecutionPolicy Bypass -File scripts/electron-build-win.ps1 -Store",
     "electron:build:linux:deb": "npm run prebuild && npm run server:build:linux && npm run build && node scripts/before-build.cjs && npx electron-builder --linux deb && node scripts/protect-asar.cjs",
     "electron:build:linux:snap": "npm run prebuild && npm run server:build:linux && npm run build && node scripts/before-build.cjs && npx electron-builder --linux snap && node scripts/protect-asar.cjs",
     "protect:asar": "node scripts/protect-asar.cjs"
@@ -158,25 +163,11 @@
           "arch": [
             "x64"
           ]
-        },
-        {
-          "target": "appx",
-          "arch": [
-            "x64",
-            "arm64"
-          ]
-        },
-        {
-          "target": "msi",
-          "arch": [
-            "x64"
-          ]
         }
       ],
       "icon": "build/icons/icon.ico",
       "artifactName": "${productName}-Windows-${version}-${arch}.${ext}",
-      "verifyUpdateCodeSignature": false,
-      "signAndEditExecutable": false
+      "verifyUpdateCodeSignature": false
     },
     "nsis": {
       "oneClick": false,
