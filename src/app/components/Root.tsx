@@ -1,5 +1,5 @@
 import { Outlet, Link, useLocation } from "react-router-dom";
-import { TrendingUp, Network, GitBranch, Brain, Layers, Database, Menu, X, Sun, Moon } from "lucide-react";
+import { TrendingUp, Network, GitBranch, Brain, Layers, Database, Landmark, Menu, X, Sun, Moon } from "lucide-react";
 import { useState } from "react";
 import { useAppSettings } from "../context/AppSettingsContext";
 
@@ -7,6 +7,7 @@ export function Root() {
   const location = useLocation();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const { locale, setLocale, theme, toggleTheme, t } = useAppSettings();
+  const tx = (ru: string, en: string) => (locale === "en" ? en : ru);
 
   const navigation = [
     { name: t("nav.overview"), path: "/", icon: TrendingUp },
@@ -14,6 +15,7 @@ export function Root() {
     { name: t("nav.decisionTree"), path: "/decision-tree", icon: GitBranch },
     { name: t("nav.neuralNetwork"), path: "/neural-network", icon: Brain },
     { name: t("nav.hybrid"), path: "/hybrid", icon: Layers },
+    { name: tx("Анализ облигаций", "Bond Analysis"), path: "/bonds", icon: Landmark },
     { name: t("nav.fundamentals"), path: "/fundamentals", icon: Database },
   ];
 

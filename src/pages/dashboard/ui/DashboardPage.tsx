@@ -1,9 +1,10 @@
 import { Link } from "react-router-dom";
-import { Network, GitBranch, Brain, Layers, Database, ArrowRight, TrendingUp, Activity } from "lucide-react";
+import { Network, GitBranch, Brain, Layers, Database, Landmark, ArrowRight, TrendingUp, Activity } from "lucide-react";
 import { useAppSettings } from "../../../app/context/AppSettingsContext";
 
 export function Dashboard() {
-  const { t } = useAppSettings();
+  const { locale, t } = useAppSettings();
+  const tx = (ru: string, en: string) => (locale === "en" ? en : ru);
 
   const analysisTools = [
     {
@@ -35,6 +36,16 @@ export function Dashboard() {
       color: "from-cyan-500 to-blue-500",
     },
     {
+      title: tx("Анализ облигаций", "Bond Analysis"),
+      description: tx(
+        "Загрузка облигаций из T-Bank API на клиенте, локальный расчёт метрик и портфеля, полный список с пагинацией.",
+        "Client-side bond loading from the T-Bank API, local portfolio calculations, and the full universe with pagination.",
+      ),
+      path: "/bonds",
+      icon: Landmark,
+      color: "from-amber-500 to-orange-600",
+    },
+    {
       title: t("tool.fundamentals.title"),
       description: t("tool.fundamentals.description"),
       path: "/fundamentals",
@@ -42,6 +53,7 @@ export function Dashboard() {
       color: "from-slate-600 to-slate-800",
     },
   ];
+  const activeAnalysesCount = analysisTools.filter((tool) => tool.path !== "/fundamentals").length;
 
   return (
     <div className="space-y-8">
@@ -94,7 +106,7 @@ export function Dashboard() {
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <div className="bg-white dark:bg-slate-900 rounded-xl p-6 shadow-sm border border-slate-200 dark:border-slate-800">
           <div className="text-sm text-slate-600 dark:text-slate-400 mb-1">{t("dashboard.stats.activeAnalyses")}</div>
-          <div className="text-3xl font-semibold text-slate-900 dark:text-slate-100">4</div>
+          <div className="text-3xl font-semibold text-slate-900 dark:text-slate-100">{activeAnalysesCount}</div>
         </div>
         <div className="bg-white dark:bg-slate-900 rounded-xl p-6 shadow-sm border border-slate-200 dark:border-slate-800">
           <div className="text-sm text-slate-600 dark:text-slate-400 mb-1">{t("dashboard.stats.hybridModels")}</div>

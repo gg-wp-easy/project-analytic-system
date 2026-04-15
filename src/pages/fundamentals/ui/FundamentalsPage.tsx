@@ -5,8 +5,9 @@ import { useAppSettings } from "../../../app/context/AppSettingsContext";
 import { useFundamentals } from "../../../entities/fundamentals";
 import { Link } from "react-router-dom";
 import { MetricCard, MetricGrid, PageHero, SectionCard } from "../../../shared/ui/analysis-shell";
-import { formatFundamentalMetricValue } from "../../../shared/lib/format/fundamentals";
+import { formatFundamentalMetricValue, type FundamentalMetricKey } from "../../../shared/lib/format/fundamentals";
 import { AppErrorDialog } from "../../../shared/ui/app-error-dialog";
+import { FundamentalMetricLabel } from "../../../shared/ui/fundamentals/FundamentalMetricLabel";
 
 export function FundamentalsPage() {
   const { cache, isLoading, hasData, error, loadFundamentals, clearCache } = useFundamentals();
@@ -17,6 +18,18 @@ export function FundamentalsPage() {
   const [errorDialogMessage, setErrorDialogMessage] = useState<string | null>(null);
   const prevErrorRef = useRef<string | null>(null);
   const pageSize = 20;
+  const metricColumns: Array<{ metric: FundamentalMetricKey; label: string }> = [
+    { metric: "marketCapBn", label: t("fund.table.marketCap") },
+    { metric: "peRatio", label: t("fund.table.pe") },
+    { metric: "pbRatio", label: t("fund.table.pb") },
+    { metric: "roe", label: t("fund.table.roe") },
+    { metric: "dividendYield", label: t("fund.table.divYield") },
+    { metric: "beta", label: t("fund.table.beta") },
+    { metric: "roa", label: t("fund.table.roa") },
+    { metric: "netMargin", label: t("fund.table.netMargin") },
+    { metric: "netDebtToEbitda", label: t("fund.table.netDebtToEbitda") },
+    { metric: "totalDebt", label: t("fund.table.totalDebt") },
+  ];
 
   const filteredShares = useMemo(() => {
     const query = searchQuery.trim().toLowerCase();
@@ -122,7 +135,14 @@ export function FundamentalsPage() {
       </SectionCard>
 
       {hasData && !isLoading && (
-        <SectionCard title={t("fund.sampleTitle")}>
+        <SectionCard
+          title={t("fund.sampleTitle")}
+          description={
+            isEn
+              ? "Hover the help icon in the metric headers to see a quick explanation."
+              : "Наведите на значок подсказки в заголовке метрики, чтобы увидеть краткое объяснение."
+          }
+        >
           <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
             <input
               type="text"
@@ -139,16 +159,11 @@ export function FundamentalsPage() {
                   <th>{t("fund.table.ticker")}</th>
                   <th>{t("fund.table.name")}</th>
                   <th>{isEn ? "Details" : "Подробно"}</th>
-                  <th>{t("fund.table.marketCap")}</th>
-                  <th>{t("fund.table.pe")}</th>
-                  <th>{t("fund.table.pb")}</th>
-                  <th>{t("fund.table.roe")}</th>
-                  <th>{t("fund.table.divYield")}</th>
-                  <th>{t("fund.table.beta")}</th>
-                  <th>{t("fund.table.roa")}</th>
-                  <th>{t("fund.table.netMargin")}</th>
-                  <th>{t("fund.table.netDebtToEbitda")}</th>
-                  <th>{t("fund.table.totalDebt")}</th>
+                  {metricColumns.map((column) => (
+                    <th key={column.metric}>
+                      <FundamentalMetricLabel label={column.label} metric={column.metric} locale={locale} />
+                    </th>
+                  ))}
                 </tr>
               </thead>
               <tbody>
@@ -173,16 +188,11 @@ export function FundamentalsPage() {
                             {isEn ? "View" : "Смотреть"}
                           </Link>
                         </td>
-                        <td className="ui-cell-number">{formatFundamentalMetricValue("marketCapBn", f?.marketCapBn, locale)}</td>
-                        <td className="ui-cell-number">{formatFundamentalMetricValue("peRatio", f?.peRatio, locale)}</td>
-                        <td className="ui-cell-number">{formatFundamentalMetricValue("pbRatio", f?.pbRatio, locale)}</td>
-                        <td className="ui-cell-number">{formatFundamentalMetricValue("roe", f?.roe, locale)}</td>
-                        <td className="ui-cell-number">{formatFundamentalMetricValue("dividendYield", f?.dividendYield, locale)}</td>
-                        <td className="ui-cell-number">{formatFundamentalMetricValue("beta", f?.beta, locale)}</td>
-                        <td className="ui-cell-number">{formatFundamentalMetricValue("roa", f?.roa, locale)}</td>
-                        <td className="ui-cell-number">{formatFundamentalMetricValue("netMargin", f?.netMargin, locale)}</td>
-                        <td className="ui-cell-number">{formatFundamentalMetricValue("netDebtToEbitda", f?.netDebtToEbitda, locale)}</td>
-                        <td className="ui-cell-number">{formatFundamentalMetricValue("totalDebt", f?.totalDebt, locale)}</td>
+                        {metricColumns.map((column) => (
+                          <td key={column.metric} className="ui-cell-number">
+                            {formatFundamentalMetricValue(column.metric, f?.[column.metric], locale)}
+                          </td>
+                        ))}
                       </tr>
                     );
                   })

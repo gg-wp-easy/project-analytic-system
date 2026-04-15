@@ -1,16 +1,25 @@
+import { CircleHelp } from "lucide-react";
+import { Tooltip, TooltipContent, TooltipTrigger } from "../../../app/components/ui/tooltip";
+
 type MetricTooltipProps = {
   text: string;
 };
 
 export function MetricTooltip({ text }: MetricTooltipProps) {
   return (
-    <span className="relative inline-flex items-center group">
-      <span className="inline-flex h-4 w-4 items-center justify-center rounded-full border border-slate-300 dark:border-slate-600 text-[10px] text-slate-500 dark:text-slate-300">
-        ?
-      </span>
-      <span className="pointer-events-none absolute bottom-full left-1/2 z-50 mb-2 w-56 -translate-x-1/2 rounded-md bg-slate-900 px-2 py-1 text-[11px] text-white opacity-0 shadow-lg transition-opacity group-hover:opacity-100">
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <button
+          type="button"
+          className="inline-flex h-4 w-4 items-center justify-center rounded-full border border-slate-300 text-slate-500 transition-colors hover:border-slate-400 hover:text-slate-700 dark:border-slate-600 dark:text-slate-300 dark:hover:border-slate-500 dark:hover:text-slate-100"
+          aria-label="Metric explanation"
+        >
+          <CircleHelp className="h-3.5 w-3.5" />
+        </button>
+      </TooltipTrigger>
+      <TooltipContent side="top" sideOffset={8} className="max-w-80 px-3 py-2 text-[11px] leading-5">
         {text}
-      </span>
-    </span>
+      </TooltipContent>
+    </Tooltip>
   );
 }
