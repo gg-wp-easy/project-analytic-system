@@ -15,7 +15,7 @@ import {
   PieChart,
   Pie,
 } from "recharts";
-import { useFundamentals } from "../../../app/context/FundamentalsContext";
+import { useFundamentals } from "../../../entities/fundamentals";
 import { useAppSettings } from "../../../app/context/AppSettingsContext";
 import { OptimizerSettingsFields } from "../../../features/optimizer-settings/ui/OptimizerSettingsFields";
 import { submitOptimizerSettings, useOptimizerSettings } from "../../../features/optimizer-settings/model/optimizerSettings";
@@ -28,7 +28,12 @@ import type {
   ClusterPortfolioRow as PortfolioRow,
   ClusterStrategyPortfolio as StrategyPortfolio,
 } from "../../../features/cluster-analysis/model/types";
-import { formatMetricDisplay, getMetricTooltip, localizeMetricLabel } from "../../../shared/lib/analysis/metric-display";
+import {
+  formatMetricDisplay,
+  getMetricTooltip,
+  isVisibleAnalysisMetric,
+  localizeMetricLabel,
+} from "../../../shared/lib/analysis/metric-display";
 import {
   downloadAnalysisResultsAsPdf,
   downloadAnalysisResultsAsXlsx,
@@ -235,10 +240,6 @@ function extractMetrics(parsed: Record<string, unknown>, points: ClusterPoint[],
     { key: "volatility", label: "Volatility" },
     { key: "sharpe", label: "Sharpe" },
     { key: "sharpe_ratio", label: "Sharpe ratio" },
-    { key: "sortino", label: "Sortino" },
-    { key: "sortino_ratio", label: "Sortino Ratio" },
-    { key: "value_at_risk", label: "VaR" },
-    { key: "var", label: "VaR" },
     { key: "diversification_score", label: "Diversification" },
   ];
 
@@ -409,6 +410,7 @@ export function ClusterAnalysis() {
   const [summaryInfo, setSummaryInfo] = useState<AnalysisSummary | null>(null);
   const [bestPortfolioAssetsCount, setBestPortfolioAssetsCount] = useState(0);
   const portfolioChartRef = useRef<HTMLDivElement | null>(null);
+  const visibleMetrics = useMemo(() => metrics.filter((item) => isVisibleAnalysisMetric(item.label)), [metrics]);
   const showErrorDialog = (message: string) => {
     setError(message);
     setErrorDialogMessage(message);
@@ -436,7 +438,7 @@ export function ClusterAnalysis() {
       if (parsed.serverRaw && typeof parsed.serverRaw === "object") setServerRaw(parsed.serverRaw);
       if (Array.isArray(parsed.clusterData)) setClusterData(parsed.clusterData);
       if (Array.isArray(parsed.clusterGroups)) setClusterGroups(parsed.clusterGroups);
-      if (Array.isArray(parsed.metrics)) setMetrics(parsed.metrics);
+      if (Array.isArray(parsed.metrics)) setMetrics(parsed.metrics.filter((item) => isVisibleAnalysisMetric(item.label)));
       if (Array.isArray(parsed.optimalPortfolio)) setOptimalPortfolio(parsed.optimalPortfolio);
       if (Array.isArray(parsed.portfolioStrategies)) setPortfolioStrategies(parsed.portfolioStrategies);
       if (parsed.summaryInfo && typeof parsed.summaryInfo === "object") setSummaryInfo(parsed.summaryInfo);
@@ -519,7 +521,7 @@ export function ClusterAnalysis() {
         name: tx("Акция", "Stock"),
         weight: tx("Вес, %", "Weight, %"),
       }),
-      metrics: metrics.map((item) => ({
+      metrics: visibleMetrics.map((item) => ({
         label: localizeMetricLabel(item.label, isEn),
         value: formatMetricDisplay(item.label, item.value),
       })),
@@ -552,7 +554,7 @@ export function ClusterAnalysis() {
           name: tx("Акция", "Stock"),
           weight: tx("Вес, %", "Weight, %"),
         }),
-        metrics: metrics.map((item) => ({
+        metrics: visibleMetrics.map((item) => ({
           label: localizeMetricLabel(item.label, isEn),
           value: formatMetricDisplay(item.label, item.value),
         })),
@@ -728,9 +730,9 @@ export function ClusterAnalysis() {
             />
           )}
 
-          {!!metrics.length && (
+          {!!visibleMetrics.length && (
             <MetricGrid>
-              {metrics.map((m) => (
+              {visibleMetrics.map((m) => (
                 <MetricCard
                   key={m.label}
                   label={(

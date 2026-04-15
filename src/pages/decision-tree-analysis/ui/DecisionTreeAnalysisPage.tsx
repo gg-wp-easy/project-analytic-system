@@ -1,7 +1,7 @@
 ﻿import { useEffect, useMemo, useRef, useState } from "react";
 import { FileSpreadsheet, FileText, GitBranch, ImageDown, Play, Settings } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from "recharts";
-import { useFundamentals } from "../../../app/context/FundamentalsContext";
+import { useFundamentals } from "../../../entities/fundamentals";
 import { useAppSettings } from "../../../app/context/AppSettingsContext";
 import { OptimizerSettingsFields } from "../../../features/optimizer-settings/ui/OptimizerSettingsFields";
 import { submitOptimizerSettings, useOptimizerSettings } from "../../../features/optimizer-settings/model/optimizerSettings";
@@ -14,14 +14,19 @@ import type {
   DecisionTreePortfolioPosition as PortfolioPosition,
   DecisionTreeSectorAllocationItem as SectorAllocationItem,
 } from "../../../features/decision-tree-analysis/model/types";
-import { formatMetricDisplay, getMetricTooltip, localizeMetricLabel } from "../../../shared/lib/analysis/metric-display";
+import {
+  formatMetricDisplay,
+  getMetricTooltip,
+  isVisibleAnalysisMetric,
+  localizeMetricLabel,
+} from "../../../shared/lib/analysis/metric-display";
 import {
   downloadAnalysisResultsAsPdf,
   downloadAnalysisResultsAsXlsx,
   downloadSvgAsPng,
   getPortfolioHoldingColumns,
 } from "../../../shared/lib/export/download";
-import { formatPercentOrNumber, formatVarPercent } from "../../../shared/lib/format/finance";
+import { formatPercentOrNumber } from "../../../shared/lib/format/finance";
 import { numberOr } from "../../../shared/lib/number/numberOr";
 import {
   AnalysisPageFrame,
@@ -163,10 +168,6 @@ function extractPortfolioMetrics(parsed: Record<string, unknown>): MetricItem[] 
     { key: "expected_return", label: "Expected Return" },
     { key: "risk", label: "Risk" },
     { key: "sharpe_ratio", label: "Sharpe Ratio" },
-    { key: "sortino_ratio", label: "Sortino Ratio" },
-    { key: "sortino", label: "Sortino" },
-    { key: "value_at_risk", label: "VaR" },
-    { key: "var", label: "VaR" },
     { key: "diversification_score", label: "Diversification" },
   ];
 
@@ -176,12 +177,6 @@ function extractPortfolioMetrics(parsed: Record<string, unknown>): MetricItem[] 
       const value = numberOr(source[item.key], NaN);
       if (!Number.isFinite(value)) {
         return { label: item.label, value: "-" };
-      }
-      if (item.label === "VaR") {
-        return { label: item.label, value: formatVarPercent(value) };
-      }
-      if (item.label === "Sortino" || item.label === "Sortino Ratio") {
-        return { label: item.label, value: value.toFixed(4) };
       }
       return { label: item.label, value: formatMetricPercentOrNumber(value) };
     });
@@ -281,6 +276,7 @@ export function DecisionTreeAnalysis() {
   const [portfolioAssetsCount, setPortfolioAssetsCount] = useState(0);
   const [serverKeys, setServerKeys] = useState<string[]>([]);
   const portfolioChartRef = useRef<HTMLDivElement | null>(null);
+  const visibleMetrics = useMemo(() => metrics.filter((item) => isVisibleAnalysisMetric(item.label)), [metrics]);
   const showErrorDialog = (message: string) => {
     setError(message);
     setErrorDialogMessage(message);
@@ -303,7 +299,7 @@ export function DecisionTreeAnalysis() {
         serverKeys?: string[];
       };
       if (typeof parsed.error === "string" || parsed.error === null) setError(parsed.error);
-      if (Array.isArray(parsed.metrics)) setMetrics(parsed.metrics);
+      if (Array.isArray(parsed.metrics)) setMetrics(parsed.metrics.filter((item) => isVisibleAnalysisMetric(item.label)));
       if (Array.isArray(parsed.featureImportance)) setFeatureImportance(parsed.featureImportance);
       if (parsed.confusionMatrix && typeof parsed.confusionMatrix === "object") setConfusionMatrix(parsed.confusionMatrix);
       if (Array.isArray(parsed.portfolioPositions)) setPortfolioPositions(parsed.portfolioPositions);
@@ -450,7 +446,7 @@ export function DecisionTreeAnalysis() {
         name: isEn ? "Stock" : "Акция",
         weight: isEn ? "Weight, %" : "Вес, %",
       }),
-      metrics: metrics.map((item) => ({
+      metrics: visibleMetrics.map((item) => ({
         label: localizeMetricLabel(item.label, isEn),
         value: formatMetricDisplay(item.label, item.value),
       })),
@@ -483,7 +479,7 @@ export function DecisionTreeAnalysis() {
           name: isEn ? "Stock" : "Акция",
           weight: isEn ? "Weight, %" : "Вес, %",
         }),
-        metrics: metrics.map((item) => ({
+        metrics: visibleMetrics.map((item) => ({
           label: localizeMetricLabel(item.label, isEn),
           value: formatMetricDisplay(item.label, item.value),
         })),
@@ -558,9 +554,9 @@ export function DecisionTreeAnalysis() {
             />
           )}
 
-          {!!metrics.length && (
+          {!!visibleMetrics.length && (
             <MetricGrid>
-              {metrics.map((m) => (
+              {visibleMetrics.map((m) => (
                 <MetricCard
                   key={m.label}
                   label={(

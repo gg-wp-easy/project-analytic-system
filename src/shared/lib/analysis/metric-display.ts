@@ -112,6 +112,13 @@ function normalizeLabelKey(label: string): string {
   return label.trim().toLowerCase();
 }
 
+const hiddenAnalysisMetricLabels = new Set([
+  "sortino",
+  "sortino ratio",
+  "var",
+  "value at risk",
+]);
+
 function toNumber(value: string): number | null {
   const cleaned = value.trim().replace("%", "");
   const parsed = Number(cleaned);
@@ -143,6 +150,10 @@ export function getMetricTooltip(label: string, isEn: boolean): string | null {
     return null;
   }
   return isEn ? mapped.en : mapped.ru;
+}
+
+export function isVisibleAnalysisMetric(label: string): boolean {
+  return !hiddenAnalysisMetricLabels.has(normalizeLabelKey(label));
 }
 
 export function formatMetricDisplay(label: string, rawValue: string): string {

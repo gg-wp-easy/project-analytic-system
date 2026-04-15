@@ -21,10 +21,10 @@ export function Root() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-950 dark:to-slate-900">
-      <header className="bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 sticky top-0 z-50 shadow-sm">
+      <header className="sticky top-0 z-50 border-b border-slate-200 bg-white/95 shadow-sm backdrop-blur-sm dark:border-slate-800 dark:bg-slate-900/95">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center h-16 gap-2">
-            <div className="flex items-center gap-3">
+          <div className="flex min-h-[4.5rem] items-center justify-between gap-3 py-3">
+            <div className="flex items-center gap-3 sm:gap-4">
               <div className="bg-gradient-to-br from-blue-600 to-cyan-600 p-2 rounded-lg">
                 <TrendingUp className="w-6 h-6 text-white" />
               </div>
@@ -34,7 +34,7 @@ export function Root() {
               </div>
             </div>
 
-            <div className="hidden lg:flex items-center gap-2">
+            <div className="hidden lg:flex items-center gap-3">
               <button
                 type="button"
                 onClick={toggleTheme}
@@ -70,7 +70,7 @@ export function Root() {
             </button>
           </div>
 
-          <nav className="hidden lg:flex items-center gap-1 pb-3 overflow-x-auto">
+          <nav className="hidden lg:flex items-center gap-2 pb-4 pt-1 overflow-x-auto">
             {navigation.map((item) => {
               const Icon = item.icon;
               const isActive = location.pathname === item.path;
@@ -93,8 +93,8 @@ export function Root() {
         </div>
 
         {mobileMenuOpen && (
-          <div className="lg:hidden border-t border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900">
-            <div className="px-4 py-3 flex items-center gap-2">
+          <div className="lg:hidden border-t border-slate-200 bg-white/95 dark:border-slate-800 dark:bg-slate-900/95">
+            <div className="flex items-center gap-2 px-4 py-4">
               <button
                 type="button"
                 onClick={toggleTheme}
@@ -112,7 +112,7 @@ export function Root() {
                 <option value="en">{t("switch.langEn")}</option>
               </select>
             </div>
-            <nav className="px-4 pb-4 space-y-1">
+            <nav className="space-y-1 px-4 pb-5">
               {navigation.map((item) => {
                 const Icon = item.icon;
                 const isActive = location.pathname === item.path;

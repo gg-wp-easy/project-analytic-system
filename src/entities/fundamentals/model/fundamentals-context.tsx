@@ -90,6 +90,10 @@ const emptyCache: FundamentalsCache = {
   },
 };
 
+type FundamentalsContextGlobal = typeof globalThis & {
+  __fundamentalsContext__?: ReturnType<typeof createContext<FundamentalsContextValue | null>>;
+};
+
 function loadCacheFromStorage(): FundamentalsCache {
   if (typeof window === "undefined") {
     return emptyCache;
@@ -165,7 +169,14 @@ function saveCacheToStorage(cache: FundamentalsCache): void {
   }
 }
 
-const FundamentalsContext = createContext<FundamentalsContextValue | null>(null);
+// Reuse a single context instance across dev HMR / duplicated module paths.
+const fundamentalsContextGlobal = globalThis as FundamentalsContextGlobal;
+const FundamentalsContext =
+  fundamentalsContextGlobal.__fundamentalsContext__ ?? createContext<FundamentalsContextValue | null>(null);
+
+if (!fundamentalsContextGlobal.__fundamentalsContext__) {
+  fundamentalsContextGlobal.__fundamentalsContext__ = FundamentalsContext;
+}
 
 export function FundamentalsProvider({ children }: { children: ReactNode }) {
   const [cache, setCache] = useState<FundamentalsCache>(() => loadCacheFromStorage());

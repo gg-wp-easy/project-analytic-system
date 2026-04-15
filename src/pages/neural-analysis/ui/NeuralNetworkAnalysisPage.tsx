@@ -13,7 +13,7 @@ import {
   Line,
   Legend,
 } from "recharts";
-import { useFundamentals } from "../../../app/context/FundamentalsContext";
+import { useFundamentals } from "../../../entities/fundamentals";
 import { useAppSettings } from "../../../app/context/AppSettingsContext";
 import { OptimizerSettingsFields } from "../../../features/optimizer-settings/ui/OptimizerSettingsFields";
 import { submitOptimizerSettings, useOptimizerSettings } from "../../../features/optimizer-settings/model/optimizerSettings";
@@ -25,14 +25,19 @@ import type {
   NeuralPortfolioStrategy as PortfolioStrategy,
   NeuralTrainingPoint as TrainingPoint,
 } from "../../../features/neural-analysis/model/types";
-import { formatMetricDisplay, getMetricTooltip, localizeMetricLabel } from "../../../shared/lib/analysis/metric-display";
+import {
+  formatMetricDisplay,
+  getMetricTooltip,
+  isVisibleAnalysisMetric,
+  localizeMetricLabel,
+} from "../../../shared/lib/analysis/metric-display";
 import {
   downloadAnalysisResultsAsPdf,
   downloadAnalysisResultsAsXlsx,
   downloadSvgAsPng,
   getPortfolioHoldingColumns,
 } from "../../../shared/lib/export/download";
-import { formatPercentOrNumber, formatVarPercent } from "../../../shared/lib/format/finance";
+import { formatPercentOrNumber } from "../../../shared/lib/format/finance";
 import { numberOr } from "../../../shared/lib/number/numberOr";
 import {
   AnalysisPageFrame,
@@ -236,28 +241,11 @@ function extractMetrics(parsed: Record<string, unknown>): MetricItem[] {
     { key: "expected_return", label: "Expected Return" },
     { key: "volatility", label: "Volatility" },
     { key: "sharpe_ratio", label: "Sharpe Ratio" },
-    { key: "sortino_ratio", label: "Sortino Ratio" },
-    { key: "sortino", label: "Sortino" },
-    { key: "value_at_risk", label: "VaR" },
-    { key: "var", label: "VaR" },
     { key: "diversification_score", label: "Diversification" },
   ];
 
   for (const item of portfolioMapping) {
     if (item.key in maxSharpeMetrics) {
-      if (item.label === "VaR" || item.label === "Sortino" || item.label === "Sortino Ratio") {
-        const raw = numberOr(maxSharpeMetrics[item.key], NaN);
-        rows.push({
-          label: item.label,
-          value:
-            item.label === "VaR"
-              ? formatVarPercent(raw)
-              : Number.isFinite(raw)
-                ? raw.toFixed(4)
-                : "-",
-        });
-        continue;
-      }
       rows.push({
         label: item.label,
         value: formatMetricValue(maxSharpeMetrics[item.key]),
@@ -300,6 +288,7 @@ export function NeuralNetworkAnalysis() {
   const [portfolioAssetsCount, setPortfolioAssetsCount] = useState(0);
   const [serverKeys, setServerKeys] = useState<string[]>([]);
   const portfolioChartRef = useRef<HTMLDivElement | null>(null);
+  const visibleMetrics = useMemo(() => metrics.filter((item) => isVisibleAnalysisMetric(item.label)), [metrics]);
   const showErrorDialog = (message: string) => {
     setError(message);
     setErrorDialogMessage(message);
@@ -321,7 +310,7 @@ export function NeuralNetworkAnalysis() {
         serverKeys?: string[];
       };
       if (typeof parsed.error === "string" || parsed.error === null) setError(parsed.error);
-      if (Array.isArray(parsed.metrics)) setMetrics(parsed.metrics);
+      if (Array.isArray(parsed.metrics)) setMetrics(parsed.metrics.filter((item) => isVisibleAnalysisMetric(item.label)));
       if (Array.isArray(parsed.featureImportance)) setFeatureImportance(parsed.featureImportance);
       if (Array.isArray(parsed.portfolioStrategies)) setPortfolioStrategies(parsed.portfolioStrategies);
       if (Array.isArray(parsed.portfolioPositions)) setPortfolioPositions(parsed.portfolioPositions);
@@ -467,7 +456,7 @@ export function NeuralNetworkAnalysis() {
         name: isEn ? "Stock" : "Акция",
         weight: isEn ? "Weight, %" : "Вес, %",
       }),
-      metrics: metrics.map((item) => ({
+      metrics: visibleMetrics.map((item) => ({
         label: localizeMetricLabel(item.label, isEn),
         value: formatMetricDisplay(item.label, item.value),
       })),
@@ -500,7 +489,7 @@ export function NeuralNetworkAnalysis() {
           name: isEn ? "Stock" : "Акция",
           weight: isEn ? "Weight, %" : "Вес, %",
         }),
-        metrics: metrics.map((item) => ({
+        metrics: visibleMetrics.map((item) => ({
           label: localizeMetricLabel(item.label, isEn),
           value: formatMetricDisplay(item.label, item.value),
         })),
@@ -574,9 +563,9 @@ export function NeuralNetworkAnalysis() {
             />
           )}
 
-          {!!metrics.length && (
+          {!!visibleMetrics.length && (
             <MetricGrid>
-              {metrics.map((m) => (
+              {visibleMetrics.map((m) => (
                 <MetricCard
                   key={m.label}
                   label={(
