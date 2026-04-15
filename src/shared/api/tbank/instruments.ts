@@ -1,5 +1,11 @@
 const SHARES_ENDPOINT =
   "https://invest-public-api.tbank.ru/rest/tinkoff.public.invest.api.contract.v1.InstrumentsService/Shares";
+const INDICATIVES_ENDPOINT =
+  "https://invest-public-api.tbank.ru/rest/tinkoff.public.invest.api.contract.v1.InstrumentsService/Indicatives";
+const BONDS_ENDPOINT =
+  "https://invest-public-api.tbank.ru/rest/tinkoff.public.invest.api.contract.v1.InstrumentsService/Bonds";
+const BOND_COUPONS_ENDPOINT =
+  "https://invest-public-api.tbank.ru/rest/tinkoff.public.invest.api.contract.v1.InstrumentsService/GetBondCoupons";
 const ASSET_FUNDAMENTALS_ENDPOINT =
   "https://invest-public-api.tbank.ru/rest/tinkoff.public.invest.api.contract.v1.InstrumentsService/GetAssetFundamentals";
 const CLOSE_PRICES_ENDPOINT =
@@ -21,6 +27,34 @@ export type TBankShare = {
   lot: number;
   currency: string;
   exchange: string;
+};
+
+export type TBankIndicative = {
+  figi: string;
+  uid: string;
+  ticker: string;
+  name: string;
+  exchange: string;
+  classCode: string;
+  instrumentKind: string;
+  buyAvailableFlag: boolean;
+  sellAvailableFlag: boolean;
+};
+
+export type TBankBond = {
+  figi: string;
+  uid: string;
+  ticker: string;
+  name: string;
+  currency: string;
+  sector: string;
+  maturityDate: string;
+  nominal: number;
+  aciValue: number;
+  couponQuantityPerYear: number;
+  floatingCouponFlag: boolean;
+  amortizationFlag: boolean;
+  liquidityFlag: boolean;
 };
 
 export type TBankFundamental = {
@@ -57,6 +91,17 @@ export type TBankCandle = {
   high: number;
   low: number;
   volume: number;
+};
+
+export type TBankBondCoupon = {
+  figi: string;
+  couponDate: string;
+  couponNumber: number;
+  payOneBond: number;
+  couponType: string;
+  couponStartDate: string;
+  couponEndDate: string;
+  couponPeriod: number;
 };
 
 function pickString(source: AnyRecord, keys: string[]): string {
@@ -193,6 +238,66 @@ function normalizeClosePriceItem(item: AnyRecord, nowIso: string): TBankClosePri
   };
 }
 
+function normalizeIndicativeItem(item: AnyRecord): TBankIndicative | null {
+  const figi = pickString(item, ["figi"]);
+  const uid = pickString(item, ["uid", "instrumentUid", "instrument_uid"]);
+  const ticker = pickString(item, ["ticker"]);
+  if (!ticker || !uid) {
+    return null;
+  }
+
+  return {
+    figi,
+    uid,
+    ticker,
+    name: pickString(item, ["name"]),
+    exchange: pickString(item, ["exchange"]),
+    classCode: pickString(item, ["classCode", "class_code"]),
+    instrumentKind: pickString(item, ["instrumentKind", "instrument_kind"]),
+    buyAvailableFlag: Boolean(item.buyAvailableFlag ?? item.buy_available_flag),
+    sellAvailableFlag: Boolean(item.sellAvailableFlag ?? item.sell_available_flag),
+  };
+}
+
+function normalizeBondItem(item: AnyRecord, nowIso: string): TBankBond | null {
+  const figi = pickString(item, ["figi"]);
+  const uid = pickString(item, ["uid", "instrumentUid", "instrument_uid"]);
+  const ticker = pickString(item, ["ticker"]);
+  const maturityDate = pickTimestampIso(item, ["maturityDate", "maturity_date"]) || nowIso;
+  if (!figi || !uid || !ticker) {
+    return null;
+  }
+
+  return {
+    figi,
+    uid,
+    ticker,
+    name: pickString(item, ["name"]),
+    currency: pickString(item, ["currency"]),
+    sector: pickString(item, ["sector"]),
+    maturityDate,
+    nominal: quotationToNumber(item.nominal ?? item.initialNominal ?? item.initial_nominal),
+    aciValue: quotationToNumber(item.aciValue ?? item.aci_value),
+    couponQuantityPerYear: pickNumber(item, ["couponQuantityPerYear", "coupon_quantity_per_year"]),
+    floatingCouponFlag: Boolean(item.floatingCouponFlag ?? item.floating_coupon_flag),
+    amortizationFlag: Boolean(item.amortizationFlag ?? item.amortization_flag),
+    liquidityFlag: Boolean(item.liquidityFlag ?? item.liquidity_flag),
+  };
+}
+
+function normalizeBondCouponItem(item: AnyRecord, figi: string, nowIso: string): TBankBondCoupon {
+  return {
+    figi: pickString(item, ["figi"]) || figi,
+    couponDate: pickTimestampIso(item, ["couponDate", "coupon_date"]) || nowIso,
+    couponNumber: pickNumber(item, ["couponNumber", "coupon_number"]),
+    payOneBond: quotationToNumber(item.payOneBond ?? item.pay_one_bond),
+    couponType: pickString(item, ["couponType", "coupon_type"]),
+    couponStartDate: pickTimestampIso(item, ["couponStartDate", "coupon_start_date"]) || nowIso,
+    couponEndDate: pickTimestampIso(item, ["couponEndDate", "coupon_end_date"]) || nowIso,
+    couponPeriod: pickNumber(item, ["couponPeriod", "coupon_period"]),
+  };
+}
+
 function normalizeCandleItem(item: AnyRecord, figi: string, nowIso: string): TBankCandle {
   return {
     figi,
@@ -292,6 +397,39 @@ export function createTBankInstrumentsApi(token?: string) {
       .filter((share) => share.currency.toUpperCase() === "RUB");
   }
 
+  async function fetchIndicatives(): Promise<TBankIndicative[]> {
+    const authToken = ensureToken();
+    const payload = await requestJson<AnyRecord>(INDICATIVES_ENDPOINT, authToken, {});
+    const instruments =
+      (Array.isArray(payload.instruments) && payload.instruments) ||
+      (Array.isArray(payload.items) && payload.items) ||
+      (Array.isArray(payload.data) && payload.data) ||
+      [];
+
+    return instruments
+      .map((raw) => normalizeIndicativeItem((raw ?? {}) as AnyRecord))
+      .filter((item): item is TBankIndicative => Boolean(item));
+  }
+
+  async function fetchBonds(): Promise<TBankBond[]> {
+    const authToken = ensureToken();
+    const payload = await requestJson<AnyRecord>(BONDS_ENDPOINT, authToken, {
+      instrumentStatus: "INSTRUMENT_STATUS_BASE",
+    });
+
+    const instruments =
+      (Array.isArray(payload.instruments) && payload.instruments) ||
+      (Array.isArray(payload.bonds) && payload.bonds) ||
+      (Array.isArray(payload.items) && payload.items) ||
+      (Array.isArray(payload.data) && payload.data) ||
+      [];
+
+    const nowIso = new Date().toISOString();
+    return instruments
+      .map((raw) => normalizeBondItem((raw ?? {}) as AnyRecord, nowIso))
+      .filter((bond): bond is TBankBond => Boolean(bond));
+  }
+
   async function fetchAssetFundamentals(shares: TBankShare[]): Promise<Record<string, TBankFundamental>> {
     const authToken = ensureToken();
     const assetUidToFigi = shares.reduce<Record<string, string>>((acc, share) => {
@@ -336,12 +474,13 @@ export function createTBankInstrumentsApi(token?: string) {
     return result;
   }
 
-  async function fetchClosePrices(shares: TBankShare[]): Promise<Record<string, TBankClosePrice[]>> {
+  async function fetchClosePricesByInstrumentIds(
+    instrumentIds: string[],
+  ): Promise<Record<string, TBankClosePrice[]>> {
     const authToken = ensureToken();
-    const instruments = shares
-      .map((share) => share.figi)
-      .filter((figi) => Boolean(figi))
-      .map((figi) => ({ instrumentId: figi }));
+    const instruments = instrumentIds
+      .filter((instrumentId) => Boolean(instrumentId))
+      .map((instrumentId) => ({ instrumentId }));
 
     if (instruments.length === 0) {
       return {};
@@ -380,6 +519,34 @@ export function createTBankInstrumentsApi(token?: string) {
     return result;
   }
 
+  async function fetchClosePrices(shares: TBankShare[]): Promise<Record<string, TBankClosePrice[]>> {
+    return fetchClosePricesByInstrumentIds(shares.map((share) => share.figi));
+  }
+
+  async function fetchBondCoupons(params: {
+    instrumentId: string;
+    from: string;
+    to: string;
+  }): Promise<TBankBondCoupon[]> {
+    const authToken = ensureToken();
+    const payload = await requestJson<AnyRecord>(BOND_COUPONS_ENDPOINT, authToken, {
+      instrumentId: params.instrumentId,
+      from: params.from,
+      to: params.to,
+    });
+
+    const rawItems =
+      (Array.isArray(payload.events) && payload.events) ||
+      (Array.isArray(payload.items) && payload.items) ||
+      (Array.isArray(payload.data) && payload.data) ||
+      [];
+
+    const nowIso = new Date().toISOString();
+    return rawItems.map((raw) =>
+      normalizeBondCouponItem((raw ?? {}) as AnyRecord, params.instrumentId, nowIso),
+    );
+  }
+
   async function fetchCandles(params: {
     figi: string;
     from: string;
@@ -408,11 +575,18 @@ export function createTBankInstrumentsApi(token?: string) {
 
   return {
     fetchShares,
+    fetchIndicatives,
+    fetchBonds,
     fetchAssetFundamentals,
     fetchClosePrices,
+    fetchClosePricesByInstrumentIds,
+    fetchBondCoupons,
     fetchCandles,
     endpoints: {
       shares: SHARES_ENDPOINT,
+      indicatives: INDICATIVES_ENDPOINT,
+      bonds: BONDS_ENDPOINT,
+      bondCoupons: BOND_COUPONS_ENDPOINT,
       assetFundamentals: ASSET_FUNDAMENTALS_ENDPOINT,
       closePrices: CLOSE_PRICES_ENDPOINT,
       candles: CANDLES_ENDPOINT,

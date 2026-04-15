@@ -5,6 +5,11 @@ import { Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YA
 import { useAppSettings } from "../../../app/context/AppSettingsContext";
 import { useFundamentals, type AssetFundamentalRecord, type ShareRecord } from "../../../entities/fundamentals";
 import { createTBankInstrumentsApi, type TBankCandle } from "../../../shared/api/tbank";
+import {
+  loadCapmAnalysis,
+  type CapmAdequacyLevel,
+  type CapmAnalysisResult,
+} from "../../../features/fundamentals-capm/model/capm";
 import { formatFundamentalMetricValue } from "../../../shared/lib/format/fundamentals";
 import { AppErrorDialog } from "../../../shared/ui/app-error-dialog";
 import { MetricCard, MetricGrid, PageHero, SectionCard } from "../../../shared/ui/analysis-shell";
@@ -51,7 +56,7 @@ const RANGE_CONFIG: Record<ChartRange, RangeConfig> = {
     },
     interval: "CANDLE_INTERVAL_DAY",
     limit: 45,
-    candleBucket: "week",
+    candleBucket: "raw",
   },
   "1Y": {
     from: (to) => {
@@ -176,6 +181,14 @@ function formatDateTime(value: string, locale: "ru" | "en"): string {
   }).format(new Date(value));
 }
 
+function formatCalendarDate(value: string, locale: "ru" | "en"): string {
+  return new Intl.DateTimeFormat(getLocaleCode(locale), {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  }).format(new Date(value));
+}
+
 function getRangeLabel(range: ChartRange, isEn: boolean): string {
   switch (range) {
     case "1D":
@@ -188,6 +201,64 @@ function getRangeLabel(range: ChartRange, isEn: boolean): string {
       return isEn ? "1 year" : "1 год";
     default:
       return range;
+  }
+}
+
+function formatPercentPoints(value: number | null | undefined, locale: "ru" | "en"): string {
+  if (typeof value !== "number" || !Number.isFinite(value)) {
+    return "-";
+  }
+  return formatPercent(value * 100, locale);
+}
+
+function formatCompactNumber(value: number | null | undefined, locale: "ru" | "en", digits = 2): string {
+  if (typeof value !== "number" || !Number.isFinite(value)) {
+    return "-";
+  }
+  return new Intl.NumberFormat(getLocaleCode(locale), {
+    minimumFractionDigits: digits,
+    maximumFractionDigits: digits,
+  }).format(value);
+}
+
+function getCapmAdequacyCopy(
+  level: CapmAdequacyLevel,
+  isEn: boolean,
+): { label: string; description: string; toneClass: string } {
+  switch (level) {
+    case "strong":
+      return {
+        label: isEn ? "Strong fit" : "Хорошая подгонка",
+        description: isEn
+          ? "The market factor explains a meaningful part of the stock's excess-return dynamics. For a one-factor CAPM on daily data, the model looks fairly adequate."
+          : "Рыночный фактор объясняет заметную часть динамики избыточной доходности акции. Для однофакторной CAPM на дневных данных модель выглядит достаточно адекватной.",
+        toneClass: "bg-emerald-500/12 text-emerald-700 dark:bg-emerald-500/16 dark:text-emerald-300",
+      };
+    case "moderate":
+      return {
+        label: isEn ? "Moderate fit" : "Средняя подгонка",
+        description: isEn
+          ? "The model captures part of market sensitivity, but a large share of stock moves still comes from company-specific factors."
+          : "Модель улавливает часть рыночной чувствительности, но заметная доля движений акции всё ещё определяется собственными факторами компании.",
+        toneClass: "bg-amber-500/12 text-amber-700 dark:bg-amber-500/16 dark:text-amber-300",
+      };
+    case "insufficient":
+      return {
+        label: isEn ? "Insufficient data" : "Недостаточно данных",
+        description: isEn
+          ? "There are too few overlapping observations to judge the CAPM fit reliably."
+          : "Пересекающихся наблюдений слишком мало, чтобы надёжно оценивать качество CAPM.",
+        toneClass: "bg-slate-500/12 text-slate-700 dark:bg-slate-500/16 dark:text-slate-300",
+      };
+    case "weak":
+    default:
+      return {
+        label: isEn ? "Weak fit" : "Слабая подгонка",
+        description: isEn
+          ? "The market factor explains only a small share of the stock's behavior, so CAPM should be treated as a rough directional estimate."
+          : "Рыночный фактор объясняет лишь небольшую часть поведения акции, поэтому CAPM здесь лучше воспринимать как грубую ориентировочную оценку.",
+        toneClass: "bg-rose-500/12 text-rose-700 dark:bg-rose-500/16 dark:text-rose-300",
+      };
   }
 }
 
@@ -381,7 +452,9 @@ function CandlestickChart({
   const marginRight = 18;
   const marginBottom = 32;
   const marginLeft = 56;
-  const plotWidth = Math.max(width - marginLeft - marginRight, 1);
+  const minStep = range === "1Y" ? 3.4 : range === "1M" ? 11 : range === "1W" ? 18 : 22;
+  const chartWidth = Math.max(width, marginLeft + marginRight + Math.max(data.length, 1) * minStep);
+  const plotWidth = Math.max(chartWidth - marginLeft - marginRight, 1);
   const plotHeight = Math.max(height - marginTop - marginBottom, 1);
 
   const { minPrice, maxPrice } = useMemo(() => {
@@ -407,7 +480,7 @@ function CandlestickChart({
   );
 
   const step = data.length > 1 ? plotWidth / data.length : plotWidth;
-  const bodyWidth = clamp(step * 0.58, 4, 12);
+  const bodyWidth = clamp(step * (range === "1Y" ? 0.46 : 0.58), range === "1Y" ? 2 : 4, 12);
   const axisValues = Array.from({ length: 5 }, (_, index) => maxPrice - ((maxPrice - minPrice) / 4) * index);
   const labelIndices = [...new Set([0, Math.floor(data.length / 3), Math.floor((data.length * 2) / 3), data.length - 1])]
     .filter((index) => index >= 0 && index < data.length);
@@ -443,17 +516,17 @@ function CandlestickChart({
 
       <div
         ref={ref}
-        className="h-84 w-full overflow-hidden rounded-[1.75rem] border border-slate-200/80 bg-gradient-to-b from-slate-50 via-white to-slate-100/80 p-2 dark:border-slate-800 dark:from-slate-950 dark:via-slate-950 dark:to-slate-900/90"
+        className="h-84 w-full overflow-x-auto overflow-y-hidden rounded-[1.75rem] border border-slate-200/80 bg-gradient-to-b from-slate-50 via-white to-slate-100/80 p-2 dark:border-slate-800 dark:from-slate-950 dark:via-slate-950 dark:to-slate-900/90"
       >
         {width > 0 ? (
-          <svg viewBox={`0 0 ${width} ${height}`} className="h-full w-full">
+          <svg width={chartWidth} height={height} viewBox={`0 0 ${chartWidth} ${height}`} className="h-full">
             {axisValues.map((value) => {
               const y = yToCoord(value);
               return (
                 <g key={value}>
                   <line
                     x1={marginLeft}
-                    x2={width - marginRight}
+                    x2={chartWidth - marginRight}
                     y1={y}
                     y2={y}
                     stroke="rgba(148, 163, 184, 0.18)"
@@ -595,6 +668,9 @@ export function FundamentalsDetailsPage() {
   const [chartMode, setChartMode] = useState<ChartMode>("line");
   const [historyByRange, setHistoryByRange] = useState<Partial<Record<ChartRange, PriceCandle[]>>>({});
   const [isHistoryLoading, setIsHistoryLoading] = useState(false);
+  const [capmAnalysis, setCapmAnalysis] = useState<CapmAnalysisResult | null>(null);
+  const [isCapmLoading, setIsCapmLoading] = useState(false);
+  const [capmError, setCapmError] = useState<string | null>(null);
   const [errorDialogMessage, setErrorDialogMessage] = useState<string | null>(null);
 
   const pendingRequestsRef = useRef(0);
@@ -619,6 +695,8 @@ export function FundamentalsDetailsPage() {
     setHistoryByRange({});
     setSelectedRange("1M");
     setChartMode("line");
+    setCapmAnalysis(null);
+    setCapmError(null);
   }, [figi]);
 
   useEffect(() => {
@@ -691,6 +769,38 @@ export function FundamentalsDetailsPage() {
     void loadHistory(selectedRange, false);
   }, [loadHistory, selectedRange, share?.figi]);
 
+  useEffect(() => {
+    if (!share?.figi) {
+      return;
+    }
+
+    let cancelled = false;
+    setIsCapmLoading(true);
+    setCapmError(null);
+
+    void loadCapmAnalysis(share.figi)
+      .then((result) => {
+        if (!cancelled) {
+          setCapmAnalysis(result);
+        }
+      })
+      .catch((err) => {
+        if (!cancelled) {
+          setCapmAnalysis(null);
+          setCapmError(err instanceof Error ? err.message : isEn ? "Failed to build CAPM" : "Не удалось построить CAPM");
+        }
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setIsCapmLoading(false);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [isEn, share?.figi]);
+
   const heroAside = useMemo(() => {
     const current = selectedSummary?.current ?? fallbackClosePrice;
     if (current === null) {
@@ -744,6 +854,11 @@ export function FundamentalsDetailsPage() {
       }`,
     };
   }, [isEn, selectedHistory.length, selectedRange, selectedSummary]);
+
+  const capmAdequacy = useMemo(
+    () => (capmAnalysis ? getCapmAdequacyCopy(capmAnalysis.adequacyLevel, isEn) : null),
+    [capmAnalysis, isEn],
+  );
 
   if (!share) {
     return (
@@ -1004,6 +1119,120 @@ export function FundamentalsDetailsPage() {
           helper={selectedHistory.length ? `${selectedHistory.length} ${isEn ? "candles" : "свечей"}` : undefined}
         />
       </MetricGrid>
+
+      <SectionCard
+        title={isEn ? "CAPM model" : "Модель CAPM"}
+        description={
+          isEn
+            ? "Built from daily returns for the last year against the MOEX index. The risk-free rate is estimated from the nearest liquid fixed-coupon OFZ around the 2-year horizon."
+            : "Построена по дневным доходностям за последний год относительно индекса Мосбиржи. Безрисковая ставка оценивается по ближайшей ликвидной фиксированной ОФЗ около двухлетнего горизонта."
+        }
+      >
+        {isCapmLoading ? (
+          <div className="flex min-h-[12rem] items-center justify-center rounded-[1.75rem] border border-slate-200/80 bg-slate-50/70 text-sm text-slate-500 dark:border-slate-800 dark:bg-slate-950/40 dark:text-slate-400">
+            <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
+            {isEn ? "Building CAPM from fresh market data..." : "Строим CAPM по свежим рыночным данным..."}
+          </div>
+        ) : capmError ? (
+          <div className="rounded-[1.75rem] border border-rose-200/80 bg-rose-50/75 px-5 py-4 text-sm leading-7 text-rose-700 dark:border-rose-500/20 dark:bg-rose-500/10 dark:text-rose-200">
+            <div className="text-xs font-semibold uppercase tracking-[0.16em]">
+              {isEn ? "CAPM was not built" : "CAPM не построена"}
+            </div>
+            <div className="mt-2">{capmError}</div>
+          </div>
+        ) : capmAnalysis && capmAdequacy ? (
+          <div className="space-y-5">
+            <MetricGrid className="xl:grid-cols-4">
+              <MetricCard
+                label="R^2"
+                value={formatPercentPoints(capmAnalysis.rSquared, locale)}
+                helper={
+                  isEn
+                    ? "Share of excess-return variance explained by the market factor"
+                    : "Доля вариации избыточной доходности, объясняемая рыночным фактором"
+                }
+              />
+              <MetricCard
+                label={isEn ? "Beta" : "Бета"}
+                value={formatCompactNumber(capmAnalysis.beta, locale, 2)}
+                helper={
+                  isEn
+                    ? "Sensitivity of the stock to market excess returns"
+                    : "Чувствительность акции к избыточной доходности рынка"
+                }
+              />
+              <MetricCard
+                label={isEn ? "Risk-free rate" : "Безрисковая ставка"}
+                value={formatPercentPoints(capmAnalysis.riskFreeAnnualRate, locale)}
+                helper={`${capmAnalysis.riskFreeSource.bondTicker} | ${formatCalendarDate(capmAnalysis.riskFreeSource.maturityDate, locale)}`}
+              />
+              <MetricCard
+                label={isEn ? "Observations" : "Наблюдений"}
+                value={formatCompactNumber(capmAnalysis.sampleSize, locale, 0)}
+                helper={`${formatCalendarDate(capmAnalysis.periodStart, locale)} - ${formatCalendarDate(capmAnalysis.periodEnd, locale)}`}
+              />
+            </MetricGrid>
+
+            <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1.15fr)_minmax(0,0.85fr)]">
+              <div className="rounded-[1.75rem] border border-slate-200/80 bg-slate-50/70 px-5 py-5 dark:border-slate-800 dark:bg-slate-950/40">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">
+                    {isEn ? "Adequacy assessment" : "Оценка адекватности"}
+                  </div>
+                  <span className={`inline-flex rounded-full px-3 py-1.5 text-sm font-semibold ${capmAdequacy.toneClass}`}>
+                    {capmAdequacy.label}
+                  </span>
+                </div>
+                <p className="mt-4 text-sm leading-7 text-slate-600 dark:text-slate-300">{capmAdequacy.description}</p>
+                <div className="mt-4 text-xs leading-6 text-slate-500 dark:text-slate-400">
+                  {isEn
+                    ? `The model uses ${capmAnalysis.sampleSize} overlapping daily observations from ${formatCalendarDate(capmAnalysis.periodStart, locale)} to ${formatCalendarDate(capmAnalysis.periodEnd, locale)}.`
+                    : `Модель использует ${formatCompactNumber(capmAnalysis.sampleSize, locale, 0)} пересекающихся дневных наблюдений с ${formatCalendarDate(capmAnalysis.periodStart, locale)} по ${formatCalendarDate(capmAnalysis.periodEnd, locale)}.`}
+                </div>
+              </div>
+
+              <div className="rounded-[1.75rem] border border-slate-200/80 bg-white/85 px-5 py-5 dark:border-slate-800 dark:bg-slate-950/50">
+                <div className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">
+                  {isEn ? "Model inputs" : "Входные данные"}
+                </div>
+                <div className="mt-4 space-y-3 text-sm leading-7 text-slate-600 dark:text-slate-300">
+                  <div>
+                    <span className="font-semibold text-slate-900 dark:text-slate-100">
+                      {isEn ? "Market benchmark" : "Рыночный бенчмарк"}:
+                    </span>{" "}
+                    {capmAnalysis.marketTicker} | {capmAnalysis.marketName}
+                  </div>
+                  <div>
+                    <span className="font-semibold text-slate-900 dark:text-slate-100">
+                      {isEn ? "Risk-free source" : "Источник безрисковой ставки"}:
+                    </span>{" "}
+                    {capmAnalysis.riskFreeSource.bondTicker} | {capmAnalysis.riskFreeSource.bondName}
+                  </div>
+                  <div>
+                    <span className="font-semibold text-slate-900 dark:text-slate-100">
+                      {isEn ? "Expected annual return" : "Ожидаемая годовая доходность"}:
+                    </span>{" "}
+                    {formatPercentPoints(capmAnalysis.expectedAnnualReturn, locale)}
+                  </div>
+                  <div className="text-xs leading-6 text-slate-500 dark:text-slate-400">
+                    {capmAnalysis.riskFreeSource.pricingMethod === "ytm_solver"
+                      ? isEn
+                        ? "The OFZ rate is derived from the bond price and coupon cash flows using a YTM solver."
+                        : "Ставка по ОФЗ получена из рыночной цены и купонных потоков через расчёт YTM."
+                      : isEn
+                        ? "The OFZ rate is approximated from coupon cash flows because an exact YTM solve was not stable."
+                        : "Ставка по ОФЗ приближённая: использована купонная оценка, потому что точный расчёт YTM оказался нестабилен."}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        ) : (
+          <div className="rounded-[1.75rem] border border-dashed border-slate-300/80 bg-slate-50/70 px-5 py-6 text-sm text-slate-500 dark:border-slate-700 dark:bg-slate-950/40 dark:text-slate-400">
+            {isEn ? "CAPM data is not available yet." : "Данные CAPM пока недоступны."}
+          </div>
+        )}
+      </SectionCard>
 
       <SectionCard
         title={isEn ? "Fundamental metrics" : "Фундаментальные показатели"}

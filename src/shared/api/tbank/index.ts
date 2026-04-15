@@ -1,2 +1,10 @@
 export { createTBankInstrumentsApi } from "./instruments";
-export type { TBankShare, TBankFundamental, TBankClosePrice, TBankCandle } from "./instruments";
+export type {
+  TBankShare,
+  TBankIndicative,
+  TBankBond,
+  TBankBondCoupon,
+  TBankFundamental,
+  TBankClosePrice,
+  TBankCandle,
+} from "./instruments";
