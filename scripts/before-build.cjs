@@ -5,7 +5,8 @@ const { execSync } = require("child_process");
 exports.default = async function beforeBuild() {
   console.log("Checking project state before packaging...");
 
-  await checkServerBinary();
+  await checkBundledServer("server-analytic-system", ["dist", "server-analytic-system"]);
+  await checkBundledServer("server-news-analytic", ["dist", "news-assistant"]);
   await checkDependencies();
   await checkIcons();
 
@@ -19,24 +20,19 @@ if (require.main === module) {
   });
 }
 
-async function checkServerBinary() {
-  const releasesDir = path.join(
-    process.cwd(),
-    "server-analytic-system",
-    "dist",
-    "releases",
-  );
+async function checkBundledServer(serverDirName, relativeDistPath) {
+  const outputDir = path.join(process.cwd(), serverDirName, ...relativeDistPath);
 
-  if (!fs.existsSync(releasesDir)) {
-    console.warn("Server releases directory was not found.");
+  if (!fs.existsSync(outputDir)) {
+    console.warn(`Bundled server directory was not found for ${serverDirName}.`);
     return;
   }
 
-  const files = fs.readdirSync(releasesDir);
+  const files = fs.readdirSync(outputDir);
   if (files.length === 0) {
-    console.warn("No packaged server binaries were found.");
+    console.warn(`No packaged server binaries were found for ${serverDirName}.`);
   } else {
-    console.log(`  Found ${files.length} server release files.`);
+    console.log(`  Found ${files.length} bundled files for ${serverDirName}.`);
   }
 }
 

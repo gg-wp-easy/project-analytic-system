@@ -15,19 +15,40 @@
     "dev": "vite",
     "icons:create": "node scripts/create-icons.cjs",
     "prebuild": "npm run icons:create",
-    "server:build:win": "powershell -ExecutionPolicy Bypass -File scripts/server-build-win.ps1",
-    "server:build:linux": "cd server-analytic-system && python3 -m venv .venv && .venv/bin/python -m pip install --upgrade pip && .venv/bin/python -m pip install -r requirements.txt && .venv/bin/python build.py --mode pyinstaller --target current --project-name server-analytic-system --clean",
-    "electron:dev": "concurrently -k \"vite\" \"wait-on tcp:5173 && electron .\"",
-    "server:dev:win": "cd server-analytic-system && if exist .venv\\Scripts\\python.exe (.venv\\Scripts\\python main.py) else (python -m venv .venv && .venv\\Scripts\\python main.py)",
-    "server:dev:linux": "cd server-analytic-system && if [ -f .venv/bin/python ]; then .venv/bin/python main.py; else python3 -m venv .venv && .venv/bin/python main.py; fi",
-    "electron:dev:win": "set NODE_ENV=development && concurrently -k \"npm run server:dev:win\" \"npm run electron:dev\"",
-    "electron:dev:linux": "export NODE_ENV=development && concurrently -k \"npm run server:dev:linux\" \"npm run electron:dev\"",
-    "electron:build:win": "powershell -ExecutionPolicy Bypass -File scripts/electron-build-win.ps1",
-    "electron:build:win:msi": "powershell -ExecutionPolicy Bypass -File scripts/electron-build-win.ps1 -Msi",
-    "electron:build:linux": "npm run prebuild && npm run server:build:linux && npm run build && node scripts/before-build.cjs && npx electron-builder --linux && node scripts/protect-asar.cjs",
-    "electron:build:win:store": "powershell -ExecutionPolicy Bypass -File scripts/electron-build-win.ps1 -Store",
-    "electron:build:linux:deb": "npm run prebuild && npm run server:build:linux && npm run build && node scripts/before-build.cjs && npx electron-builder --linux deb && node scripts/protect-asar.cjs",
-    "electron:build:linux:snap": "npm run prebuild && npm run server:build:linux && npm run build && node scripts/before-build.cjs && npx electron-builder --linux snap && node scripts/protect-asar.cjs",
+    "desktop:dev": "npm run electron:dev",
+    "desktop:build": "npm run electron:build",
+    "desktop:build:win": "npm run electron:build:win",
+    "desktop:build:linux": "npm run electron:build:linux",
+    "desktop:build:mac": "npm run electron:build:mac",
+    "desktop:prod": "npm run electron:build",
+    "desktop:prod:win": "npm run electron:build:win",
+    "desktop:prod:linux": "npm run electron:build:linux",
+    "desktop:prod:mac": "npm run electron:build:mac",
+    "server:install": "node scripts/servers.cjs install all",
+    "server:build": "node scripts/servers.cjs build all",
+    "server:build:win": "npm run server:build",
+    "server:build:linux": "npm run server:build",
+    "servers:install": "node scripts/servers.cjs install all",
+    "servers:build": "node scripts/servers.cjs build all",
+    "servers:build:win": "npm run servers:build",
+    "servers:build:linux": "npm run servers:build",
+    "analytics-server:install": "node scripts/servers.cjs install analytics",
+    "analytics-server:build": "node scripts/servers.cjs build analytics",
+    "analytics-server:dev": "node scripts/servers.cjs dev analytics",
+    "news-server:install": "node scripts/servers.cjs install news",
+    "news-server:build": "node scripts/servers.cjs build news",
+    "news-server:dev": "node scripts/servers.cjs dev news",
+    "server:dev": "node scripts/servers.cjs dev analytics",
+    "electron:dev": "node scripts/electron.cjs dev",
+    "electron:dev:win": "npm run electron:dev",
+    "electron:dev:linux": "npm run electron:dev",
+    "electron:dev:mac": "npm run electron:dev",
+    "electron:build": "node scripts/electron.cjs build",
+    "electron:build:win": "node scripts/electron.cjs build --platform=win",
+    "electron:build:win:msi": "node scripts/electron.cjs build --platform=win --profile=msi",
+    "electron:build:win:store": "node scripts/electron.cjs build --platform=win --profile=store",
+    "electron:build:linux": "node scripts/electron.cjs build --platform=linux",
+    "electron:build:mac": "node scripts/electron.cjs build --platform=mac",
     "protect:asar": "node scripts/protect-asar.cjs"
   },
   "dependencies": {
@@ -95,15 +116,13 @@
   "devDependencies": {
     "@tailwindcss/vite": "4.1.12",
     "@vitejs/plugin-react": "4.7.0",
-    "concurrently": "^9.2.1",
     "electron": "^37.10.3",
     "electron-builder": "^26.0.12",
     "electron-builder-squirrel-windows": "^26.0.12",
     "electron-icon-builder": "^2.0.1",
     "electron-notarize": "^1.2.2",
     "tailwindcss": "4.1.12",
-    "vite": "6.3.5",
-    "wait-on": "^8.0.5"
+    "vite": "6.3.5"
   },
   "peerDependencies": {
     "react": "18.3.1",
@@ -141,12 +160,20 @@
         "filter": [
           "**/*"
         ]
+      },
+      {
+        "from": "server-news-analytic/dist/news-assistant/",
+        "to": "news-server",
+        "filter": [
+          "**/*"
+        ]
       }
     ],
     "asar": true,
     "asarUnpack": [
       "node_modules/@*/**/*.node",
-      "server/**/*"
+      "server/**/*",
+      "news-server/**/*"
     ],
     "executableName": "nk-invest-analytics",
     "win": {
@@ -295,7 +322,6 @@
         "releaseType": "release"
       }
     ],
-    "afterPack": "scripts/after-pack.cjs",
-    "beforeBuild": "scripts/before-build.cjs"
+    "afterPack": "scripts/after-pack.cjs"
   }
 }

@@ -1,5 +1,5 @@
 import { Link } from "react-router-dom";
-import { Network, GitBranch, Brain, Layers, Database, Landmark, ArrowRight, TrendingUp, Activity } from "lucide-react";
+import { Network, GitBranch, Brain, Layers, Database, Landmark, Newspaper, ArrowRight, TrendingUp, Activity } from "lucide-react";
 import { useAppSettings } from "../../../app/context/AppSettingsContext";
 
 export function Dashboard() {
@@ -44,6 +44,16 @@ export function Dashboard() {
       path: "/bonds",
       icon: Landmark,
       color: "from-amber-500 to-orange-600",
+    },
+    {
+      title: tx("Новостной ИИ-ассистент", "News AI Assistant"),
+      description: tx(
+        "Обзор новостного фона, идеи по тикерам, отчёты по инструментам и запуск refresh новостного пайплайна.",
+        "Market-news overview, ticker ideas, instrument reports, and one-click refresh of the news pipeline.",
+      ),
+      path: "/news-assistant",
+      icon: Newspaper,
+      color: "from-sky-500 to-blue-600",
     },
     {
       title: t("tool.fundamentals.title"),

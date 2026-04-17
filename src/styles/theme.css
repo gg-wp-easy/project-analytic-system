@@ -47,10 +47,12 @@
   --surface-shadow: 0 24px 60px -32px rgba(15, 23, 42, 0.22);
   --surface-shadow-strong: 0 32px 90px -42px rgba(15, 23, 42, 0.35);
   --scrollbar-size: 12px;
-  --scrollbar-track: rgba(226, 232, 240, 0.72);
-  --scrollbar-track-strong: rgba(203, 213, 225, 0.78);
-  --scrollbar-thumb: linear-gradient(180deg, rgba(245, 158, 11, 0.92), rgba(249, 115, 22, 0.88));
-  --scrollbar-thumb-hover: linear-gradient(180deg, rgba(217, 119, 6, 0.96), rgba(234, 88, 12, 0.92));
+  --scrollbar-track: rgba(226, 232, 240, 0.8);
+  --scrollbar-track-strong: rgba(203, 213, 225, 0.9);
+  --scrollbar-thumb-color: rgba(100, 116, 139, 0.82);
+  --scrollbar-thumb: linear-gradient(180deg, rgba(148, 163, 184, 0.95), rgba(100, 116, 139, 0.9));
+  --scrollbar-thumb-hover-color: rgba(71, 85, 105, 0.92);
+  --scrollbar-thumb-hover: linear-gradient(180deg, rgba(100, 116, 139, 0.98), rgba(71, 85, 105, 0.94));
   --scrollbar-corner: rgba(241, 245, 249, 0.92);
 }
 
@@ -94,10 +96,12 @@
   --page-highlight-secondary: rgba(14, 165, 233, 0.08);
   --surface-shadow: 0 28px 80px -42px rgba(2, 6, 23, 0.85);
   --surface-shadow-strong: 0 36px 100px -46px rgba(2, 6, 23, 0.92);
-  --scrollbar-track: rgba(30, 41, 59, 0.82);
-  --scrollbar-track-strong: rgba(51, 65, 85, 0.9);
-  --scrollbar-thumb: linear-gradient(180deg, rgba(251, 191, 36, 0.82), rgba(249, 115, 22, 0.76));
-  --scrollbar-thumb-hover: linear-gradient(180deg, rgba(245, 158, 11, 0.95), rgba(234, 88, 12, 0.9));
+  --scrollbar-track: rgba(30, 41, 59, 0.9);
+  --scrollbar-track-strong: rgba(51, 65, 85, 0.96);
+  --scrollbar-thumb-color: rgba(148, 163, 184, 0.72);
+  --scrollbar-thumb: linear-gradient(180deg, rgba(148, 163, 184, 0.88), rgba(100, 116, 139, 0.82));
+  --scrollbar-thumb-hover-color: rgba(203, 213, 225, 0.82);
+  --scrollbar-thumb-hover: linear-gradient(180deg, rgba(203, 213, 225, 0.9), rgba(148, 163, 184, 0.84));
   --scrollbar-corner: rgba(15, 23, 42, 0.96);
 }
 
@@ -242,7 +246,7 @@
 
   * {
     scrollbar-width: thin;
-    scrollbar-color: rgba(245, 158, 11, 0.9) var(--scrollbar-track);
+    scrollbar-color: var(--scrollbar-thumb-color) var(--scrollbar-track);
   }
 
   *::-webkit-scrollbar {

@@ -3,20 +3,19 @@ const { spawn } = require("child_process");
 const fs = require("fs");
 const http = require("http");
 const path = require("path");
+
 let log;
 try {
-  log = require('electron-log');
-  // **Важно:** Вызовите initialize для поддержки логирования из процессов рендерера
-  if (typeof log.initialize === 'function') {
+  log = require("electron-log");
+  if (typeof log.initialize === "function") {
     log.initialize();
   }
 } catch (error) {
-  // Фоллбек, чтобы приложение не падало при отсутствии electron-log в сборке
-  console.error('electron-log is unavailable, using console fallback.', error);
+  console.error("electron-log is unavailable, using console fallback.", error);
   log = {
     transports: {
-      console: { level: 'debug', format: '{text}' },
-      file: { level: 'info', format: '{text}' },
+      console: { level: "debug", format: "{text}" },
+      file: { level: "info", format: "{text}" },
     },
     info: (...args) => console.log(...args),
     warn: (...args) => console.warn(...args),
@@ -25,34 +24,49 @@ try {
   };
 }
 
-// --- Настройка транспортов (куда отправлять логи) ---
 if (log.transports && log.transports.console) {
-  // 1. Настройка вывода в консоль
-  // Уровень 'debug' будет показывать всё в режиме разработки
-  log.transports.console.level = 'debug';
-  // Можно задать свой формат для консоли
-  log.transports.console.format = '[{h}:{i}:{s}.{ms}] › {text}';
+  log.transports.console.level = "debug";
+  log.transports.console.format = "[{h}:{i}:{s}.{ms}] > {text}";
 }
 
 if (log.transports && log.transports.file) {
-  // 2. Настройка сохранения в файл
-  // Уровень 'info' — в файл пишутся события info, warn, error и выше
-  log.transports.file.level = 'info';
-  // Кастомный формат для файла с датой
-  log.transports.file.format = '[{y}-{m}-{d} {h}:{i}:{s}.{ms}] [{level}] {text}';
+  log.transports.file.level = "info";
+  log.transports.file.format = "[{y}-{m}-{d} {h}:{i}:{s}.{ms}] [{level}] {text}";
 }
 
-app.commandLine.appendSwitch('ignore-certificate-errors');
+app.commandLine.appendSwitch("ignore-certificate-errors");
 
 const isDev = !app.isPackaged;
-const SERVER_HOST = "127.0.0.1";
-const SERVER_PORT = 8000;
-const SERVER_HEALTH_URL = `http://${SERVER_HOST}:${SERVER_PORT}/health`;
 const APP_ID = "com.invest.analytics.desktop";
+const DEFAULT_HOST = "127.0.0.1";
 
 let splashWindow = null;
-let serverProcess = null;
-let serverManagedByApp = false;
+const managedServices = new Map();
+
+const BACKEND_SERVICES = [
+  {
+    key: "analytics",
+    displayName: "server-analytic-system",
+    host: DEFAULT_HOST,
+    port: 8000,
+    healthPath: "/health",
+    required: true,
+    resolveRunConfig: resolveAnalyticsRunConfig,
+  },
+  {
+    key: "newsAssistant",
+    displayName: "server-news-analytic",
+    host: DEFAULT_HOST,
+    port: 8787,
+    healthPath: "/health",
+    required: false,
+    resolveRunConfig: resolveNewsAssistantRunConfig,
+  },
+];
+
+function getProjectRoot() {
+  return path.join(__dirname, "..");
+}
 
 function resolveWindowIconPath() {
   const iconName = process.platform === "win32"
@@ -65,35 +79,40 @@ function resolveWindowIconPath() {
   return fs.existsSync(iconPath) ? iconPath : undefined;
 }
 
-function pingServerHealth() {
+function getServiceHealthUrl(service) {
+  return `http://${service.host}:${service.port}${service.healthPath}`;
+}
+
+function pingServiceHealth(service) {
   return new Promise((resolve) => {
-    const req = http.get(SERVER_HEALTH_URL, (res) => {
-      let data = '';
-      res.on('data', chunk => data += chunk);
-      res.on('end', () => {
-        log.info(`Health check response: ${res.statusCode} - ${data}`);
+    const req = http.get(getServiceHealthUrl(service), (res) => {
+      let data = "";
+      res.on("data", (chunk) => {
+        data += chunk;
+      });
+      res.on("end", () => {
+        log.info(`[${service.displayName}] health response: ${res.statusCode} - ${data}`);
         resolve(res.statusCode === 200);
       });
     });
-    
+
     req.on("error", (err) => {
-      log.error('Health check error:', err.message);
+      log.warn(`[${service.displayName}] health check error: ${err.message}`);
       resolve(false);
     });
-    
+
     req.setTimeout(1200, () => {
       req.destroy();
-      log.warn('Health check timeout');
       resolve(false);
     });
   });
 }
 
-async function waitForServerHealth(timeoutMs = 60000, intervalMs = 600) {
+async function waitForServiceHealth(service, timeoutMs = 60000, intervalMs = 600) {
   const startedAt = Date.now();
   while (Date.now() - startedAt < timeoutMs) {
     // eslint-disable-next-line no-await-in-loop
-    if (await pingServerHealth()) {
+    if (await pingServiceHealth(service)) {
       return true;
     }
     // eslint-disable-next-line no-await-in-loop
@@ -102,20 +121,55 @@ async function waitForServerHealth(timeoutMs = 60000, intervalMs = 600) {
   return false;
 }
 
-function resolveServerExecutablePath() {
+function resolveProjectPython(serverDir) {
+  const candidates = process.platform === "win32"
+    ? [path.join(serverDir, ".venv", "Scripts", "python.exe"), "python"]
+    : [path.join(serverDir, ".venv", "bin", "python"), "python3", "python"];
+
+  for (const candidate of candidates) {
+    if (!candidate.includes(path.sep) || fs.existsSync(candidate)) {
+      return candidate;
+    }
+  }
+
+  return process.platform === "win32" ? "python" : "python3";
+}
+
+function ensureDirectory(targetPath) {
+  try {
+    fs.mkdirSync(targetPath, { recursive: true });
+  } catch (error) {
+    log.warn(`Failed to ensure directory ${targetPath}:`, error);
+  }
+}
+
+function createServiceUserDirs(relativeDirName) {
+  const rootDir = path.join(app.getPath("userData"), relativeDirName);
+  const logDir = path.join(rootDir, "logs");
+  const dataDir = path.join(rootDir, "data");
+  const cacheDir = path.join(rootDir, "cache");
+  const matplotlibCacheDir = path.join(cacheDir, "matplotlib");
+
+  ensureDirectory(rootDir);
+  ensureDirectory(logDir);
+  ensureDirectory(dataDir);
+  ensureDirectory(cacheDir);
+  ensureDirectory(matplotlibCacheDir);
+
+  return { rootDir, logDir, dataDir, cacheDir, matplotlibCacheDir };
+}
+
+function resolveAnalyticsExecutablePath() {
   const exeName = process.platform === "win32"
     ? "server-analytic-system.exe"
     : "server-analytic-system";
 
   if (app.isPackaged) {
     const packagedExePath = path.join(process.resourcesPath, "server", exeName);
-    if (fs.existsSync(packagedExePath)) {
-      return packagedExePath;
-    }
-    return null;
+    return fs.existsSync(packagedExePath) ? packagedExePath : null;
   }
 
-  const projectRoot = path.join(__dirname, "..");
+  const projectRoot = getProjectRoot();
   const candidates = [
     path.join(projectRoot, "server-analytic-system", "dist", "server-analytic-system", exeName),
     path.join(projectRoot, "server-analytic-system", "dist", exeName),
@@ -126,32 +180,47 @@ function resolveServerExecutablePath() {
       return candidate;
     }
   }
+
   return null;
 }
 
-function resolveServerCommand() {
-  const exePath = resolveServerExecutablePath();
+function resolveNewsAssistantExecutablePath() {
+  const exeName = process.platform === "win32"
+    ? "news-assistant.exe"
+    : "news-assistant";
+
+  if (app.isPackaged) {
+    const packagedExePath = path.join(process.resourcesPath, "news-server", exeName);
+    return fs.existsSync(packagedExePath) ? packagedExePath : null;
+  }
+
+  const projectRoot = getProjectRoot();
+  const candidates = [
+    path.join(projectRoot, "server-news-analytic", "dist", "news-assistant", exeName),
+    path.join(projectRoot, "server-news-analytic", "dist", exeName),
+  ];
+
+  for (const candidate of candidates) {
+    if (fs.existsSync(candidate)) {
+      return candidate;
+    }
+  }
+
+  return null;
+}
+
+function resolveAnalyticsRunConfig() {
+  const exePath = resolveAnalyticsExecutablePath();
   if (exePath) {
-    const userDataDir = app.getPath("userData");
-    const serverDataDir = path.join(userDataDir, "server-data");
-    try {
-      fs.mkdirSync(userDataDir, { recursive: true });
-    } catch (err) {
-      log.warn("Failed to ensure userData directory:", err);
-    }
-    try {
-      fs.mkdirSync(serverDataDir, { recursive: true });
-    } catch (err) {
-      log.warn("Failed to ensure server data directory:", err);
-    }
+    const dirs = createServiceUserDirs("analytics-server");
     return {
       command: exePath,
       args: [],
       cwd: path.dirname(exePath),
       env: {
         ...process.env,
-        ANALYTIC_LOG_DIR: userDataDir,
-        ANALYTIC_DATA_DIR: serverDataDir,
+        ANALYTIC_LOG_DIR: dirs.logDir,
+        ANALYTIC_DATA_DIR: dirs.dataDir,
       },
     };
   }
@@ -160,21 +229,67 @@ function resolveServerCommand() {
     return null;
   }
 
-  const projectRoot = path.join(__dirname, "..");
-  const serverDir = path.join(projectRoot, "server-analytic-system");
+  const serverDir = path.join(getProjectRoot(), "server-analytic-system");
   const mainPy = path.join(serverDir, "main.py");
   if (!fs.existsSync(mainPy)) {
     return null;
   }
 
   return {
-    command: "python",
+    command: resolveProjectPython(serverDir),
     args: ["main.py"],
     cwd: serverDir,
   };
 }
 
-function killServerProcess(pid) {
+function resolveNewsAssistantRunConfig() {
+  const exePath = resolveNewsAssistantExecutablePath();
+  if (exePath) {
+    const dirs = createServiceUserDirs("news-assistant");
+    return {
+      command: exePath,
+      args: [],
+      cwd: path.dirname(exePath),
+      env: {
+        ...process.env,
+        NEWS_ANALYTIC_LOG_DIR: dirs.logDir,
+        NEWS_ANALYTIC_DATA_DIR: dirs.dataDir,
+        NEWS_ANALYTIC_CACHE_DIR: dirs.cacheDir,
+        MPLCONFIGDIR: dirs.matplotlibCacheDir,
+      },
+    };
+  }
+
+  if (app.isPackaged) {
+    return null;
+  }
+
+  const serverDir = path.join(getProjectRoot(), "server-news-analytic");
+  const entryPoint = path.join(serverDir, "pipeline", "run_assistant_api.py");
+  if (!fs.existsSync(entryPoint)) {
+    return null;
+  }
+
+  ensureDirectory(path.join(serverDir, "logs"));
+  ensureDirectory(path.join(serverDir, "news_data"));
+  ensureDirectory(path.join(serverDir, ".cache"));
+  ensureDirectory(path.join(serverDir, ".cache", "matplotlib"));
+
+  return {
+    command: resolveProjectPython(serverDir),
+    args: [path.join("pipeline", "run_assistant_api.py")],
+    cwd: serverDir,
+    env: {
+      ...process.env,
+      NEWS_ANALYTIC_LOG_DIR: path.join(serverDir, "logs"),
+      NEWS_ANALYTIC_DATA_DIR: path.join(serverDir, "news_data"),
+      NEWS_ANALYTIC_CACHE_DIR: path.join(serverDir, ".cache"),
+      MPLCONFIGDIR: path.join(serverDir, ".cache", "matplotlib"),
+    },
+  };
+}
+
+function killProcessTree(pid) {
   if (!pid) {
     return Promise.resolve();
   }
@@ -201,44 +316,83 @@ function killServerProcess(pid) {
   });
 }
 
-async function stopServerService() {
-  if (!serverManagedByApp || !serverProcess) {
+async function stopManagedService(serviceKey) {
+  const state = managedServices.get(serviceKey);
+  if (!state || !state.process) {
     return;
   }
-  const pid = serverProcess.pid;
-  serverProcess = null;
-  serverManagedByApp = false;
-  await killServerProcess(pid);
+
+  managedServices.delete(serviceKey);
+  await killProcessTree(state.process.pid);
 }
 
-async function ensureServerService() {
-  if (await pingServerHealth()) {
-    serverManagedByApp = false;
-    return;
+async function stopAllManagedServices() {
+  const serviceKeys = Array.from(managedServices.keys());
+  await Promise.all(serviceKeys.map((key) => stopManagedService(key)));
+}
+
+async function ensureService(service) {
+  if (await pingServiceHealth(service)) {
+    managedServices.delete(service.key);
+    return true;
   }
 
-  const runConfig = resolveServerCommand();
+  const runConfig = service.resolveRunConfig();
   if (!runConfig) {
-    throw new Error("Server executable not found. Build server-analytic-system from main.py first.");
+    const error = new Error(`${service.displayName} executable was not found.`);
+    if (service.required) {
+      throw error;
+    }
+    log.warn(error.message);
+    return false;
   }
 
-  serverProcess = spawn(runConfig.command, runConfig.args, {
+  const child = spawn(runConfig.command, runConfig.args, {
     cwd: runConfig.cwd,
     env: runConfig.env,
     stdio: "ignore",
     windowsHide: true,
   });
-  serverManagedByApp = true;
 
-  serverProcess.on("exit", () => {
-    serverProcess = null;
-    serverManagedByApp = false;
+  managedServices.set(service.key, { process: child, service });
+
+  child.on("error", (error) => {
+    log.error(`[${service.displayName}] process error:`, error);
   });
 
-  const healthy = await waitForServerHealth();
+  child.on("exit", (code, signal) => {
+    managedServices.delete(service.key);
+    log.info(`[${service.displayName}] stopped with code=${code ?? "null"} signal=${signal ?? "null"}`);
+  });
+
+  const healthy = await waitForServiceHealth(service);
   if (!healthy) {
-    await stopServerService();
-    throw new Error("server-analytic-system did not start in time.");
+    await stopManagedService(service.key);
+    const error = new Error(`${service.displayName} did not start in time.`);
+    if (service.required) {
+      throw error;
+    }
+    log.warn(error.message);
+    return false;
+  }
+
+  log.info(`[${service.displayName}] is ready at ${getServiceHealthUrl(service)}`);
+  return true;
+}
+
+async function ensureBackendServices() {
+  for (const service of BACKEND_SERVICES.filter((item) => item.required)) {
+    // eslint-disable-next-line no-await-in-loop
+    await ensureService(service);
+  }
+
+  for (const service of BACKEND_SERVICES.filter((item) => !item.required)) {
+    try {
+      // eslint-disable-next-line no-await-in-loop
+      await ensureService(service);
+    } catch (error) {
+      log.warn(`Optional service ${service.displayName} is unavailable:`, error);
+    }
   }
 }
 
@@ -315,7 +469,7 @@ app.whenReady().then(async () => {
   createSplashWindow();
 
   try {
-    await ensureServerService();
+    await ensureBackendServices();
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown startup error";
     dialog.showErrorBox("Server Startup Error", message);
@@ -333,7 +487,7 @@ app.whenReady().then(async () => {
 });
 
 app.on("before-quit", async () => {
-  await stopServerService();
+  await stopAllManagedServices();
 });
 
 app.on("window-all-closed", () => {

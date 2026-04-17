@@ -1,0 +1,400 @@
+#!/usr/bin/env node
+
+const fs = require("fs");
+const path = require("path");
+const { spawn } = require("child_process");
+
+const electronBinary = require("electron");
+
+const {
+  logStep,
+  repoRoot,
+  runCommand,
+  timestamp,
+  waitForPort,
+} = require("./lib/runtime.cjs");
+
+
+const nodeBinary = process.execPath;
+const scriptsDir = __dirname;
+const serversScript = path.join(scriptsDir, "servers.cjs");
+const createIconsScript = path.join(scriptsDir, "create-icons.cjs");
+const beforeBuildScript = path.join(scriptsDir, "before-build.cjs");
+const protectAsarScript = path.join(scriptsDir, "protect-asar.cjs");
+const viteCli = path.join(repoRoot, "node_modules", "vite", "bin", "vite.js");
+const electronBuilderCli = path.join(repoRoot, "node_modules", "electron-builder", "cli.js");
+
+
+async function main() {
+  const { mode, options } = parseArgs(process.argv.slice(2));
+
+  if (!mode || options.help) {
+    printHelp();
+    return;
+  }
+
+  if (mode === "dev") {
+    await runDev(options);
+    return;
+  }
+
+  if (mode === "build") {
+    await runBuild(options);
+    return;
+  }
+
+  throw new Error(`Unknown electron mode: ${mode}`);
+}
+
+
+function parseArgs(argv) {
+  const mode = argv[0] === "--help" || argv[0] === "-h" ? null : argv[0];
+  const options = {
+    help: argv[0] === "--help" || argv[0] === "-h",
+    platform: "current",
+    profile: "standard",
+    skipIcons: false,
+    skipServerInstall: false,
+    skipServerBuild: false,
+    skipBuilder: false,
+    skipProtectAsar: false,
+    vitePort: 5173,
+    viteHost: "127.0.0.1",
+    outputDir: null,
+  };
+
+  for (const arg of argv.slice(1)) {
+    if (arg === "--help" || arg === "-h") {
+      options.help = true;
+    } else if (arg === "--skip-icons") {
+      options.skipIcons = true;
+    } else if (arg === "--skip-server-install") {
+      options.skipServerInstall = true;
+    } else if (arg === "--skip-server-build") {
+      options.skipServerBuild = true;
+    } else if (arg === "--skip-builder") {
+      options.skipBuilder = true;
+    } else if (arg === "--skip-protect-asar") {
+      options.skipProtectAsar = true;
+    } else if (arg.startsWith("--platform=")) {
+      options.platform = arg.slice("--platform=".length);
+    } else if (arg.startsWith("--profile=")) {
+      options.profile = arg.slice("--profile=".length);
+    } else if (arg.startsWith("--vite-port=")) {
+      options.vitePort = Number(arg.slice("--vite-port=".length));
+    } else if (arg.startsWith("--vite-host=")) {
+      options.viteHost = arg.slice("--vite-host=".length);
+    } else if (arg.startsWith("--output-dir=")) {
+      options.outputDir = path.resolve(repoRoot, arg.slice("--output-dir=".length));
+    } else {
+      throw new Error(`Unknown argument: ${arg}`);
+    }
+  }
+
+  return { mode, options };
+}
+
+
+function printHelp() {
+  console.log(`
+Usage:
+  node scripts/electron.cjs dev [--skip-server-install] [--vite-port=5173]
+  node scripts/electron.cjs build [--platform=current|win|linux|mac] [--profile=standard|msi|store]
+                                [--skip-icons] [--skip-server-build] [--skip-builder] [--skip-protect-asar]
+
+Examples:
+  node scripts/electron.cjs dev
+  node scripts/electron.cjs build
+  node scripts/electron.cjs build --platform=win --profile=msi
+`);
+}
+
+
+async function runDev(options) {
+  assertFileExists(viteCli, "Vite CLI");
+
+  if (!options.skipServerInstall) {
+    logStep("Preparing Python backends for Electron dev");
+    await runCommand(nodeBinary, [serversScript, "install", "all"], {
+      cwd: repoRoot,
+      env: process.env,
+    });
+  }
+
+  logStep("Starting Vite dev server");
+  const viteProcess = spawn(nodeBinary, [viteCli, "--host", options.viteHost], {
+    cwd: repoRoot,
+    env: process.env,
+    stdio: "inherit",
+    shell: false,
+    windowsHide: false,
+  });
+
+  try {
+    await waitForProcessPort(
+      viteProcess,
+      "Vite dev server",
+      options.viteHost,
+      options.vitePort,
+      120000,
+    );
+  } catch (error) {
+    await stopChild(viteProcess);
+    throw error;
+  }
+
+  logStep("Starting Electron dev shell");
+  const electronProcess = spawn(electronBinary, ["."], {
+    cwd: repoRoot,
+    env: process.env,
+    stdio: "inherit",
+    shell: false,
+    windowsHide: false,
+  });
+
+  await superviseChildren([
+    { label: "Electron", child: electronProcess, primary: true },
+    { label: "Vite", child: viteProcess, primary: false },
+  ]);
+}
+
+
+async function runBuild(options) {
+  assertFileExists(viteCli, "Vite CLI");
+  assertFileExists(electronBuilderCli, "electron-builder CLI");
+
+  const targetPlatform = resolveElectronPlatform(options.platform);
+  const outputDir = options.outputDir || path.join(
+    repoRoot,
+    "release",
+    `${targetPlatform.label}-${timestamp()}`,
+  );
+  const builderEnv = {
+    ...process.env,
+    ELECTRON_OUTPUT_DIR: outputDir,
+  };
+
+  console.log(`Electron build output directory: ${outputDir}`);
+
+  if (!options.skipIcons) {
+    logStep("Generating icon assets");
+    await runCommand(nodeBinary, [createIconsScript], {
+      cwd: repoRoot,
+      env: process.env,
+    });
+  }
+
+  if (!options.skipServerBuild) {
+    logStep("Building bundled Python backends");
+    await runCommand(nodeBinary, [serversScript, "build", "all"], {
+      cwd: repoRoot,
+      env: process.env,
+    });
+  }
+
+  logStep("Building frontend with Vite");
+  await runCommand(nodeBinary, [viteCli, "build", "--configLoader", "native"], {
+    cwd: repoRoot,
+    env: process.env,
+  });
+
+  logStep("Running Electron pre-pack checks");
+  await runCommand(nodeBinary, [beforeBuildScript], {
+    cwd: repoRoot,
+    env: process.env,
+  });
+
+  if (!options.skipBuilder) {
+    const builderArgs = [
+      electronBuilderCli,
+      ...resolveBuilderArgs(targetPlatform.key, options.profile),
+      `--config.directories.output=${outputDir}`,
+    ];
+
+    logStep(`Packaging Electron app for ${targetPlatform.label}`);
+    await runCommand(nodeBinary, builderArgs, {
+      cwd: repoRoot,
+      env: builderEnv,
+    });
+  } else {
+    console.log("Skipping electron-builder packaging.");
+  }
+
+  if (!options.skipProtectAsar) {
+    logStep("Protecting ASAR bundle");
+    await runCommand(nodeBinary, [protectAsarScript], {
+      cwd: repoRoot,
+      env: process.env,
+    });
+  } else {
+    console.log("Skipping ASAR protection.");
+  }
+}
+
+
+function resolveElectronPlatform(rawPlatform) {
+  const platform = rawPlatform === "current" ? currentPlatformKey() : rawPlatform;
+
+  switch (platform) {
+    case "win":
+      return { key: "win", label: "windows" };
+    case "linux":
+      return { key: "linux", label: "linux" };
+    case "mac":
+      return { key: "mac", label: "macos" };
+    default:
+      throw new Error(`Unsupported Electron platform: ${rawPlatform}`);
+  }
+}
+
+
+function currentPlatformKey() {
+  if (process.platform === "win32") {
+    return "win";
+  }
+
+  if (process.platform === "darwin") {
+    return "mac";
+  }
+
+  return "linux";
+}
+
+
+function resolveBuilderArgs(platform, profile) {
+  if (platform === "win") {
+    if (profile === "msi") {
+      return ["--win", "msi"];
+    }
+
+    if (profile === "store") {
+      return ["--win", "appx"];
+    }
+
+    return ["--win", "nsis", "portable"];
+  }
+
+  if (profile !== "standard") {
+    console.warn(`Profile "${profile}" is ignored for ${platform} builds.`);
+  }
+
+  if (platform === "linux") {
+    return ["--linux"];
+  }
+
+  return ["--mac"];
+}
+
+
+function assertFileExists(targetPath, label) {
+  if (!fs.existsSync(targetPath)) {
+    throw new Error(`${label} was not found: ${targetPath}`);
+  }
+}
+
+
+function waitForProcessPort(child, label, host, port, timeoutMs) {
+  return new Promise((resolve, reject) => {
+    let settled = false;
+
+    const finish = (callback) => (value) => {
+      if (settled) {
+        return;
+      }
+
+      settled = true;
+      child.removeListener("error", onError);
+      child.removeListener("exit", onExit);
+      callback(value);
+    };
+
+    const onError = finish(reject);
+    const onExit = finish((details) => {
+      reject(
+        new Error(
+          `${label} exited before startup was complete (code=${details.code ?? "null"}, signal=${details.signal ?? "null"})`,
+        ),
+      );
+    });
+
+    child.once("error", onError);
+    child.once("exit", (code, signal) => onExit({ code, signal }));
+
+    waitForPort(host, port, timeoutMs, 500).then(finish(resolve)).catch(finish(reject));
+  });
+}
+
+
+async function superviseChildren(processes) {
+  const stopAll = async () => {
+    await Promise.all(processes.map(({ child }) => stopChild(child)));
+  };
+
+  const onSignal = async () => {
+    await stopAll();
+  };
+
+  process.once("SIGINT", onSignal);
+  process.once("SIGTERM", onSignal);
+
+  try {
+    const result = await Promise.race(
+      processes.map(({ label, child, primary }) => waitForChildExit(label, child, primary)),
+    );
+
+    await stopAll();
+
+    if (result.primary && result.code === 0) {
+      return;
+    }
+
+    throw new Error(
+      `${result.label} exited with code=${result.code ?? "null"} signal=${result.signal ?? "null"}`,
+    );
+  } finally {
+    process.removeListener("SIGINT", onSignal);
+    process.removeListener("SIGTERM", onSignal);
+  }
+}
+
+
+function waitForChildExit(label, child, primary) {
+  return new Promise((resolve, reject) => {
+    child.once("error", reject);
+    child.once("exit", (code, signal) => {
+      resolve({ label, code, signal, primary });
+    });
+  });
+}
+
+
+function stopChild(child) {
+  if (!child || child.exitCode !== null || child.killed) {
+    return Promise.resolve();
+  }
+
+  if (process.platform === "win32") {
+    return new Promise((resolve) => {
+      const killer = spawn("taskkill", ["/pid", String(child.pid), "/t", "/f"], {
+        stdio: "ignore",
+        windowsHide: true,
+      });
+      killer.once("exit", () => resolve());
+      killer.once("error", () => resolve());
+    });
+  }
+
+  return new Promise((resolve) => {
+    child.once("exit", () => resolve());
+    child.kill("SIGTERM");
+    setTimeout(resolve, 500);
+  });
+}
+
+
+if (require.main === module) {
+  main().catch((error) => {
+    console.error(`Electron orchestration failed: ${error.message}`);
+    process.exit(1);
+  });
+}
