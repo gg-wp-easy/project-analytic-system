@@ -660,7 +660,7 @@ function buildHeroAside(
 export function FundamentalsDetailsPage() {
   const { figi = "" } = useParams();
   const { cache, isLoading, error, loadFundamentals } = useFundamentals();
-  const { locale } = useAppSettings();
+  const { locale, t } = useAppSettings();
   const isEn = locale === "en";
   const api = useMemo(() => createTBankInstrumentsApi(), []);
 
@@ -750,9 +750,7 @@ export function FundamentalsDetailsPage() {
         const message =
           err instanceof Error
             ? err.message
-            : isEn
-              ? "Failed to load chart history"
-              : "Не удалось загрузить историю графика";
+            : t("Не удалось загрузить историю графика", "Failed to load chart history");
         setErrorDialogMessage(message);
       } finally {
         pendingRequestsRef.current = Math.max(0, pendingRequestsRef.current - 1);
@@ -787,7 +785,7 @@ export function FundamentalsDetailsPage() {
       .catch((err) => {
         if (!cancelled) {
           setCapmAnalysis(null);
-          setCapmError(err instanceof Error ? err.message : isEn ? "Failed to build CAPM" : "Не удалось построить CAPM");
+          setCapmError(err instanceof Error ? err.message : t("Не удалось построить CAPM", "Failed to build CAPM"));
         }
       })
       .finally(() => {
@@ -813,11 +811,9 @@ export function FundamentalsDetailsPage() {
         change: formatSignedPriceValue(selectedSummary?.absoluteChange ?? 0, share?.currency ?? "RUB", locale),
         changePercent: formatPercent(selectedSummary?.percentChange ?? 0, locale, true),
         updatedAt: selectedSummary?.updatedAt
-          ? `${isEn ? "Updated" : "Обновлено"}: ${formatDateTime(selectedSummary.updatedAt, locale)}`
-          : isEn
-            ? "Updated price is not available yet"
-            : "Обновлённая цена пока недоступна",
-        rangeLabel: `${isEn ? "Range" : "Период"}: ${getRangeLabel(selectedRange, isEn)}`,
+          ? `${t("Обновлено", "Updated")}: ${formatDateTime(selectedSummary.updatedAt, locale)}`
+          : t("Обновлённая цена пока недоступна", "Updated price is not available yet"),
+        rangeLabel: `${t("Период", "Range")}: ${getRangeLabel(selectedRange, isEn)}`,
         isPositive: (selectedSummary?.absoluteChange ?? 0) >= 0,
       },
       isEn,
@@ -840,17 +836,15 @@ export function FundamentalsDetailsPage() {
   const chartHeadline = useMemo(() => {
     if (!selectedSummary) {
       return {
-        title: isEn ? "Price history" : "История цены",
-        description: isEn
-          ? "Select a period to load a fresh price slice from the market data API."
-          : "Выберите период, чтобы загрузить свежий срез цен из API рыночных данных.",
+        title: t("История цены", "Price history"),
+        description: t("Выберите период, чтобы загрузить свежий срез цен из API рыночных данных.", "Select a period to load a fresh price slice from the market data API."),
       };
     }
 
     return {
-      title: isEn ? "Price history" : "История цены",
+      title: t("История цены", "Price history"),
       description: `${getRangeLabel(selectedRange, isEn)} • ${selectedHistory.length} ${
-        isEn ? "points loaded" : "точек загружено"
+        t("точек загружено", "points loaded")
       }`,
     };
   }, [isEn, selectedHistory.length, selectedRange, selectedSummary]);
@@ -865,19 +859,17 @@ export function FundamentalsDetailsPage() {
       <div className="space-y-6">
         <PageHero
           icon={TrendingUp}
-          title={isEn ? "Share not found" : "Акция не найдена"}
+          title={t("Акция не найдена", "Share not found")}
           description={
-            isEn
-              ? "Open this page after loading the fundamentals cache, so we can match the FIGI with a stock card."
-              : "Откройте страницу после загрузки кэша фундаментальных данных, чтобы сопоставить FIGI с карточкой акции."
+            t("Откройте страницу после загрузки кэша фундаментальных данных, чтобы сопоставить FIGI с карточкой акции.", "Open this page after loading the fundamentals cache, so we can match the FIGI with a stock card.")
           }
-          badge={isEn ? "Fundamentals" : "Фундаментальные данные"}
+          badge={t("Фундаментальные данные", "Fundamentals")}
           accent="slate"
           footer={
             <>
               <Link to="/fundamentals" className="ui-secondary-button">
                 <ArrowLeft className="h-4 w-4" />
-                {isEn ? "Back to list" : "Назад к списку"}
+                {t("Назад к списку", "Back to list")}
               </Link>
               <button
                 type="button"
@@ -886,24 +878,22 @@ export function FundamentalsDetailsPage() {
                 className="ui-primary-button bg-slate-900 hover:bg-slate-950"
               >
                 {isLoading ? <RefreshCw className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
-                {isEn ? "Load fundamentals" : "Загрузить фундаментал"}
+                {t("Загрузить фундаментал", "Load fundamentals")}
               </button>
             </>
           }
         />
         <SectionCard>
           <div className="ui-surface-muted text-sm leading-7 text-slate-600 dark:text-slate-300">
-            {isEn
-              ? "No matching company was found in the local cache yet. Load or refresh fundamentals on the main page, then open the stock card again."
-              : "В локальном кэше пока нет подходящей компании. Загрузите или обновите фундаментальные данные на основной странице, затем снова откройте карточку акции."}
+            {t("В локальном кэше пока нет подходящей компании. Загрузите или обновите фундаментальные данные на основной странице, затем снова откройте карточку акции.", "No matching company was found in the local cache yet. Load or refresh fundamentals on the main page, then open the stock card again.")}
           </div>
         </SectionCard>
         <AppErrorDialog
           message={errorDialogMessage}
           onClose={() => setErrorDialogMessage(null)}
-          title={isEn ? "Data loading error" : "Ошибка загрузки данных"}
-          description={isEn ? "The application could not complete the request." : "Приложение не смогло завершить запрос."}
-          closeLabel={isEn ? "Close" : "Закрыть"}
+          title={t("Ошибка загрузки данных", "Data loading error")}
+          description={t("Приложение не смогло завершить запрос.", "The application could not complete the request.")}
+          closeLabel={t("Закрыть", "Close")}
         />
       </div>
     );
@@ -920,9 +910,7 @@ export function FundamentalsDetailsPage() {
           </div>
         }
         description={
-          isEn
-            ? "Interactive price history with fast period switching and a cleaner view of current market action."
-            : "Интерактивная история цены с быстрым переключением периода и более наглядным отображением текущего движения рынка."
+          t("Интерактивная история цены с быстрым переключением периода и более наглядным отображением текущего движения рынка.", "Interactive price history with fast period switching and a cleaner view of current market action.")
         }
         badge={mapExchangeLabel(share.exchange, isEn)}
         accent="blue"
@@ -934,10 +922,10 @@ export function FundamentalsDetailsPage() {
               className="ui-secondary-button border-white/20 bg-white/10 text-white hover:bg-white/16 dark:border-white/20 dark:bg-white/10 dark:text-white"
             >
               <ArrowLeft className="h-4 w-4" />
-              {isEn ? "Back to shares" : "Назад к акциям"}
+              {t("Назад к акциям", "Back to shares")}
             </Link>
             <span className="ui-page-hero-badge">{share.currency || "RUB"}</span>
-            <span className="ui-page-hero-badge">{isEn ? `Lot ${share.lot}` : `Лот ${share.lot}`}</span>
+            <span className="ui-page-hero-badge">{t(`Лот ${share.lot}`, `Lot ${share.lot}`)}</span>
             <span className="ui-page-hero-badge">FIGI: {share.figi}</span>
           </>
         }
@@ -954,7 +942,7 @@ export function FundamentalsDetailsPage() {
             className="ui-secondary-button"
           >
             {isHistoryLoading ? <RefreshCw className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
-            {isEn ? "Refresh chart" : "Обновить график"}
+            {t("Обновить график", "Refresh chart")}
           </button>
         }
       >
@@ -991,7 +979,7 @@ export function FundamentalsDetailsPage() {
                 }
               >
                 <TrendingUp className="h-4 w-4" />
-                {isEn ? "Line" : "Линия"}
+                {t("Линия", "Line")}
               </button>
               <button
                 type="button"
@@ -1003,7 +991,7 @@ export function FundamentalsDetailsPage() {
                 }
               >
                 <BarChart3 className="h-4 w-4" />
-                {isEn ? "Candles" : "Свечи"}
+                {t("Свечи", "Candles")}
               </button>
             </div>
           </div>
@@ -1011,21 +999,21 @@ export function FundamentalsDetailsPage() {
           <div className="ui-surface-muted flex flex-wrap items-center gap-3 text-sm text-slate-600 dark:text-slate-300">
             <span className="inline-flex items-center gap-2">
               <Calendar className="h-4 w-4" />
-              {isEn ? "Period" : "Период"}: {getRangeLabel(selectedRange, isEn)}
+              {t("Период", "Period")}: {getRangeLabel(selectedRange, isEn)}
             </span>
             <span>
-              {isEn ? "Mode" : "Режим"}:{" "}
-              {chartMode === "line" ? (isEn ? "Line chart" : "Линейный график") : (isEn ? "Candlesticks" : "Свечи")}
+              {t("Режим", "Mode")}:{" "}
+              {chartMode === "line" ? (t("Линейный график", "Line chart")) : (t("Свечи", "Candlesticks"))}
             </span>
             <span>
-              {chartMode === "candles" ? (isEn ? "Candles" : "Свечей") : isEn ? "Points" : "Точек"}: {displayedHistory.length}
+              {chartMode === "candles" ? (t("Свечей", "Candles")) : t("Точек", "Points")}: {displayedHistory.length}
             </span>
           </div>
 
           {isHistoryLoading && selectedHistory.length === 0 ? (
             <div className="flex h-[22rem] items-center justify-center rounded-[1.75rem] border border-slate-200/80 bg-slate-50/70 text-sm text-slate-500 dark:border-slate-800 dark:bg-slate-950/40 dark:text-slate-400">
               <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
-              {isEn ? "Loading chart history..." : "Загружаем историю графика..."}
+              {t("Загружаем историю графика...", "Loading chart history...")}
             </div>
           ) : selectedHistory.length > 0 ? (
             chartMode === "line" ? (
@@ -1078,7 +1066,7 @@ export function FundamentalsDetailsPage() {
             )
           ) : (
             <div className="flex h-[22rem] items-center justify-center rounded-[1.75rem] border border-dashed border-slate-300/80 bg-slate-50/70 text-sm text-slate-500 dark:border-slate-700 dark:bg-slate-950/40 dark:text-slate-400">
-              {isEn ? "No candles were returned for this period." : "Для этого периода API не вернул свечи."}
+              {t("Для этого периода API не вернул свечи.", "No candles were returned for this period.")}
             </div>
           )}
         </div>
@@ -1086,12 +1074,12 @@ export function FundamentalsDetailsPage() {
 
       <MetricGrid className="xl:grid-cols-4">
         <MetricCard
-          label={isEn ? "Current price" : "Текущая цена"}
+          label={t("Текущая цена", "Current price")}
           value={selectedSummary ? formatPriceValue(selectedSummary.current, share.currency, locale) : formatPriceValue(fallbackClosePrice, share.currency, locale)}
           helper={selectedSummary?.updatedAt ? formatDateTime(selectedSummary.updatedAt, locale) : undefined}
         />
         <MetricCard
-          label={isEn ? "Change on selected range" : "Изменение за период"}
+          label={t("Изменение за период", "Change on selected range")}
           value={selectedSummary ? `${formatSignedPriceValue(selectedSummary.absoluteChange, share.currency, locale)}` : "-"}
           helper={selectedSummary ? formatPercent(selectedSummary.percentChange, locale, true) : undefined}
           className={
@@ -1101,7 +1089,7 @@ export function FundamentalsDetailsPage() {
           }
         />
         <MetricCard
-          label={isEn ? "Range high / low" : "Максимум / минимум"}
+          label={t("Максимум / минимум", "Range high / low")}
           value={
             selectedSummary
               ? `${formatPriceValue(selectedSummary.high, share.currency, locale)} / ${formatPriceValue(selectedSummary.low, share.currency, locale)}`
@@ -1110,33 +1098,31 @@ export function FundamentalsDetailsPage() {
           helper={getRangeLabel(selectedRange, isEn)}
         />
         <MetricCard
-          label={isEn ? "Aggregated volume" : "Суммарный объём"}
+          label={t("Суммарный объём", "Aggregated volume")}
           value={
             selectedSummary
               ? new Intl.NumberFormat(getLocaleCode(locale), { maximumFractionDigits: 0 }).format(selectedSummary.volume)
               : "-"
           }
-          helper={selectedHistory.length ? `${selectedHistory.length} ${isEn ? "candles" : "свечей"}` : undefined}
+          helper={selectedHistory.length ? `${selectedHistory.length} ${t("свечей", "candles")}` : undefined}
         />
       </MetricGrid>
 
       <SectionCard
-        title={isEn ? "CAPM model" : "Модель CAPM"}
+        title={t("Модель CAPM", "CAPM model")}
         description={
-          isEn
-            ? "Built from daily returns for the last year against the MOEX index. The risk-free rate is estimated from the nearest liquid fixed-coupon OFZ around the 2-year horizon."
-            : "Построена по дневным доходностям за последний год относительно индекса Мосбиржи. Безрисковая ставка оценивается по ближайшей ликвидной фиксированной ОФЗ около двухлетнего горизонта."
+          t("Построена по дневным доходностям за последний год относительно индекса Мосбиржи. Безрисковая ставка оценивается по ближайшей ликвидной фиксированной ОФЗ около двухлетнего горизонта.", "Built from daily returns for the last year against the MOEX index. The risk-free rate is estimated from the nearest liquid fixed-coupon OFZ around the 2-year horizon.")
         }
       >
         {isCapmLoading ? (
           <div className="flex min-h-[12rem] items-center justify-center rounded-[1.75rem] border border-slate-200/80 bg-slate-50/70 text-sm text-slate-500 dark:border-slate-800 dark:bg-slate-950/40 dark:text-slate-400">
             <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
-            {isEn ? "Building CAPM from fresh market data..." : "Строим CAPM по свежим рыночным данным..."}
+            {t("Строим CAPM по свежим рыночным данным...", "Building CAPM from fresh market data...")}
           </div>
         ) : capmError ? (
           <div className="rounded-[1.75rem] border border-rose-200/80 bg-rose-50/75 px-5 py-4 text-sm leading-7 text-rose-700 dark:border-rose-500/20 dark:bg-rose-500/10 dark:text-rose-200">
             <div className="text-xs font-semibold uppercase tracking-[0.16em]">
-              {isEn ? "CAPM was not built" : "CAPM не построена"}
+              {t("CAPM не построена", "CAPM was not built")}
             </div>
             <div className="mt-2">{capmError}</div>
           </div>
@@ -1147,27 +1133,23 @@ export function FundamentalsDetailsPage() {
                 label="R^2"
                 value={formatPercentPoints(capmAnalysis.rSquared, locale)}
                 helper={
-                  isEn
-                    ? "Share of excess-return variance explained by the market factor"
-                    : "Доля вариации избыточной доходности, объясняемая рыночным фактором"
+                  t("Доля вариации избыточной доходности, объясняемая рыночным фактором", "Share of excess-return variance explained by the market factor")
                 }
               />
               <MetricCard
-                label={isEn ? "Beta" : "Бета"}
+                label={t("Бета", "Beta")}
                 value={formatCompactNumber(capmAnalysis.beta, locale, 2)}
                 helper={
-                  isEn
-                    ? "Sensitivity of the stock to market excess returns"
-                    : "Чувствительность акции к избыточной доходности рынка"
+                  t("Чувствительность акции к избыточной доходности рынка", "Sensitivity of the stock to market excess returns")
                 }
               />
               <MetricCard
-                label={isEn ? "Risk-free rate" : "Безрисковая ставка"}
+                label={t("Безрисковая ставка", "Risk-free rate")}
                 value={formatPercentPoints(capmAnalysis.riskFreeAnnualRate, locale)}
                 helper={`${capmAnalysis.riskFreeSource.bondTicker} | ${formatCalendarDate(capmAnalysis.riskFreeSource.maturityDate, locale)}`}
               />
               <MetricCard
-                label={isEn ? "Observations" : "Наблюдений"}
+                label={t("Наблюдений", "Observations")}
                 value={formatCompactNumber(capmAnalysis.sampleSize, locale, 0)}
                 helper={`${formatCalendarDate(capmAnalysis.periodStart, locale)} - ${formatCalendarDate(capmAnalysis.periodEnd, locale)}`}
               />
@@ -1177,7 +1159,7 @@ export function FundamentalsDetailsPage() {
               <div className="rounded-[1.75rem] border border-slate-200/80 bg-slate-50/70 px-5 py-5 dark:border-slate-800 dark:bg-slate-950/40">
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <div className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">
-                    {isEn ? "Adequacy assessment" : "Оценка адекватности"}
+                    {t("Оценка адекватности", "Adequacy assessment")}
                   </div>
                   <span className={`inline-flex rounded-full px-3 py-1.5 text-sm font-semibold ${capmAdequacy.toneClass}`}>
                     {capmAdequacy.label}
@@ -1193,35 +1175,31 @@ export function FundamentalsDetailsPage() {
 
               <div className="rounded-[1.75rem] border border-slate-200/80 bg-white/85 px-5 py-5 dark:border-slate-800 dark:bg-slate-950/50">
                 <div className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">
-                  {isEn ? "Model inputs" : "Входные данные"}
+                  {t("Входные данные", "Model inputs")}
                 </div>
                 <div className="mt-4 space-y-3 text-sm leading-7 text-slate-600 dark:text-slate-300">
                   <div>
                     <span className="font-semibold text-slate-900 dark:text-slate-100">
-                      {isEn ? "Market benchmark" : "Рыночный бенчмарк"}:
+                      {t("Рыночный бенчмарк", "Market benchmark")}:
                     </span>{" "}
                     {capmAnalysis.marketTicker} | {capmAnalysis.marketName}
                   </div>
                   <div>
                     <span className="font-semibold text-slate-900 dark:text-slate-100">
-                      {isEn ? "Risk-free source" : "Источник безрисковой ставки"}:
+                      {t("Источник безрисковой ставки", "Risk-free source")}:
                     </span>{" "}
                     {capmAnalysis.riskFreeSource.bondTicker} | {capmAnalysis.riskFreeSource.bondName}
                   </div>
                   <div>
                     <span className="font-semibold text-slate-900 dark:text-slate-100">
-                      {isEn ? "Expected annual return" : "Ожидаемая годовая доходность"}:
+                      {t("Ожидаемая годовая доходность", "Expected annual return")}:
                     </span>{" "}
                     {formatPercentPoints(capmAnalysis.expectedAnnualReturn, locale)}
                   </div>
                   <div className="text-xs leading-6 text-slate-500 dark:text-slate-400">
                     {capmAnalysis.riskFreeSource.pricingMethod === "ytm_solver"
-                      ? isEn
-                        ? "The OFZ rate is derived from the bond price and coupon cash flows using a YTM solver."
-                        : "Ставка по ОФЗ получена из рыночной цены и купонных потоков через расчёт YTM."
-                      : isEn
-                        ? "The OFZ rate is approximated from coupon cash flows because an exact YTM solve was not stable."
-                        : "Ставка по ОФЗ приближённая: использована купонная оценка, потому что точный расчёт YTM оказался нестабилен."}
+                      ? t("Ставка по ОФЗ получена из рыночной цены и купонных потоков через расчёт YTM.", "The OFZ rate is derived from the bond price and coupon cash flows using a YTM solver.")
+                      : t("Ставка по ОФЗ приближённая: использована купонная оценка, потому что точный расчёт YTM оказался нестабилен.", "The OFZ rate is approximated from coupon cash flows because an exact YTM solve was not stable.")}
                   </div>
                 </div>
               </div>
@@ -1229,17 +1207,15 @@ export function FundamentalsDetailsPage() {
           </div>
         ) : (
           <div className="rounded-[1.75rem] border border-dashed border-slate-300/80 bg-slate-50/70 px-5 py-6 text-sm text-slate-500 dark:border-slate-700 dark:bg-slate-950/40 dark:text-slate-400">
-            {isEn ? "CAPM data is not available yet." : "Данные CAPM пока недоступны."}
+            {t("Данные CAPM пока недоступны.", "CAPM data is not available yet.")}
           </div>
         )}
       </SectionCard>
 
       <SectionCard
-        title={isEn ? "Fundamental metrics" : "Фундаментальные показатели"}
+        title={t("Фундаментальные показатели", "Fundamental metrics")}
         description={
-          isEn
-            ? "Core valuation and profitability indicators from the fundamentals cache. Hover the help icon to see what each metric means."
-            : "Ключевые мультипликаторы и показатели прибыльности из кэша фундаментальных данных. Наведите на значок подсказки, чтобы увидеть объяснение метрики."
+          t("Ключевые мультипликаторы и показатели прибыльности из кэша фундаментальных данных. Наведите на значок подсказки, чтобы увидеть объяснение метрики.", "Core valuation and profitability indicators from the fundamentals cache. Hover the help icon to see what each metric means.")
         }
       >
         <MetricGrid className="xl:grid-cols-3">
@@ -1248,7 +1224,7 @@ export function FundamentalsDetailsPage() {
               key={item.key}
               label={
                 <FundamentalMetricLabel
-                  label={isEn ? item.labelEn : item.labelRu}
+                  label={t(item.labelRu, item.labelEn)}
                   metric={item.metric}
                   locale={locale}
                 />
@@ -1262,13 +1238,11 @@ export function FundamentalsDetailsPage() {
       <AppErrorDialog
         message={errorDialogMessage}
         onClose={() => setErrorDialogMessage(null)}
-        title={isEn ? "Chart loading error" : "Ошибка загрузки графика"}
+        title={t("Ошибка загрузки графика", "Chart loading error")}
         description={
-          isEn
-            ? "The application could not load fresh price history from the market data API."
-            : "Приложение не смогло загрузить свежую историю цены из API рыночных данных."
+          t("Приложение не смогло загрузить свежую историю цены из API рыночных данных.", "The application could not load fresh price history from the market data API.")
         }
-        closeLabel={isEn ? "Close" : "Закрыть"}
+        closeLabel={t("Закрыть", "Close")}
       />
     </div>
   );

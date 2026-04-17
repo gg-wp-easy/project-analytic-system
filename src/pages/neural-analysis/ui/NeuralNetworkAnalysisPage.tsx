@@ -274,7 +274,7 @@ function extractPortfolioAssetsCount(parsed: Record<string, unknown>): number {
 
 export function NeuralNetworkAnalysis() {
   const { cache, hasData } = useFundamentals();
-  const { locale } = useAppSettings();
+  const { locale, t } = useAppSettings();
   const isEn = locale === "en";
   const { settings: optimizerSettings, setSettings: setOptimizerSettings } = useOptimizerSettings();
   const [isRunning, setIsRunning] = useState(false);
@@ -421,9 +421,7 @@ export function NeuralNetworkAnalysis() {
     } catch (e) {
       const message = e instanceof Error
         ? e.message
-        : isEn
-          ? "Failed to run neural network analysis"
-          : "Не удалось выполнить нейросетевой анализ";
+        : t("Не удалось выполнить нейросетевой анализ", "Failed to run neural network analysis");
       showErrorDialog(message);
       setMetrics([]);
       setFeatureImportance([]);
@@ -449,12 +447,12 @@ export function NeuralNetworkAnalysis() {
       return;
     }
     await downloadAnalysisResultsAsXlsx({
-      title: isEn ? "Optimal Portfolio from Neural Analysis" : "Оптимальный портфель из нейросетевого анализа",
+      title: t("Оптимальный портфель из нейросетевого анализа", "Optimal Portfolio from Neural Analysis"),
       filename: "ai-optimal-portfolio.xlsx",
       rows: portfolioPositions,
       columns: getPortfolioHoldingColumns<PortfolioPosition>({
-        name: isEn ? "Stock" : "Акция",
-        weight: isEn ? "Weight, %" : "Вес, %",
+        name: t("Акция", "Stock"),
+        weight: t("Вес, %", "Weight, %"),
       }),
       metrics: visibleMetrics.map((item) => ({
         label: localizeMetricLabel(item.label, isEn),
@@ -471,7 +469,7 @@ export function NeuralNetworkAnalysis() {
     try {
       await downloadSvgAsPng(svg as SVGSVGElement, "ai-optimal-portfolio.png");
     } catch (e) {
-      const message = e instanceof Error ? e.message : isEn ? "Failed to save PNG" : "Не удалось сохранить PNG";
+      const message = e instanceof Error ? e.message : t("Не удалось сохранить PNG", "Failed to save PNG");
       showErrorDialog(message);
     }
   };
@@ -482,12 +480,12 @@ export function NeuralNetworkAnalysis() {
     }
     try {
       await downloadAnalysisResultsAsPdf({
-        title: isEn ? "Optimal Portfolio from Neural Analysis" : "Оптимальный портфель из нейросетевого анализа",
+        title: t("Оптимальный портфель из нейросетевого анализа", "Optimal Portfolio from Neural Analysis"),
         filename: "ai-optimal-portfolio.pdf",
         rows: portfolioPositions,
         columns: getPortfolioHoldingColumns<PortfolioPosition>({
-          name: isEn ? "Stock" : "Акция",
-          weight: isEn ? "Weight, %" : "Вес, %",
+          name: t("Акция", "Stock"),
+          weight: t("Вес, %", "Weight, %"),
         }),
         metrics: visibleMetrics.map((item) => ({
           label: localizeMetricLabel(item.label, isEn),
@@ -496,7 +494,7 @@ export function NeuralNetworkAnalysis() {
         chartSvg: portfolioChartRef.current?.querySelector("svg"),
       });
     } catch (e) {
-      const message = e instanceof Error ? e.message : isEn ? "Failed to save PDF" : "Не удалось сохранить PDF";
+      const message = e instanceof Error ? e.message : t("Не удалось сохранить PDF", "Failed to save PDF");
       showErrorDialog(message);
     }
   };
@@ -507,30 +505,27 @@ export function NeuralNetworkAnalysis() {
       hero={(
         <PageHero
           icon={Brain}
-          title={isEn ? "Neural Network Analysis" : "Анализ нейросети"}
-          description={isEn ? "Neural model selection and training are performed on the server." : "Нейросетевая модель подбирается и обучается на сервере."}
-          badge={isEn ? "Server-side training" : "Серверное обучение"}
+          title={t("Анализ нейросети", "Neural Network Analysis")}
+          description={t("Нейросетевая модель подбирается и обучается на сервере.", "Neural model selection and training are performed on the server.")}
+          badge={t("Серверное обучение", "Server-side training")}
           accent="orange"
         />
       )}
       sidebar={(
         <AnalysisSidebarCard
           icon={Settings}
-          title={isEn ? "Run Analysis" : "Запуск анализа"}
+          title={t("Запуск анализа", "Run Analysis")}
           description={
-            isEn
-              ? "Cached fundamentals and shared optimizer settings feed the neural pipeline."
-              : "Кэш фундаментальных данных и общие настройки оптимизатора используются для нейросетевого пайплайна."
+            t("Кэш фундаментальных данных и общие настройки оптимизатора используются для нейросетевого пайплайна.", "Cached fundamentals and shared optimizer settings feed the neural pipeline.")
           }
           accent="orange"
         >
           <div className="space-y-4">
             <div className="ui-surface-muted">
-              <p className="text-sm text-slate-700 dark:text-slate-300">{isEn ? "Source: fundamentals cache" : "Источник: кэш фундаментальных данных"}</p>
-              <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">{isEn ? "Records" : "Записей"}: {requestData.length}</p>
+              <p className="text-sm text-slate-700 dark:text-slate-300">{t("Источник: кэш фундаментальных данных", "Source: fundamentals cache")}</p>
+              <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">{t("Записей", "Records")}: {requestData.length}</p>
             </div>
             <OptimizerSettingsFields
-              isEn={isEn}
               settings={optimizerSettings}
               onChange={setOptimizerSettings}
             />
@@ -538,7 +533,7 @@ export function NeuralNetworkAnalysis() {
             {!hasData && (
               <div className="rounded-2xl border border-amber-200 bg-amber-50 p-3 dark:border-amber-900 dark:bg-amber-950/20">
                 <p className="text-sm text-amber-800 dark:text-amber-300">
-                  {isEn ? "Cache is empty. Load fundamentals first." : "Кэш пуст. Сначала загрузите фундаментальные данные."}
+                  {t("Кэш пуст. Сначала загрузите фундаментальные данные.", "Cache is empty. Load fundamentals first.")}
                 </p>
               </div>
             )}
@@ -549,7 +544,7 @@ export function NeuralNetworkAnalysis() {
               className="ui-primary-button w-full bg-gradient-to-r from-orange-600 to-red-600 hover:from-orange-700 hover:to-red-700"
             >
               <Play className="h-5 w-5" />
-              {isRunning ? (isEn ? "Running..." : "Выполняется...") : (isEn ? "Run Analysis" : "Запустить анализ")}
+              {isRunning ? (t("Выполняется...", "Running...")) : (t("Запустить анализ", "Run Analysis"))}
             </button>
           </div>
         </AnalysisSidebarCard>
@@ -557,8 +552,8 @@ export function NeuralNetworkAnalysis() {
     >
           {isRunning && (
             <AnalysisRunningIndicator
-              title={isEn ? "Running neural network analysis" : "Выполняем нейросетевой анализ"}
-              subtitle={isEn ? "Training network and calculating portfolio strategies" : "Обучаем сеть и рассчитываем стратегии портфеля"}
+              title={t("Выполняем нейросетевой анализ", "Running neural network analysis")}
+              subtitle={t("Обучаем сеть и рассчитываем стратегии портфеля", "Training network and calculating portfolio strategies")}
               accentClassName="text-orange-600"
             />
           )}
@@ -583,7 +578,7 @@ export function NeuralNetworkAnalysis() {
           )}
 
           {!!trainingHistory.length && (
-            <SectionCard title={isEn ? "Training History" : "История обучения"}>
+            <SectionCard title={t("История обучения", "Training History")}>
               <ResponsiveContainer width="100%" height={320}>
                 <LineChart data={trainingHistory}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
@@ -591,25 +586,25 @@ export function NeuralNetworkAnalysis() {
                   <YAxis stroke="#64748b" />
                   <Tooltip formatter={(v: number) => Number(v).toFixed(4)} />
                   <Legend />
-                  <Line type="monotone" dataKey="trainLoss" name={isEn ? "Train Loss" : "Train Loss"} stroke="#f97316" strokeWidth={2} dot={false} />
-                  <Line type="monotone" dataKey="valLoss" name={isEn ? "Val Loss" : "Val Loss"} stroke="#ef4444" strokeWidth={2} dot={false} />
+                  <Line type="monotone" dataKey="trainLoss" name={t("Train Loss", "Train Loss")} stroke="#f97316" strokeWidth={2} dot={false} />
+                  <Line type="monotone" dataKey="valLoss" name={t("Val Loss", "Val Loss")} stroke="#ef4444" strokeWidth={2} dot={false} />
                 </LineChart>
               </ResponsiveContainer>
             </SectionCard>
           )}
 
           {!!portfolioStrategies.length && (
-            <SectionCard title={isEn ? "Portfolio Strategies" : "Стратегии портфеля"}>
+            <SectionCard title={t("Стратегии портфеля", "Portfolio Strategies")}>
               <div className="ui-table-shell overflow-x-auto">
                 <table className="ui-data-table">
                   <thead>
                     <tr>
-                      <th>{isEn ? "Strategy" : "Стратегия"}</th>
+                      <th>{t("Стратегия", "Strategy")}</th>
                       <th>Expected return</th>
                       <th>Volatility</th>
                       <th>Sharpe</th>
                       <th>Diversification</th>
-                      <th>{isEn ? "Positions" : "Позиций"}</th>
+                      <th>{t("Позиций", "Positions")}</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -631,12 +626,12 @@ export function NeuralNetworkAnalysis() {
 
           {(!!portfolioPositions.length || portfolioAssetsCount > 0) && (
             <SectionCard
-              title={isEn ? "Optimal Portfolio from Neural Analysis" : "Оптимальный портфель из нейросетевого анализа"}
+              title={t("Оптимальный портфель из нейросетевого анализа", "Optimal Portfolio from Neural Analysis")}
               description={
                 portfolioAssetsCount > 0
                   ? (
                       <>
-                        {isEn ? "Assets in portfolio" : "Количество активов в портфеле"}:{" "}
+                        {t("Количество активов в портфеле", "Assets in portfolio")}:{" "}
                         <span className="font-semibold text-slate-900 dark:text-slate-100">{portfolioAssetsCount}</span>
                       </>
                     )
@@ -676,15 +671,15 @@ export function NeuralNetworkAnalysis() {
                   rows={portfolioPositions}
                   palette={palette}
                   chartRef={portfolioChartRef}
-                  companyLabel={isEn ? "Stock" : "Акция"}
-                  weightLabel={isEn ? "Weight, %" : "Вес, %"}
+                  companyLabel={t("Акция", "Stock")}
+                  weightLabel={t("Вес, %", "Weight, %")}
                 />
               )}
             </SectionCard>
           )}
 
           {!!featureImportance.length && (
-            <SectionCard title={isEn ? "Feature Importance" : "Важность признаков"}>
+            <SectionCard title={t("Важность признаков", "Feature Importance")}>
               <ResponsiveContainer width="100%" height={300}>
                 <BarChart data={featureImportance} layout="vertical" margin={{ top: 5, right: 30, left: 90, bottom: 5 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
@@ -704,7 +699,7 @@ export function NeuralNetworkAnalysis() {
           {/*{!!serverKeys.length && (
             <div className="bg-white rounded-xl p-4 shadow-sm border border-slate-200">
               <p className="text-sm text-slate-600">
-                {isEn ? "Server response keys" : "Ключи ответа сервера"}: {serverKeys.join(", ")}
+                {t("Ключи ответа сервера", "Server response keys")}: {serverKeys.join(", ")}
               </p>
             </div>
           )}*/}
@@ -713,13 +708,11 @@ export function NeuralNetworkAnalysis() {
       <AppErrorDialog
         message={errorDialogMessage}
         onClose={() => setErrorDialogMessage(null)}
-        title={isEn ? "Analysis Error" : "Ошибка анализа"}
+        title={t("Ошибка анализа", "Analysis Error")}
         description={
-          isEn
-            ? "The request could not be completed. Check the input data and try again."
-            : "Не удалось обработать запрос. Проверьте данные и попробуйте ещё раз."
+          t("Не удалось обработать запрос. Проверьте данные и попробуйте ещё раз.", "The request could not be completed. Check the input data and try again.")
         }
-        closeLabel={isEn ? "Close" : "Закрыть"}
+        closeLabel={t("Закрыть", "Close")}
       />
     </>
   );

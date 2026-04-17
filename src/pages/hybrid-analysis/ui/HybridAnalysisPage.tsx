@@ -277,9 +277,8 @@ function extractErrorText(payload: Record<string, unknown> | null): string | nul
 
 export function HybridAnalysis() {
   const { hasData, cache } = useFundamentals();
-  const { locale } = useAppSettings();
+  const { locale, t } = useAppSettings();
   const isEn = locale === "en";
-  const tx = (ru: string, en: string) => (isEn ? en : ru);
   const { settings: optimizerSettings, setSettings: setOptimizerSettings } = useOptimizerSettings();
 
   const [isRunning, setIsRunning] = useState(false);
@@ -469,7 +468,7 @@ export function HybridAnalysis() {
         });
       }
     } catch (e) {
-      const fallback = tx("Не удалось выполнить гибридный анализ", "Failed to run hybrid analysis");
+      const fallback = t("Не удалось выполнить гибридный анализ", "Failed to run hybrid analysis");
       const message = e instanceof Error ? e.message : fallback;
       resetAnalysisResults();
       showErrorDialog(message);
@@ -483,12 +482,12 @@ export function HybridAnalysis() {
       return;
     }
     await downloadAnalysisResultsAsXlsx({
-      title: tx("Оптимальный портфель гибрида", "Hybrid Optimal Portfolio"),
+      title: t("Оптимальный портфель гибрида", "Hybrid Optimal Portfolio"),
       filename: "hybrid-optimal-portfolio.xlsx",
       rows: portfolio,
       columns: getPortfolioHoldingColumns<PortfolioPosition>({
-        name: tx("Акция", "Stock"),
-        weight: tx("Вес, %", "Weight, %"),
+        name: t("Акция", "Stock"),
+        weight: t("Вес, %", "Weight, %"),
       }),
       metrics: visibleMetrics.map((item) => ({
         label: localizeMetricLabel(item.label, isEn),
@@ -505,7 +504,7 @@ export function HybridAnalysis() {
     try {
       await downloadSvgAsPng(svg as SVGSVGElement, "hybrid-optimal-portfolio.png");
     } catch (e) {
-      const message = e instanceof Error ? e.message : tx("Не удалось сохранить PNG", "Failed to save PNG");
+      const message = e instanceof Error ? e.message : t("Не удалось сохранить PNG", "Failed to save PNG");
       showErrorDialog(message);
     }
   };
@@ -516,12 +515,12 @@ export function HybridAnalysis() {
     }
     try {
       await downloadAnalysisResultsAsPdf({
-        title: tx("Оптимальный портфель гибрида", "Hybrid Optimal Portfolio"),
+        title: t("Оптимальный портфель гибрида", "Hybrid Optimal Portfolio"),
         filename: "hybrid-optimal-portfolio.pdf",
         rows: portfolio,
         columns: getPortfolioHoldingColumns<PortfolioPosition>({
-          name: tx("Акция", "Stock"),
-          weight: tx("Вес, %", "Weight, %"),
+          name: t("Акция", "Stock"),
+          weight: t("Вес, %", "Weight, %"),
         }),
         metrics: visibleMetrics.map((item) => ({
           label: localizeMetricLabel(item.label, isEn),
@@ -530,7 +529,7 @@ export function HybridAnalysis() {
         chartSvg: portfolioChartRef.current?.querySelector("svg"),
       });
     } catch (e) {
-      const message = e instanceof Error ? e.message : tx("Не удалось сохранить PDF", "Failed to save PDF");
+      const message = e instanceof Error ? e.message : t("Не удалось сохранить PDF", "Failed to save PDF");
       showErrorDialog(message);
     }
   };
@@ -541,20 +540,20 @@ export function HybridAnalysis() {
         hero={(
           <PageHero
             icon={Layers}
-            title={tx("Гибридный анализ", "Hybrid Analysis")}
-            description={tx(
+            title={t("Гибридный анализ", "Hybrid Analysis")}
+            description={t(
               "Комбинированный сигнал на базе кластеризации, дерева решений и нейросети.",
               "Combined signal based on clustering, decision tree, and neural network.",
             )}
-            badge={tx("Ансамбль моделей", "Ensemble pipeline")}
+            badge={t("Ансамбль моделей", "Ensemble pipeline")}
             accent="cyan"
           />
         )}
         sidebar={(
           <AnalysisSidebarCard
             icon={Settings}
-            title={tx("Параметры ансамбля", "Ensemble Parameters")}
-            description={tx(
+            title={t("Параметры ансамбля", "Ensemble Parameters")}
+            description={t(
               "Общий shell для весов ансамбля и настроек оптимизатора.",
               "Shared shell for ensemble weights and optimizer settings.",
             )}
@@ -562,11 +561,10 @@ export function HybridAnalysis() {
           >
             <div className="space-y-4">
               <div className="ui-surface-muted">
-                <p className="text-sm text-slate-700 dark:text-slate-300">{tx("Источник: кэш фундаментальных данных", "Source: fundamentals cache")}</p>
-                <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">{tx("Записей", "Records")}: {requestData.length}</p>
+                <p className="text-sm text-slate-700 dark:text-slate-300">{t("Источник: кэш фундаментальных данных", "Source: fundamentals cache")}</p>
+                <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">{t("Записей", "Records")}: {requestData.length}</p>
               </div>
               <OptimizerSettingsFields
-                isEn={isEn}
                 settings={optimizerSettings}
                 onChange={setOptimizerSettings}
               />
@@ -577,10 +575,10 @@ export function HybridAnalysis() {
                 className="ui-primary-button w-full bg-gradient-to-r from-cyan-700 to-blue-700 hover:from-cyan-800 hover:to-blue-800"
               >
                 <Play className="h-4 w-4" />
-                {isRunning ? tx("Выполняется...", "Running...") : tx("Запустить гибрид", "Run Hybrid")}
+                {isRunning ? t("Выполняется...", "Running...") : t("Запустить гибрид", "Run Hybrid")}
               </button>
               {!hasData && (
-                <p className="text-xs text-amber-700 dark:text-amber-300">{tx("Для запуска сначала загрузите фундаментальные данные.", "Load fundamentals first.")}</p>
+                <p className="text-xs text-amber-700 dark:text-amber-300">{t("Для запуска сначала загрузите фундаментальные данные.", "Load fundamentals first.")}</p>
               )}
             </div>
           </AnalysisSidebarCard>
@@ -588,8 +586,8 @@ export function HybridAnalysis() {
       >
           {isRunning && (
             <AnalysisRunningIndicator
-              title={tx("Выполняем гибридный анализ", "Running hybrid analysis")}
-              subtitle={tx("Собираем сигналы моделей и оптимизируем портфель", "Combining model signals and optimizing portfolio")}
+              title={t("Выполняем гибридный анализ", "Running hybrid analysis")}
+              subtitle={t("Собираем сигналы моделей и оптимизируем портфель", "Combining model signals and optimizing portfolio")}
               accentClassName="text-cyan-700"
             />
           )}
@@ -614,7 +612,7 @@ export function HybridAnalysis() {
           )}
 
           {!!trainingHistory.length && (
-            <SectionCard title={tx("История обучения", "Training History")}>
+            <SectionCard title={t("История обучения", "Training History")}>
               <ResponsiveContainer width="100%" height={320}>
                 <LineChart data={trainingHistory}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
@@ -630,17 +628,17 @@ export function HybridAnalysis() {
           )}
 
           {!!portfolioStrategies.length && (
-            <SectionCard title={tx("Стратегии портфеля", "Portfolio Strategies")}>
+            <SectionCard title={t("Стратегии портфеля", "Portfolio Strategies")}>
               <div className="ui-table-shell overflow-x-auto">
                 <table className="ui-data-table">
                   <thead>
                     <tr>
-                      <th>{tx("Стратегия", "Strategy")}</th>
+                      <th>{t("Стратегия", "Strategy")}</th>
                       <th>Expected return</th>
                       <th>Volatility</th>
                       <th>Sharpe</th>
                       <th>Diversification</th>
-                      <th>{tx("Позиций", "Positions")}</th>
+                      <th>{t("Позиций", "Positions")}</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -662,12 +660,12 @@ export function HybridAnalysis() {
 
           {(!!portfolio.length || portfolioAssetsCount > 0) && (
             <SectionCard
-              title={tx("Оптимальный портфель гибрида", "Hybrid Optimal Portfolio")}
+              title={t("Оптимальный портфель гибрида", "Hybrid Optimal Portfolio")}
               description={
                 portfolioAssetsCount > 0
                   ? (
                       <>
-                        {tx("Количество активов в портфеле", "Assets in portfolio")}:{" "}
+                        {t("Количество активов в портфеле", "Assets in portfolio")}:{" "}
                         <span className="font-semibold text-slate-900 dark:text-slate-100">{portfolioAssetsCount}</span>
                       </>
                     )
@@ -707,8 +705,8 @@ export function HybridAnalysis() {
                   rows={portfolio}
                   palette={palette}
                   chartRef={portfolioChartRef}
-                  companyLabel={tx("Акция", "Stock")}
-                  weightLabel={tx("Вес, %", "Weight, %")}
+                  companyLabel={t("Акция", "Stock")}
+                  weightLabel={t("Вес, %", "Weight, %")}
                 />
               )}
             </SectionCard>
@@ -718,12 +716,12 @@ export function HybridAnalysis() {
       <AppErrorDialog
         message={errorDialogMessage}
         onClose={() => setErrorDialogMessage(null)}
-        title={tx("Ошибка анализа", "Analysis Error")}
-        description={tx(
+        title={t("Ошибка анализа", "Analysis Error")}
+        description={t(
           "Не удалось обработать запрос. Проверьте данные и попробуйте ещё раз.",
           "The request could not be completed. Check the input data and try again.",
         )}
-        closeLabel={tx("Закрыть", "Close")}
+        closeLabel={t("Закрыть", "Close")}
       />
     </>
   );

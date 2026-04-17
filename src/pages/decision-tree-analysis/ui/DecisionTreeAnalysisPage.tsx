@@ -261,7 +261,7 @@ function extractPortfolioAssetsCount(parsed: Record<string, unknown>): number {
 
 export function DecisionTreeAnalysis() {
   const { cache, hasData } = useFundamentals();
-  const { locale } = useAppSettings();
+  const { locale, t } = useAppSettings();
   const isEn = locale === "en";
   const { settings: optimizerSettings, setSettings: setOptimizerSettings } = useOptimizerSettings();
   const [isRunning, setIsRunning] = useState(false);
@@ -412,7 +412,7 @@ export function DecisionTreeAnalysis() {
         });
       }
     } catch (e) {
-      const message = e instanceof Error ? e.message : isEn ? "Failed to run decision tree analysis" : "Не удалось выполнить анализ дерева решений";
+      const message = e instanceof Error ? e.message : t("Не удалось выполнить анализ дерева решений", "Failed to run decision tree analysis");
       showErrorDialog(message);
       setMetrics([]);
       setFeatureImportance([]);
@@ -439,12 +439,12 @@ export function DecisionTreeAnalysis() {
       return;
     }
     await downloadAnalysisResultsAsXlsx({
-      title: isEn ? "Optimal Portfolio from Decision Tree" : "Оптимальный портфель из дерева решений",
+      title: t("Оптимальный портфель из дерева решений", "Optimal Portfolio from Decision Tree"),
       filename: "tree-optimal-portfolio.xlsx",
       rows: portfolioPositions,
       columns: getPortfolioHoldingColumns<PortfolioPosition>({
-        name: isEn ? "Stock" : "Акция",
-        weight: isEn ? "Weight, %" : "Вес, %",
+        name: t("Акция", "Stock"),
+        weight: t("Вес, %", "Weight, %"),
       }),
       metrics: visibleMetrics.map((item) => ({
         label: localizeMetricLabel(item.label, isEn),
@@ -461,7 +461,7 @@ export function DecisionTreeAnalysis() {
     try {
       await downloadSvgAsPng(svg as SVGSVGElement, "tree-optimal-portfolio.png");
     } catch (e) {
-      const message = e instanceof Error ? e.message : isEn ? "Failed to save PNG" : "Не удалось сохранить PNG";
+      const message = e instanceof Error ? e.message : t("Не удалось сохранить PNG", "Failed to save PNG");
       showErrorDialog(message);
     }
   };
@@ -472,12 +472,12 @@ export function DecisionTreeAnalysis() {
     }
     try {
       await downloadAnalysisResultsAsPdf({
-        title: isEn ? "Optimal Portfolio from Decision Tree" : "Оптимальный портфель из дерева решений",
+        title: t("Оптимальный портфель из дерева решений", "Optimal Portfolio from Decision Tree"),
         filename: "tree-optimal-portfolio.pdf",
         rows: portfolioPositions,
         columns: getPortfolioHoldingColumns<PortfolioPosition>({
-          name: isEn ? "Stock" : "Акция",
-          weight: isEn ? "Weight, %" : "Вес, %",
+          name: t("Акция", "Stock"),
+          weight: t("Вес, %", "Weight, %"),
         }),
         metrics: visibleMetrics.map((item) => ({
           label: localizeMetricLabel(item.label, isEn),
@@ -486,7 +486,7 @@ export function DecisionTreeAnalysis() {
         chartSvg: portfolioChartRef.current?.querySelector("svg"),
       });
     } catch (e) {
-      const message = e instanceof Error ? e.message : isEn ? "Failed to save PDF" : "Не удалось сохранить PDF";
+      const message = e instanceof Error ? e.message : t("Не удалось сохранить PDF", "Failed to save PDF");
       showErrorDialog(message);
     }
   };
@@ -497,31 +497,28 @@ export function DecisionTreeAnalysis() {
       hero={(
         <PageHero
           icon={GitBranch}
-          title={isEn ? "Decision Tree Analysis" : "Анализ дерева решений"}
-          description={isEn ? "Model and hyperparameters are selected on the server." : "Модель и гиперпараметры автоматически подбираются на сервере."}
-          badge={isEn ? "Server-side training" : "Серверное обучение"}
+          title={t("Анализ дерева решений", "Decision Tree Analysis")}
+          description={t("Модель и гиперпараметры автоматически подбираются на сервере.", "Model and hyperparameters are selected on the server.")}
+          badge={t("Серверное обучение", "Server-side training")}
           accent="emerald"
         />
       )}
       sidebar={(
         <AnalysisSidebarCard
           icon={Settings}
-          title={isEn ? "Run Analysis" : "Запуск анализа"}
+          title={t("Запуск анализа", "Run Analysis")}
           description={
-            isEn
-              ? "Shared optimizer inputs and cached fundamentals feed the tree model."
-              : "Общие настройки оптимизатора и кэш фундаментальных данных используются для дерева решений."
+            t("Общие настройки оптимизатора и кэш фундаментальных данных используются для дерева решений.", "Shared optimizer inputs and cached fundamentals feed the tree model.")
           }
           accent="emerald"
         >
           <div className="space-y-4">
             <div className="ui-surface-muted">
-              <p className="text-sm text-slate-700 dark:text-slate-300">{isEn ? "Source: fundamentals cache" : "Источник: кэш фундаментальных данных"}</p>
-              <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">{isEn ? "Records" : "Записей"}: {requestData.length}</p>
+              <p className="text-sm text-slate-700 dark:text-slate-300">{t("Источник: кэш фундаментальных данных", "Source: fundamentals cache")}</p>
+              <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">{t("Записей", "Records")}: {requestData.length}</p>
             </div>
 
             <OptimizerSettingsFields
-              isEn={isEn}
               settings={optimizerSettings}
               onChange={setOptimizerSettings}
             />
@@ -529,7 +526,7 @@ export function DecisionTreeAnalysis() {
             {!hasData && (
               <div className="rounded-2xl border border-amber-200 bg-amber-50 p-3 dark:border-amber-900 dark:bg-amber-950/20">
                 <p className="text-sm text-amber-800 dark:text-amber-300">
-                  {isEn ? "Cache is empty. Load fundamentals first." : "Кэш пуст. Сначала загрузите фундаментальные данные."}
+                  {t("Кэш пуст. Сначала загрузите фундаментальные данные.", "Cache is empty. Load fundamentals first.")}
                 </p>
               </div>
             )}
@@ -540,7 +537,7 @@ export function DecisionTreeAnalysis() {
               className="ui-primary-button w-full bg-gradient-to-r from-emerald-600 to-green-600 hover:from-emerald-700 hover:to-green-700"
             >
               <Play className="h-5 w-5" />
-              {isRunning ? (isEn ? "Running..." : "Выполняется...") : (isEn ? "Run Analysis" : "Запустить анализ")}
+              {isRunning ? (t("Выполняется...", "Running...")) : (t("Запустить анализ", "Run Analysis"))}
             </button>
           </div>
         </AnalysisSidebarCard>
@@ -548,8 +545,8 @@ export function DecisionTreeAnalysis() {
     >
           {isRunning && (
             <AnalysisRunningIndicator
-              title={isEn ? "Running decision tree analysis" : "Выполняем анализ дерева решений"}
-              subtitle={isEn ? "Training model and generating portfolio metrics" : "Обучаем модель и формируем метрики портфеля"}
+              title={t("Выполняем анализ дерева решений", "Running decision tree analysis")}
+              subtitle={t("Обучаем модель и формируем метрики портфеля", "Training model and generating portfolio metrics")}
               accentClassName="text-emerald-600"
             />
           )}
@@ -576,7 +573,7 @@ export function DecisionTreeAnalysis() {
           {portfolioAssetsCount > 0 && (
             <MetricGrid className="xl:grid-cols-1">
               <MetricCard
-                label={isEn ? "Assets in optimal portfolio" : "Активов в оптимальном портфеле"}
+                label={t("Активов в оптимальном портфеле", "Assets in optimal portfolio")}
                 value={portfolioAssetsCount}
                 className="max-w-xs"
               />
@@ -584,7 +581,7 @@ export function DecisionTreeAnalysis() {
           )}
 
           {!!sectorAllocation.length && (
-            <SectionCard title={isEn ? "Sector Allocation" : "Распределение по секторам"}>
+            <SectionCard title={t("Распределение по секторам", "Sector Allocation")}>
               <ResponsiveContainer width="100%" height={320}>
                 <BarChart data={sectorAllocation} layout="vertical" margin={{ top: 5, right: 30, left: 130, bottom: 5 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
@@ -599,7 +596,7 @@ export function DecisionTreeAnalysis() {
 
           {!!portfolioPositions.length && (
             <SectionCard
-              title={isEn ? "Optimal Portfolio from Decision Tree" : "Оптимальный портфель из дерева решений"}
+              title={t("Оптимальный портфель из дерева решений", "Optimal Portfolio from Decision Tree")}
               action={(
                 <div className="flex items-center gap-2">
                   <button
@@ -633,19 +630,19 @@ export function DecisionTreeAnalysis() {
                 rows={portfolioPositions}
                 palette={palette}
                 chartRef={portfolioChartRef}
-                companyLabel={isEn ? "Stock" : "Акция"}
-                weightLabel={isEn ? "Weight, %" : "Вес, %"}
+                companyLabel={t("Акция", "Stock")}
+                weightLabel={t("Вес, %", "Weight, %")}
               />
             </SectionCard>
           )}
 
           {!!numericSummary.length && (
-            <SectionCard title={isEn ? "Numeric Features Summary" : "Сводка по числовым признакам"}>
+            <SectionCard title={t("Сводка по числовым признакам", "Numeric Features Summary")}>
               <div className="ui-table-shell overflow-x-auto">
                 <table className="ui-data-table">
                   <thead>
                     <tr>
-                      <th>{isEn ? "Metric" : "Метрика"}</th>
+                      <th>{t("Метрика", "Metric")}</th>
                       <th>Mean</th>
                       <th>Median</th>
                       <th>Min</th>
@@ -669,7 +666,7 @@ export function DecisionTreeAnalysis() {
           )}
 
           {!!featureImportance.length && (
-            <SectionCard title={isEn ? "Feature Importance" : "Важность признаков"}>
+            <SectionCard title={t("Важность признаков", "Feature Importance")}>
               <ResponsiveContainer width="100%" height={300}>
                 <BarChart data={featureImportance} layout="vertical" margin={{ top: 5, right: 30, left: 90, bottom: 5 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
@@ -687,7 +684,7 @@ export function DecisionTreeAnalysis() {
           )}
 
           {confusionMatrix && (
-            <SectionCard title={isEn ? "Confusion Matrix" : "Матрица ошибок"}>
+            <SectionCard title={t("Матрица ошибок", "Confusion Matrix")}>
               <div className="max-w-2xl overflow-x-auto">
                 <table className="ui-data-table">
                   <thead>
@@ -695,7 +692,7 @@ export function DecisionTreeAnalysis() {
                       <th className="bg-slate-50 p-2 text-left dark:bg-slate-800"></th>
                       {confusionMatrix.labels.map((label) => (
                         <th key={`pred-${label}`} className="bg-slate-50 p-2 text-left dark:bg-slate-800">
-                          {isEn ? "Predicted" : "Прогноз"}: {label}
+                          {t("Прогноз", "Predicted")}: {label}
                         </th>
                       ))}
                     </tr>
@@ -703,7 +700,7 @@ export function DecisionTreeAnalysis() {
                   <tbody>
                     {confusionMatrix.matrix.map((row, rowIndex) => (
                       <tr key={`row-${rowIndex}`}>
-                        <td className="bg-slate-50 p-2 font-medium dark:bg-slate-800">{isEn ? "Actual" : "Факт"}: {confusionMatrix.labels[rowIndex] ?? `Class ${rowIndex + 1}`}</td>
+                        <td className="bg-slate-50 p-2 font-medium dark:bg-slate-800">{t("Факт", "Actual")}: {confusionMatrix.labels[rowIndex] ?? `Class ${rowIndex + 1}`}</td>
                         {row.map((value, colIndex) => (
                           <td key={`cell-${rowIndex}-${colIndex}`} className="p-2 text-center font-semibold text-slate-900 dark:text-slate-100">
                             {value}
@@ -719,7 +716,7 @@ export function DecisionTreeAnalysis() {
 
           {/*{!!serverKeys.length && (
             <div className="bg-white rounded-xl p-4 shadow-sm border border-slate-200">
-              <p className="text-sm text-slate-600">{isEn ? "Server response keys" : "Ключи ответа сервера"}: {serverKeys.join(", ")}</p>
+              <p className="text-sm text-slate-600">{t("Ключи ответа сервера", "Server response keys")}: {serverKeys.join(", ")}</p>
             </div>
           )}*/}
       </AnalysisPageFrame>
@@ -727,13 +724,11 @@ export function DecisionTreeAnalysis() {
       <AppErrorDialog
         message={errorDialogMessage}
         onClose={() => setErrorDialogMessage(null)}
-        title={isEn ? "Analysis Error" : "Ошибка анализа"}
+        title={t("Ошибка анализа", "Analysis Error")}
         description={
-          isEn
-            ? "The request could not be completed. Check the input data and try again."
-            : "Не удалось обработать запрос. Проверьте данные и попробуйте ещё раз."
+          t("Не удалось обработать запрос. Проверьте данные и попробуйте ещё раз.", "The request could not be completed. Check the input data and try again.")
         }
-        closeLabel={isEn ? "Close" : "Закрыть"}
+        closeLabel={t("Закрыть", "Close")}
       />
     </>
   );

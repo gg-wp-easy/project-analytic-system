@@ -317,9 +317,7 @@ function SectionSwitcher({
 }
 
 export function NewsAssistantPage() {
-  const { locale } = useAppSettings();
-  const isEn = locale === "en";
-  const tx = (ru: string, en: string) => (isEn ? en : ru);
+  const { locale, t } = useAppSettings();
 
   const [searchParams, setSearchParams] = useSearchParams();
   const [overview, setOverview] = useState<NewsOverviewResponse | null>(null);
@@ -341,20 +339,20 @@ export function NewsAssistantPage() {
   const sectionItems = [
     {
       key: "overview" as const,
-      title: tx("Обзор", "Overview"),
-      description: tx("Сводка рынка, идеи и горячие темы.", "Market summary, ideas, and hot topics."),
+      title: t("Обзор", "Overview"),
+      description: t("Сводка рынка, идеи и горячие темы.", "Market summary, ideas, and hot topics."),
       icon: LayoutDashboard,
     },
     {
       key: "assistant" as const,
-      title: tx("Ассистент", "Assistant"),
-      description: tx("Запросы к ИИ и отчёты по тикерам.", "AI prompts and ticker reports."),
+      title: t("Ассистент", "Assistant"),
+      description: t("Запросы к ИИ и отчёты по тикерам.", "AI prompts and ticker reports."),
       icon: Bot,
     },
     {
       key: "feed" as const,
-      title: tx("Лента", "Feed"),
-      description: tx("Обновление новостей и свежая лента.", "Refresh controls and the latest news feed."),
+      title: t("Лента", "Feed"),
+      description: t("Обновление новостей и свежая лента.", "Refresh controls and the latest news feed."),
       icon: Newspaper,
     },
   ];
@@ -383,7 +381,7 @@ export function NewsAssistantPage() {
       setSupportedTickers(tickersResponse.tickers);
       setPageError(null);
     } catch (error) {
-      setPageError(error instanceof Error ? error.message : tx("Не удалось загрузить данные news-assistant.", "Failed to load news assistant data."));
+      setPageError(error instanceof Error ? error.message : t("Не удалось загрузить данные news-assistant.", "Failed to load news assistant data."));
     } finally {
       setIsInitialLoading(false);
     }
@@ -406,13 +404,13 @@ export function NewsAssistantPage() {
 
       await loadPageData();
       setRefreshSummary(
-        tx(
+        t(
           `Обновление завершено. Статус: ${response.status}. ${response.report?.statistics?.total_news ? `Новостей обработано: ${response.report.statistics.total_news}.` : ""}`,
           `Refresh completed. Status: ${response.status}. ${response.report?.statistics?.total_news ? `Processed news: ${response.report.statistics.total_news}.` : ""}`,
         ),
       );
     } catch (error) {
-      setActionError(error instanceof Error ? error.message : tx("Не удалось обновить новости.", "Failed to refresh the news pipeline."));
+      setActionError(error instanceof Error ? error.message : t("Не удалось обновить новости.", "Failed to refresh the news pipeline."));
     } finally {
       setIsRefreshing(false);
     }
@@ -432,7 +430,7 @@ export function NewsAssistantPage() {
       const response = await queryNewsAssistant(trimmed);
       setAssistantResult(response);
     } catch (error) {
-      setActionError(error instanceof Error ? error.message : tx("Не удалось выполнить запрос к ассистенту.", "Failed to query the assistant."));
+      setActionError(error instanceof Error ? error.message : t("Не удалось выполнить запрос к ассистенту.", "Failed to query the assistant."));
     } finally {
       setIsSubmittingQuery(false);
     }
@@ -452,7 +450,7 @@ export function NewsAssistantPage() {
       const response = await fetchTickerReport(trimmed);
       setAssistantResult(response);
     } catch (error) {
-      setActionError(error instanceof Error ? error.message : tx("Не удалось получить отчёт по тикеру.", "Failed to load the ticker report."));
+      setActionError(error instanceof Error ? error.message : t("Не удалось получить отчёт по тикеру.", "Failed to load the ticker report."));
     } finally {
       setIsSubmittingTicker(false);
     }
@@ -468,21 +466,21 @@ export function NewsAssistantPage() {
       hero={(
         <PageHero
           icon={Newspaper}
-          title={tx("Новости и ИИ-ассистент", "News and AI Assistant")}
-          description={tx(
+          title={t("Новости и ИИ-ассистент", "News and AI Assistant")}
+          description={t(
             "Разделены обзор, запросы к ассистенту и новостная лента, чтобы страница читалась спокойнее и без лишнего визуального шума.",
             "Overview, assistant workflows, and the live news feed are split into separate modes so the page feels cleaner and easier to scan.",
           )}
-          badge={tx("server-news-analytic", "server-news-analytic")}
+          badge={t("server-news-analytic", "server-news-analytic")}
           accent="blue"
           aside={(
             <div className="space-y-2">
-              <div className="text-xs uppercase tracking-[0.18em] text-white/72">{tx("Статус сервиса", "Service status")}</div>
+              <div className="text-xs uppercase tracking-[0.18em] text-white/72">{t("Статус сервиса", "Service status")}</div>
               <div className="text-2xl font-semibold text-white">
-                {pageError ? tx("Недоступен", "Unavailable") : tx("Готов", "Ready")}
+                {pageError ? t("Недоступен", "Unavailable") : t("Готов", "Ready")}
               </div>
               <div className="text-sm leading-6 text-white/80">
-                {tx("Снимок данных", "Data snapshot")}: {formatTimestamp(overview?.data_timestamp, locale)}
+                {t("Снимок данных", "Data snapshot")}: {formatTimestamp(overview?.data_timestamp, locale)}
               </div>
             </div>
           )}
@@ -490,15 +488,15 @@ export function NewsAssistantPage() {
             <>
               <span className="ui-page-hero-badge">
                 <Activity className="h-4 w-4" />
-                {tx("Тикеров в справочнике", "Supported tickers")}: {supportedTickers.length}
+                {t("Тикеров в справочнике", "Supported tickers")}: {supportedTickers.length}
               </span>
               <span className="ui-page-hero-badge">
                 <Sparkles className="h-4 w-4" />
-                {tx("Источников", "Sources")}: {marketSummary?.sources.length ?? 0}
+                {t("Источников", "Sources")}: {marketSummary?.sources.length ?? 0}
               </span>
               <span className="ui-page-hero-badge">
                 <ActiveSectionIcon className="h-4 w-4" />
-                {tx("Режим", "Mode")}: {activeSectionMeta.title}
+                {t("Режим", "Mode")}: {activeSectionMeta.title}
               </span>
             </>
           )}
@@ -508,8 +506,8 @@ export function NewsAssistantPage() {
         <div className="space-y-6">
           <AnalysisSidebarCard
             icon={activeSectionMeta.icon}
-            title={tx("Разделы страницы", "Page sections")}
-            description={tx(
+            title={t("Разделы страницы", "Page sections")}
+            description={t(
               "Переключай режимы страницы, чтобы не держать обзор, рабочие запросы и ленту новостей в одном длинном полотне.",
               "Switch between focused page modes so the overview, assistant tools, and news feed do not compete on one screen.",
             )}
@@ -522,8 +520,8 @@ export function NewsAssistantPage() {
             <AnalysisSidebarCard
               className="hidden"
               icon={Activity}
-              title={tx("Снимок рынка", "Market snapshot")}
-              description={tx(
+              title={t("Снимок рынка", "Market snapshot")}
+              description={t(
                 "Короткий статус по текущему новостному снимку без лишних действий и форм.",
                 "A concise status card for the current news snapshot without extra actions.",
               )}
@@ -531,21 +529,21 @@ export function NewsAssistantPage() {
             >
               <div className="grid grid-cols-2 gap-3 text-sm">
                 <div className="ui-surface-muted">
-                  <div className="text-slate-500 dark:text-slate-400">{tx("Новости", "News")}</div>
+                  <div className="text-slate-500 dark:text-slate-400">{t("Новости", "News")}</div>
                   <div className="mt-1 text-base font-semibold text-slate-900 dark:text-slate-100">{marketSummary?.total_news ?? 0}</div>
                 </div>
                 <div className="ui-surface-muted">
-                  <div className="text-slate-500 dark:text-slate-400">{tx("Источники", "Sources")}</div>
+                  <div className="text-slate-500 dark:text-slate-400">{t("Источники", "Sources")}</div>
                   <div className="mt-1 text-base font-semibold text-slate-900 dark:text-slate-100">{marketSummary?.sources.length ?? 0}</div>
                 </div>
                 <div className="ui-surface-muted col-span-2">
-                  <div className="text-slate-500 dark:text-slate-400">{tx("Последнее обновление", "Last update")}</div>
+                  <div className="text-slate-500 dark:text-slate-400">{t("Последнее обновление", "Last update")}</div>
                   <div className="mt-1 text-sm font-semibold text-slate-900 dark:text-slate-100">{formatTimestamp(overview?.data_timestamp, locale)}</div>
                 </div>
               </div>
               <button type="button" onClick={() => setSection("feed")} className="ui-secondary-button w-full">
                 <Newspaper className="h-4 w-4" />
-                {tx("Открыть ленту", "Open feed")}
+                {t("Открыть ленту", "Open feed")}
               </button>
             </AnalysisSidebarCard>
           ) : null}
@@ -554,8 +552,8 @@ export function NewsAssistantPage() {
             <AnalysisSidebarCard
             className="hidden"
             icon={RefreshCw}
-            title={tx("Обновление новостей", "Refresh pipeline")}
-            description={tx(
+            title={t("Обновление новостей", "Refresh pipeline")}
+            description={t(
               "Запускает сбор и пересчёт новостного анализа прямо из desktop-приложения.",
               "Runs a fresh news fetch and analysis directly from the desktop application.",
             )}
@@ -568,7 +566,7 @@ export function NewsAssistantPage() {
                 onChange={(event) => setUseFinbert(event.target.checked)}
                 className="mt-1 h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
               />
-              <span>{tx("Использовать FinBERT для тональности", "Use FinBERT for sentiment analysis")}</span>
+              <span>{t("Использовать FinBERT для тональности", "Use FinBERT for sentiment analysis")}</span>
             </label>
             <label className="mt-3 flex items-start gap-3 text-sm text-slate-600 dark:text-slate-300">
               <input
@@ -577,7 +575,7 @@ export function NewsAssistantPage() {
                 onChange={(event) => setFetchFullText(event.target.checked)}
                 className="mt-1 h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
               />
-              <span>{tx("Загружать полные тексты новостей", "Fetch full article texts")}</span>
+              <span>{t("Загружать полные тексты новостей", "Fetch full article texts")}</span>
             </label>
             <button
               type="button"
@@ -586,7 +584,7 @@ export function NewsAssistantPage() {
               className="ui-primary-button mt-5 w-full bg-gradient-to-r from-blue-700 to-cyan-600 hover:from-blue-800 hover:to-cyan-700"
             >
               {isRefreshing ? <RefreshCw className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
-              {isRefreshing ? tx("Обновляем...", "Refreshing...") : tx("Обновить и пересчитать", "Refresh and analyze")}
+              {isRefreshing ? t("Обновляем...", "Refreshing...") : t("Обновить и пересчитать", "Refresh and analyze")}
             </button>
             {refreshSummary ? <div className="mt-4 ui-surface-muted text-sm">{refreshSummary}</div> : null}
             </AnalysisSidebarCard>
@@ -597,8 +595,8 @@ export function NewsAssistantPage() {
               <AnalysisSidebarCard
             className="hidden"
             icon={Bot}
-            title={tx("Запрос к ассистенту", "Assistant query")}
-            description={tx(
+            title={t("Запрос к ассистенту", "Assistant query")}
+            description={t(
               "Свободный вопрос по рынку, идеям, рискам или отдельным тикерам.",
               "Ask a free-form question about the market, ideas, risks, or a specific ticker.",
             )}
@@ -608,7 +606,7 @@ export function NewsAssistantPage() {
               <textarea
                 value={message}
                 onChange={(event) => setMessage(event.target.value)}
-                placeholder={tx("Например: что сегодня по SBER и GAZP?", "For example: what is happening with SBER and GAZP today?")}
+                placeholder={t("Например: что сегодня по SBER и GAZP?", "For example: what is happening with SBER and GAZP today?")}
                 className="ui-input min-h-28 resize-y"
               />
               <button
@@ -617,7 +615,7 @@ export function NewsAssistantPage() {
                 className="ui-primary-button w-full bg-gradient-to-r from-cyan-700 to-sky-600 hover:from-cyan-800 hover:to-sky-700"
               >
                 {isSubmittingQuery ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-                {isSubmittingQuery ? tx("Отправляем...", "Sending...") : tx("Спросить", "Ask assistant")}
+                {isSubmittingQuery ? t("Отправляем...", "Sending...") : t("Спросить", "Ask assistant")}
               </button>
             </form>
               </AnalysisSidebarCard>
@@ -625,8 +623,8 @@ export function NewsAssistantPage() {
               <AnalysisSidebarCard
             className="hidden"
             icon={Search}
-            title={tx("Отчёт по тикеру", "Ticker report")}
-            description={tx(
+            title={t("Отчёт по тикеру", "Ticker report")}
+            description={t(
               "Быстрый способ получить новостный контекст и сигнал по конкретному инструменту.",
               "A quick way to load the news context and signal for a specific instrument.",
             )}
@@ -645,7 +643,7 @@ export function NewsAssistantPage() {
                 className="ui-primary-button w-full bg-gradient-to-r from-emerald-700 to-teal-600 hover:from-emerald-800 hover:to-teal-700"
               >
                 {isSubmittingTicker ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
-                {isSubmittingTicker ? tx("Загружаем...", "Loading...") : tx("Показать отчёт", "Show report")}
+                {isSubmittingTicker ? t("Загружаем...", "Loading...") : t("Показать отчёт", "Show report")}
               </button>
             </form>
             <div className="mt-4 flex flex-wrap gap-2">
@@ -667,11 +665,11 @@ export function NewsAssistantPage() {
       )}
     >
       {pageError ? (
-        <SectionCard title={tx("Проблема подключения", "Connection issue")}>
+        <SectionCard title={t("Проблема подключения", "Connection issue")}>
           <div className="flex items-start gap-3 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-4 text-sm text-rose-700 dark:border-rose-500/30 dark:bg-rose-500/10 dark:text-rose-200">
             <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0" />
             <div>
-              <div className="font-semibold">{tx("News-assistant пока недоступен", "The news assistant is currently unavailable")}</div>
+              <div className="font-semibold">{t("News-assistant пока недоступен", "The news assistant is currently unavailable")}</div>
               <div className="mt-1 leading-6">{pageError}</div>
             </div>
           </div>
@@ -692,7 +690,7 @@ export function NewsAssistantPage() {
           <div className="flex min-h-40 flex-col items-center justify-center gap-3 text-center">
             <RefreshCw className="h-8 w-8 animate-spin text-slate-700 dark:text-slate-200" />
             <div className="text-base font-semibold text-slate-900 dark:text-slate-100">
-              {tx("Загружаем обзор новостей", "Loading the news overview")}
+              {t("Загружаем обзор новостей", "Loading the news overview")}
             </div>
           </div>
         </SectionCard>
@@ -701,29 +699,29 @@ export function NewsAssistantPage() {
       {overview && section === "overview" ? (
         <>
           <SectionCard
-            title={tx("Снимок рынка", "Market snapshot")}
-            description={tx(
+            title={t("Снимок рынка", "Market snapshot")}
+            description={t(
               "Короткий статус по текущему новостному снимку без лишних переходов в боковую панель.",
               "A concise status block for the current news snapshot without jumping back to the sidebar.",
             )}
             action={(
               <button type="button" onClick={() => setSection("feed")} className="ui-secondary-button">
                 <Newspaper className="h-4 w-4" />
-                {tx("Открыть ленту", "Open feed")}
+                {t("Открыть ленту", "Open feed")}
               </button>
             )}
           >
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
               <div className="ui-surface-muted">
-                <div className="text-sm text-slate-500 dark:text-slate-400">{tx("Новости", "News")}</div>
+                <div className="text-sm text-slate-500 dark:text-slate-400">{t("Новости", "News")}</div>
                 <div className="mt-2 text-2xl font-semibold text-slate-900 dark:text-slate-100">{marketSummary?.total_news ?? 0}</div>
               </div>
               <div className="ui-surface-muted">
-                <div className="text-sm text-slate-500 dark:text-slate-400">{tx("Источники", "Sources")}</div>
+                <div className="text-sm text-slate-500 dark:text-slate-400">{t("Источники", "Sources")}</div>
                 <div className="mt-2 text-2xl font-semibold text-slate-900 dark:text-slate-100">{marketSummary?.sources.length ?? 0}</div>
               </div>
               <div className="ui-surface-muted">
-                <div className="text-sm text-slate-500 dark:text-slate-400">{tx("Последнее обновление", "Last update")}</div>
+                <div className="text-sm text-slate-500 dark:text-slate-400">{t("Последнее обновление", "Last update")}</div>
                 <div className="mt-2 text-sm font-semibold leading-6 text-slate-900 dark:text-slate-100">
                   {formatTimestamp(overview?.data_timestamp, locale)}
                 </div>
@@ -732,15 +730,15 @@ export function NewsAssistantPage() {
           </SectionCard>
 
           <MetricGrid>
-            <MetricCard label={tx("Обработано новостей", "Processed news")} value={marketSummary?.total_news ?? 0} />
-            <MetricCard label={tx("Источников", "Sources")} value={marketSummary?.sources.length ?? 0} />
-            <MetricCard label={tx("Общий фон", "Overall sentiment")} value={marketSummary?.overall_sentiment ?? "neutral"} />
-            <MetricCard label={tx("Средний sentiment", "Average sentiment")} value={formatScore(marketSummary?.average_sentiment_score)} />
+            <MetricCard label={t("Обработано новостей", "Processed news")} value={marketSummary?.total_news ?? 0} />
+            <MetricCard label={t("Источников", "Sources")} value={marketSummary?.sources.length ?? 0} />
+            <MetricCard label={t("Общий фон", "Overall sentiment")} value={marketSummary?.overall_sentiment ?? "neutral"} />
+            <MetricCard label={t("Средний sentiment", "Average sentiment")} value={formatScore(marketSummary?.average_sentiment_score)} />
           </MetricGrid>
 
           <SectionCard
-            title={tx("Обзор от ассистента", "Assistant overview")}
-            description={tx(
+            title={t("Обзор от ассистента", "Assistant overview")}
+            description={t(
               "Сводка формируется из последнего snapshot новостного анализа.",
               "This summary is built from the latest news-analysis snapshot.",
             )}
@@ -749,27 +747,27 @@ export function NewsAssistantPage() {
           </SectionCard>
 
           <SectionCard
-            title={tx("Рекомендации по новостному фону", "News-driven recommendations")}
-            description={tx(
+            title={t("Рекомендации по новостному фону", "News-driven recommendations")}
+            description={t(
               "Положительные идеи и риск-алерты по свежему новостному контексту.",
               "Positive ideas and risk alerts based on the latest news context.",
             )}
           >
             <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
               <div className="space-y-4">
-                <div className="ui-section-title">{tx("Топ идеи", "Top ideas")}</div>
+                <div className="ui-section-title">{t("Топ идеи", "Top ideas")}</div>
                 <RecommendationList items={overview.recommendations} locale={locale} />
               </div>
               <div className="space-y-4">
-                <div className="ui-section-title">{tx("Риск-алерты", "Risk alerts")}</div>
+                <div className="ui-section-title">{t("Риск-алерты", "Risk alerts")}</div>
                 <RecommendationList items={overview.risk_alerts} locale={locale} />
               </div>
             </div>
           </SectionCard>
 
           <SectionCard
-            title={tx("Горячие темы", "Hot topics")}
-            description={tx(
+            title={t("Горячие темы", "Hot topics")}
+            description={t(
               "Самые обсуждаемые тикеры и темы из текущего новостного снимка.",
               "The most discussed tickers and themes from the current news snapshot.",
             )}
@@ -783,8 +781,8 @@ export function NewsAssistantPage() {
       {overview && section === "feed" ? (
         <>
           <SectionCard
-            title={tx("Обновление новостей", "Refresh pipeline")}
-            description={tx(
+            title={t("Обновление новостей", "Refresh pipeline")}
+            description={t(
               "Запускает сбор и пересчёт новостного анализа прямо из основной области страницы, без прокрутки к боковой панели.",
               "Runs a fresh news fetch and analysis from the main content area, without scrolling back to the sidebar.",
             )}
@@ -798,7 +796,7 @@ export function NewsAssistantPage() {
                     onChange={(event) => setUseFinbert(event.target.checked)}
                     className="mt-1 h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
                   />
-                  <span>{tx("Использовать FinBERT для тональности", "Use FinBERT for sentiment analysis")}</span>
+                  <span>{t("Использовать FinBERT для тональности", "Use FinBERT for sentiment analysis")}</span>
                 </label>
                 <label className="ui-surface-muted flex items-start gap-3 text-sm text-slate-600 dark:text-slate-300">
                   <input
@@ -807,7 +805,7 @@ export function NewsAssistantPage() {
                     onChange={(event) => setFetchFullText(event.target.checked)}
                     className="mt-1 h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
                   />
-                  <span>{tx("Загружать полные тексты новостей", "Fetch full article texts")}</span>
+                  <span>{t("Загружать полные тексты новостей", "Fetch full article texts")}</span>
                 </label>
               </div>
               <div className="space-y-3">
@@ -818,7 +816,7 @@ export function NewsAssistantPage() {
                   className="ui-primary-button w-full bg-gradient-to-r from-blue-700 to-cyan-600 hover:from-blue-800 hover:to-cyan-700"
                 >
                   {isRefreshing ? <RefreshCw className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
-                  {isRefreshing ? tx("Обновляем...", "Refreshing...") : tx("Обновить и пересчитать", "Refresh and analyze")}
+                  {isRefreshing ? t("Обновляем...", "Refreshing...") : t("Обновить и пересчитать", "Refresh and analyze")}
                 </button>
                 {refreshSummary ? <div className="ui-surface-muted text-sm">{refreshSummary}</div> : null}
               </div>
@@ -826,15 +824,15 @@ export function NewsAssistantPage() {
           </SectionCard>
 
           <MetricGrid>
-            <MetricCard label={tx("Обработано новостей", "Processed news")} value={marketSummary?.total_news ?? 0} />
-            <MetricCard label={tx("Источников", "Sources")} value={marketSummary?.sources.length ?? 0} />
-            <MetricCard label={tx("Общий фон", "Overall sentiment")} value={marketSummary?.overall_sentiment ?? "neutral"} />
-            <MetricCard label={tx("Средний sentiment", "Average sentiment")} value={formatScore(marketSummary?.average_sentiment_score)} />
+            <MetricCard label={t("Обработано новостей", "Processed news")} value={marketSummary?.total_news ?? 0} />
+            <MetricCard label={t("Источников", "Sources")} value={marketSummary?.sources.length ?? 0} />
+            <MetricCard label={t("Общий фон", "Overall sentiment")} value={marketSummary?.overall_sentiment ?? "neutral"} />
+            <MetricCard label={t("Средний sentiment", "Average sentiment")} value={formatScore(marketSummary?.average_sentiment_score)} />
           </MetricGrid>
 
           <SectionCard
-            title={tx("Ключевые новости", "Top news")}
-            description={tx(
+            title={t("Ключевые новости", "Top news")}
+            description={t(
               "Отдельная лента без смешивания с overview и ответами ассистента.",
               "A dedicated news feed without mixing it with the overview or assistant responses.",
             )}
@@ -843,8 +841,8 @@ export function NewsAssistantPage() {
           </SectionCard>
 
           <SectionCard
-            title={tx("Горячие темы", "Hot topics")}
-            description={tx(
+            title={t("Горячие темы", "Hot topics")}
+            description={t(
               "Темы и тикеры, которые чаще всего всплывают в текущей ленте.",
               "Themes and tickers that appear most often in the current feed.",
             )}
@@ -856,8 +854,8 @@ export function NewsAssistantPage() {
 
       {section === "assistant" ? (
         <SectionCard
-          title={tx("Запросы ассистента", "Assistant tools")}
-          description={tx(
+          title={t("Запросы ассистента", "Assistant tools")}
+          description={t(
             "Формы вынесены наверх основной области, чтобы можно было быстро задавать запросы и не листать к боковой панели.",
             "The assistant forms are placed at the top of the main area so you can work without scrolling back to the sidebar.",
           )}
@@ -865,9 +863,9 @@ export function NewsAssistantPage() {
           <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
             <div className="ui-surface-muted space-y-4">
               <div className="space-y-1">
-                <div className="ui-section-title text-base">{tx("Запрос к ассистенту", "Assistant query")}</div>
+                <div className="ui-section-title text-base">{t("Запрос к ассистенту", "Assistant query")}</div>
                 <div className="ui-section-copy">
-                  {tx(
+                  {t(
                     "Свободный вопрос по рынку, идеям, рискам или отдельным тикерам.",
                     "Ask a free-form question about the market, ideas, risks, or a specific ticker.",
                   )}
@@ -877,7 +875,7 @@ export function NewsAssistantPage() {
                 <textarea
                   value={message}
                   onChange={(event) => setMessage(event.target.value)}
-                  placeholder={tx("Например: что сегодня по SBER и GAZP?", "For example: what is happening with SBER and GAZP today?")}
+                  placeholder={t("Например: что сегодня по SBER и GAZP?", "For example: what is happening with SBER and GAZP today?")}
                   className="ui-input min-h-32 resize-y"
                 />
                 <button
@@ -886,16 +884,16 @@ export function NewsAssistantPage() {
                   className="ui-primary-button w-full bg-gradient-to-r from-cyan-700 to-sky-600 hover:from-cyan-800 hover:to-sky-700"
                 >
                   {isSubmittingQuery ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-                  {isSubmittingQuery ? tx("Отправляем...", "Sending...") : tx("Спросить", "Ask assistant")}
+                  {isSubmittingQuery ? t("Отправляем...", "Sending...") : t("Спросить", "Ask assistant")}
                 </button>
               </form>
             </div>
 
             <div className="ui-surface-muted space-y-4">
               <div className="space-y-1">
-                <div className="ui-section-title text-base">{tx("Отчёт по тикеру", "Ticker report")}</div>
+                <div className="ui-section-title text-base">{t("Отчёт по тикеру", "Ticker report")}</div>
                 <div className="ui-section-copy">
-                  {tx(
+                  {t(
                     "Быстрый способ получить новостный контекст и сигнал по конкретному инструменту.",
                     "A quick way to load the news context and signal for a specific instrument.",
                   )}
@@ -914,7 +912,7 @@ export function NewsAssistantPage() {
                   className="ui-primary-button w-full bg-gradient-to-r from-emerald-700 to-teal-600 hover:from-emerald-800 hover:to-teal-700"
                 >
                   {isSubmittingTicker ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
-                  {isSubmittingTicker ? tx("Загружаем...", "Loading...") : tx("Показать отчёт", "Show report")}
+                  {isSubmittingTicker ? t("Загружаем...", "Loading...") : t("Показать отчёт", "Show report")}
                 </button>
               </form>
               <div className="flex flex-wrap gap-2">
@@ -936,8 +934,8 @@ export function NewsAssistantPage() {
 
       {section === "assistant" ? (
         <SectionCard
-        title={tx("Ответ ассистента", "Assistant response")}
-        description={tx(
+        title={t("Ответ ассистента", "Assistant response")}
+        description={t(
           "Здесь отображаются результаты свободного запроса или отчёта по тикеру.",
           "This section shows results from the free-form assistant query or the ticker report.",
         )}
@@ -947,20 +945,20 @@ export function NewsAssistantPage() {
             <div className="ui-surface-muted text-sm leading-7">{assistantResult.answer}</div>
             {assistantRecommendations.length ? (
               <div className="space-y-4">
-                <div className="ui-section-title">{tx("Сигналы", "Signals")}</div>
+                <div className="ui-section-title">{t("Сигналы", "Signals")}</div>
                 <RecommendationList items={assistantRecommendations} locale={locale} />
               </div>
             ) : null}
             {assistantNews.length ? (
               <div className="space-y-4">
-                <div className="ui-section-title">{tx("Связанные новости", "Related news")}</div>
+                <div className="ui-section-title">{t("Связанные новости", "Related news")}</div>
                 <NewsList items={assistantNews} locale={locale} />
               </div>
             ) : null}
           </div>
         ) : (
           <div className="ui-surface-muted text-sm">
-            {tx(
+            {t(
               "Сначала задайте вопрос ассистенту или запросите отчёт по тикеру.",
               "Ask the assistant a question or request a ticker report first.",
             )}

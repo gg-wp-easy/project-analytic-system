@@ -394,9 +394,8 @@ function normalizeWeights(rows: PortfolioRow[]): PortfolioRow[] {
 
 export function ClusterAnalysis() {
   const { cache, hasData } = useFundamentals();
-  const { locale } = useAppSettings();
+  const { locale, t } = useAppSettings();
   const isEn = locale === "en";
-  const tx = (ru: string, en: string) => (isEn ? en : ru);
   const { settings: optimizerSettings, setSettings: setOptimizerSettings } = useOptimizerSettings();
   const [isRunning, setIsRunning] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -514,12 +513,12 @@ export function ClusterAnalysis() {
       return;
     }
     await downloadAnalysisResultsAsXlsx({
-      title: tx("Оптимальный портфель из кластерного анализа", "Optimal Portfolio from Cluster Analysis"),
+      title: t("Оптимальный портфель из кластерного анализа", "Optimal Portfolio from Cluster Analysis"),
       filename: "optimal-portfolio.xlsx",
       rows: displayPortfolio,
       columns: getPortfolioHoldingColumns<PortfolioRow>({
-        name: tx("Акция", "Stock"),
-        weight: tx("Вес, %", "Weight, %"),
+        name: t("Акция", "Stock"),
+        weight: t("Вес, %", "Weight, %"),
       }),
       metrics: visibleMetrics.map((item) => ({
         label: localizeMetricLabel(item.label, isEn),
@@ -547,12 +546,12 @@ export function ClusterAnalysis() {
     }
     try {
       await downloadAnalysisResultsAsPdf({
-        title: tx("Оптимальный портфель из кластерного анализа", "Optimal Portfolio from Cluster Analysis"),
+        title: t("Оптимальный портфель из кластерного анализа", "Optimal Portfolio from Cluster Analysis"),
         filename: "optimal-portfolio.pdf",
         rows: displayPortfolio,
         columns: getPortfolioHoldingColumns<PortfolioRow>({
-          name: tx("Акция", "Stock"),
-          weight: tx("Вес, %", "Weight, %"),
+          name: t("Акция", "Stock"),
+          weight: t("Вес, %", "Weight, %"),
         }),
         metrics: visibleMetrics.map((item) => ({
           label: localizeMetricLabel(item.label, isEn),
@@ -561,7 +560,7 @@ export function ClusterAnalysis() {
         chartSvg: portfolioChartRef.current?.querySelector("svg"),
       });
     } catch (e) {
-      const message = e instanceof Error ? e.message : tx("Не удалось сохранить PDF", "Failed to save PDF");
+      const message = e instanceof Error ? e.message : t("Не удалось сохранить PDF", "Failed to save PDF");
       showErrorDialog(message);
     }
   };
@@ -639,7 +638,7 @@ export function ClusterAnalysis() {
         });
       }
     } catch (e) {
-      const message = e instanceof Error ? e.message : tx("Не удалось выполнить кластеризацию", "Failed to run clustering");
+      const message = e instanceof Error ? e.message : t("Не удалось выполнить кластеризацию", "Failed to run clustering");
       showErrorDialog(message);
       setServerRaw(null);
       setClusterData([]);
@@ -668,20 +667,20 @@ export function ClusterAnalysis() {
       hero={(
         <PageHero
           icon={Network}
-          title={tx("Кластерный анализ", "Cluster Analysis")}
-          description={tx(
+          title={t("Кластерный анализ", "Cluster Analysis")}
+          description={t(
             "Кластеризация выполняется на сервере. По умолчанию используется алгоритм K-Means.",
             "Clustering is performed on the server. K-Means is used by default.",
           )}
-          badge={tx("Серверный pipeline", "Server-side pipeline")}
+          badge={t("Серверный pipeline", "Server-side pipeline")}
           accent="violet"
         />
       )}
       sidebar={(
         <AnalysisSidebarCard
           icon={Settings}
-          title={tx("Параметры анализа", "Analysis Parameters")}
-          description={tx(
+          title={t("Параметры анализа", "Analysis Parameters")}
+          description={t(
             "Единый запуск на базе кэша фундаментальных данных и настроек оптимизатора.",
             "Unified run based on fundamentals cache and shared optimizer settings.",
           )}
@@ -690,14 +689,13 @@ export function ClusterAnalysis() {
           <div className="space-y-4">
             <div className="ui-surface-muted">
               <p className="text-sm text-slate-700 dark:text-slate-300">
-                {tx("Источник: кэш фундаментальных данных", "Source: fundamentals cache")}
+                {t("Источник: кэш фундаментальных данных", "Source: fundamentals cache")}
               </p>
               <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
-                {tx("Записей", "Records")}: {requestData.length}
+                {t("Записей", "Records")}: {requestData.length}
               </p>
             </div>
             <OptimizerSettingsFields
-              isEn={isEn}
               settings={optimizerSettings}
               onChange={setOptimizerSettings}
             />
@@ -705,7 +703,7 @@ export function ClusterAnalysis() {
             {!hasData && (
               <div className="rounded-2xl border border-amber-200 bg-amber-50 p-3 dark:border-amber-900 dark:bg-amber-950/20">
                 <p className="text-sm text-amber-800 dark:text-amber-300">
-                  {tx("Кэш пуст. Сначала загрузите фундаментальные данные.", "Cache is empty. Load fundamentals first.")}
+                  {t("Кэш пуст. Сначала загрузите фундаментальные данные.", "Cache is empty. Load fundamentals first.")}
                 </p>
               </div>
             )}
@@ -716,7 +714,7 @@ export function ClusterAnalysis() {
               className="ui-primary-button w-full bg-gradient-to-r from-violet-600 to-fuchsia-600 hover:from-violet-700 hover:to-fuchsia-700"
             >
               <Play className="h-5 w-5" />
-              {isRunning ? tx("Выполняется...", "Running...") : tx("Запустить анализ", "Run Analysis")}
+              {isRunning ? t("Выполняется...", "Running...") : t("Запустить анализ", "Run Analysis")}
             </button>
           </div>
         </AnalysisSidebarCard>
@@ -724,8 +722,8 @@ export function ClusterAnalysis() {
     >
           {isRunning && (
             <AnalysisRunningIndicator
-              title={tx("Выполняем кластеризацию", "Running clustering")}
-              subtitle={tx("Подбираем структуру кластеров и оптимальный портфель", "Estimating clusters and optimal portfolio")}
+              title={t("Выполняем кластеризацию", "Running clustering")}
+              subtitle={t("Подбираем структуру кластеров и оптимальный портфель", "Estimating clusters and optimal portfolio")}
               accentClassName="text-purple-600"
             />
           )}
@@ -750,19 +748,19 @@ export function ClusterAnalysis() {
           )}
 
           {summaryInfo && (
-            <SectionCard title={tx("Сводка по результату", "Result Summary")}>
+            <SectionCard title={t("Сводка по результату", "Result Summary")}>
               <div className="space-y-5">
                 <div className="grid grid-cols-1 gap-3 text-sm md:grid-cols-3">
                   <div className="ui-stat-card">
-                    <div className="text-slate-500 dark:text-slate-400">{tx("Компаний", "Companies")}</div>
+                    <div className="text-slate-500 dark:text-slate-400">{t("Компаний", "Companies")}</div>
                     <div className="text-xl font-semibold text-slate-900 dark:text-slate-100">{summaryInfo.companiesCount}</div>
                   </div>
                   <div className="ui-stat-card">
-                    <div className="text-slate-500 dark:text-slate-400">{tx("Кластеров", "Clusters")}</div>
+                    <div className="text-slate-500 dark:text-slate-400">{t("Кластеров", "Clusters")}</div>
                     <div className="text-xl font-semibold text-slate-900 dark:text-slate-100">{summaryInfo.clustersCount}</div>
                   </div>
                   <div className="ui-stat-card">
-                    <div className="text-slate-500 dark:text-slate-400">{tx("Портфелей", "Portfolios")}</div>
+                    <div className="text-slate-500 dark:text-slate-400">{t("Портфелей", "Portfolios")}</div>
                     <div className="text-xl font-semibold text-slate-900 dark:text-slate-100">{summaryInfo.portfoliosCount}</div>
                   </div>
                 </div>
@@ -789,17 +787,17 @@ export function ClusterAnalysis() {
           )}
 
           {!!portfolioStrategies.length && (
-            <SectionCard title={tx("Стратегии портфелей", "Portfolio Strategies")}>
+            <SectionCard title={t("Стратегии портфелей", "Portfolio Strategies")}>
               <div className="ui-table-shell overflow-x-auto">
                 <table className="ui-data-table">
                   <thead>
                     <tr>
-                      <th>{tx("Стратегия", "Strategy")}</th>
+                      <th>{t("Стратегия", "Strategy")}</th>
                       <th>Expected return</th>
                       <th>Risk</th>
                       <th>Sharpe</th>
                       <th>Diversification</th>
-                      <th>{tx("Позиций", "Positions")}</th>
+                      <th>{t("Позиций", "Positions")}</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -821,8 +819,8 @@ export function ClusterAnalysis() {
 
           {!!clusterGroups.length && (
             <SectionCard
-              title={tx("Кластеры и профили", "Clusters and Profiles")}
-              description={tx(
+              title={t("Кластеры и профили", "Clusters and Profiles")}
+              description={t(
                 "Краткий профиль по каждому найденному кластеру.",
                 "Quick profile for each detected cluster.",
               )}
@@ -839,15 +837,15 @@ export function ClusterAnalysis() {
                     </div>
                     <div className="space-y-2 text-sm">
                       <div className="flex justify-between gap-4">
-                        <span className="text-slate-600 dark:text-slate-400">{tx("Компаний:", "Companies:")}</span>
+                        <span className="text-slate-600 dark:text-slate-400">{t("Компаний:", "Companies:")}</span>
                         <span className="font-medium text-slate-900 dark:text-slate-100">{cluster.count}</span>
                       </div>
                       <div className="flex justify-between gap-4">
-                        <span className="text-slate-600 dark:text-slate-400">{tx("Средний P/E:", "Average P/E:")}</span>
+                        <span className="text-slate-600 dark:text-slate-400">{t("Средний P/E:", "Average P/E:")}</span>
                         <span className="font-medium text-blue-600 dark:text-blue-400">{cluster.avgPE.toFixed(2)}</span>
                       </div>
                       <div className="flex justify-between gap-4">
-                        <span className="text-slate-600 dark:text-slate-400">{tx("Средний g:", "Average g:")}</span>
+                        <span className="text-slate-600 dark:text-slate-400">{t("Средний g:", "Average g:")}</span>
                         <span className="font-medium text-green-600 dark:text-green-400">{cluster.avgG.toFixed(2)}%</span>
                       </div>
                     </div>
@@ -858,8 +856,8 @@ export function ClusterAnalysis() {
           )}
 
           <SectionCard
-            title={tx("Визуализация кластеров (P/E vs g)", "Cluster Visualization (P/E vs g)")}
-            description={tx(
+            title={t("Визуализация кластеров (P/E vs g)", "Cluster Visualization (P/E vs g)")}
+            description={t(
               "Сравнение компаний по мультипликатору и темпу роста внутри найденных кластеров.",
               "Compare companies by valuation and growth across the detected clusters.",
             )}
@@ -889,7 +887,7 @@ export function ClusterAnalysis() {
                 {Array.from(new Set(clusterData.map((d) => d.cluster))).map((cluster) => {
                   const points = clusterData.filter((d) => d.cluster === cluster);
                   return (
-                    <Scatter key={cluster} name={`${tx("Кластер", "Cluster")} ${cluster + 1}`} data={points}>
+                    <Scatter key={cluster} name={`${t("Кластер", "Cluster")} ${cluster + 1}`} data={points}>
                       {points.map((entry) => (
                         <Cell key={`${entry.figi}-${entry.cluster}`} fill={entry.color} />
                       ))}
@@ -903,12 +901,12 @@ export function ClusterAnalysis() {
 
           {(!!displayPortfolio.length || bestPortfolioAssetsCount > 0) && (
             <SectionCard
-              title={tx("Оптимальный портфель из кластерного анализа", "Optimal Portfolio from Cluster Analysis")}
+              title={t("Оптимальный портфель из кластерного анализа", "Optimal Portfolio from Cluster Analysis")}
               description={
                 bestPortfolioAssetsCount > 0
                   ? (
                       <>
-                        {tx("Количество активов в портфеле:", "Assets in portfolio:")}{" "}
+                        {t("Количество активов в портфеле:", "Assets in portfolio:")}{" "}
                         <span className="font-semibold text-slate-900 dark:text-slate-100">{bestPortfolioAssetsCount}</span>
                       </>
                     )
@@ -948,8 +946,8 @@ export function ClusterAnalysis() {
                   rows={displayPortfolio}
                   palette={palette}
                   chartRef={portfolioChartRef}
-                  companyLabel={tx("Акция", "Stock")}
-                  weightLabel={tx("Вес, %", "Weight, %")}
+                  companyLabel={t("Акция", "Stock")}
+                  weightLabel={t("Вес, %", "Weight, %")}
                 />
               )}
             </SectionCard>
@@ -960,12 +958,12 @@ export function ClusterAnalysis() {
       <AppErrorDialog
         message={errorDialogMessage}
         onClose={() => setErrorDialogMessage(null)}
-        title={tx("Ошибка анализа", "Analysis Error")}
-        description={tx(
+        title={t("Ошибка анализа", "Analysis Error")}
+        description={t(
           "Не удалось обработать запрос. Проверьте данные и попробуйте ещё раз.",
           "The request could not be completed. Check the input data and try again.",
         )}
-        closeLabel={tx("Закрыть", "Close")}
+        closeLabel={t("Закрыть", "Close")}
       />
     </>
   );

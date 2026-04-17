@@ -3,8 +3,7 @@ import { Network, GitBranch, Brain, Layers, Database, Landmark, Newspaper, Arrow
 import { useAppSettings } from "../../../app/context/AppSettingsContext";
 
 export function Dashboard() {
-  const { locale, t } = useAppSettings();
-  const tx = (ru: string, en: string) => (locale === "en" ? en : ru);
+  const { t } = useAppSettings();
 
   const analysisTools = [
     {
@@ -36,8 +35,8 @@ export function Dashboard() {
       color: "from-cyan-500 to-blue-500",
     },
     {
-      title: tx("Анализ облигаций", "Bond Analysis"),
-      description: tx(
+      title: t("Анализ облигаций", "Bond Analysis"),
+      description: t(
         "Загрузка облигаций из T-Bank API на клиенте, локальный расчёт метрик и портфеля, полный список с пагинацией.",
         "Client-side bond loading from the T-Bank API, local portfolio calculations, and the full universe with pagination.",
       ),
@@ -46,8 +45,8 @@ export function Dashboard() {
       color: "from-amber-500 to-orange-600",
     },
     {
-      title: tx("Новостной ИИ-ассистент", "News AI Assistant"),
-      description: tx(
+      title: t("Новостной ИИ-ассистент", "News AI Assistant"),
+      description: t(
         "Обзор новостного фона, идеи по тикерам, отчёты по инструментам и запуск refresh новостного пайплайна.",
         "Market-news overview, ticker ideas, instrument reports, and one-click refresh of the news pipeline.",
       ),
@@ -110,21 +109,6 @@ export function Dashboard() {
               </Link>
             );
           })}
-        </div>
-      </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <div className="bg-white dark:bg-slate-900 rounded-xl p-6 shadow-sm border border-slate-200 dark:border-slate-800">
-          <div className="text-sm text-slate-600 dark:text-slate-400 mb-1">{t("dashboard.stats.activeAnalyses")}</div>
-          <div className="text-3xl font-semibold text-slate-900 dark:text-slate-100">{activeAnalysesCount}</div>
-        </div>
-        <div className="bg-white dark:bg-slate-900 rounded-xl p-6 shadow-sm border border-slate-200 dark:border-slate-800">
-          <div className="text-sm text-slate-600 dark:text-slate-400 mb-1">{t("dashboard.stats.hybridModels")}</div>
-          <div className="text-3xl font-semibold text-green-600 dark:text-green-400">3</div>
-        </div>
-        <div className="bg-white dark:bg-slate-900 rounded-xl p-6 shadow-sm border border-slate-200 dark:border-slate-800">
-          <div className="text-sm text-slate-600 dark:text-slate-400 mb-1">{t("dashboard.stats.cache")}</div>
-          <div className="text-3xl font-semibold text-slate-900 dark:text-slate-100">localStorage</div>
         </div>
       </div>
     </div>

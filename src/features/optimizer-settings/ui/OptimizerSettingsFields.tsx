@@ -1,20 +1,22 @@
+import { useAppSettings } from "../../../app/context/AppSettingsContext";
 import type { OptimizerSettings } from "../model/optimizerSettings";
 
 type OptimizerSettingsFieldsProps = {
-  isEn: boolean;
   settings: OptimizerSettings;
   onChange: (next: OptimizerSettings) => void;
 };
 
-export function OptimizerSettingsFields({ isEn, settings, onChange }: OptimizerSettingsFieldsProps) {
+export function OptimizerSettingsFields({ settings, onChange }: OptimizerSettingsFieldsProps) {
+  const { t } = useAppSettings();
+
   return (
     <div className="ui-surface-muted space-y-3">
       <p className="text-sm font-medium text-slate-700 dark:text-slate-300">
-        {isEn ? "Portfolio Optimizer Settings" : "Настройки оптимизатора портфеля"}
+        {t("Настройки оптимизатора портфеля", "Portfolio Optimizer Settings")}
       </p>
 
       <label className="block text-xs text-slate-600 dark:text-slate-400">
-        {isEn ? "Risk-free rate, %" : "Безрисковая ставка, %"}
+        {t("Безрисковая ставка, %", "Risk-free rate, %")}
         <input
           type="number"
           step="0.1"
@@ -25,7 +27,7 @@ export function OptimizerSettingsFields({ isEn, settings, onChange }: OptimizerS
       </label>
 
       <label className="block text-xs text-slate-600 dark:text-slate-400">
-        {isEn ? "Min weight, %" : "Минимальный вес актива, %"}
+        {t("Минимальный вес актива, %", "Min weight, %")}
         <input
           type="number"
           min="0"
@@ -37,7 +39,7 @@ export function OptimizerSettingsFields({ isEn, settings, onChange }: OptimizerS
       </label>
 
       <label className="block text-xs text-slate-600 dark:text-slate-400">
-        {isEn ? "Max weight, %" : "Максимальный вес актива, %"}
+        {t("Максимальный вес актива, %", "Max weight, %")}
         <input
           type="number"
           min="0"
@@ -49,7 +51,7 @@ export function OptimizerSettingsFields({ isEn, settings, onChange }: OptimizerS
       </label>
 
       <label className="block text-xs text-slate-600 dark:text-slate-400">
-        {isEn ? "Sharpe blend weight, %" : "Вес портфеля с оптимизацией на коэффициент Шарпа, %"}
+        {t("Вес портфеля с оптимизацией на коэффициент Шарпа, %", "Sharpe blend weight, %")}
         <input
           type="number"
           step="0.1"
@@ -60,7 +62,7 @@ export function OptimizerSettingsFields({ isEn, settings, onChange }: OptimizerS
       </label>
 
       <label className="block text-xs text-slate-600 dark:text-slate-400">
-        {isEn ? "Min risk blend weight, %" : "Вес портфеля с оптимизацией на минимизацию риска, %"}
+        {t("Вес портфеля с оптимизацией на минимизацию риска, %", "Min risk blend weight, %")}
         <input
           type="number"
           step="0.1"
@@ -71,7 +73,7 @@ export function OptimizerSettingsFields({ isEn, settings, onChange }: OptimizerS
       </label>
 
       <label className="block text-xs text-slate-600 dark:text-slate-400">
-        {isEn ? "Portfolio assets count" : "Количество активов в портфеле"}
+        {t("Количество активов в портфеле", "Portfolio assets count")}
         <input
           type="number"
           min="0"

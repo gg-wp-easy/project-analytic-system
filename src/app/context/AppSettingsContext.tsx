@@ -2,6 +2,10 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState, t
 
 type Theme = "light" | "dark";
 type Locale = "ru" | "en";
+type InlineTranslation = {
+  ru: string;
+  en: string;
+};
 
 type TranslationKey =
   | "nav.overview"
@@ -236,7 +240,7 @@ type AppSettingsContextValue = {
   setTheme: (next: Theme) => void;
   setLocale: (next: Locale) => void;
   toggleTheme: () => void;
-  t: (key: TranslationKey) => string;
+  t: (key: TranslationKey | InlineTranslation | string, en?: string) => string;
 };
 
 const THEME_KEY = "app-theme-v1";
@@ -284,7 +288,22 @@ export function AppSettingsProvider({ children }: { children: ReactNode }) {
   const toggleTheme = useCallback(() => {
     setThemeState((prev) => (prev === "light" ? "dark" : "light"));
   }, []);
-  const t = useCallback((key: TranslationKey) => translations[locale][key], [locale]);
+  const t = useCallback(
+    (key: TranslationKey | InlineTranslation | string, en?: string) => {
+      if (typeof en === "string") {
+        return locale === "en" ? en : String(key);
+      }
+
+      if (typeof key === "string") {
+        return key in translations[locale]
+          ? translations[locale][key as TranslationKey]
+          : key;
+      }
+
+      return key[locale];
+    },
+    [locale],
+  );
 
   const value = useMemo<AppSettingsContextValue>(
     () => ({

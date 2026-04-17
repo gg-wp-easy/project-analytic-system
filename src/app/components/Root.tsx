@@ -44,12 +44,11 @@ export function Root() {
   const location = useLocation();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const { locale, setLocale, theme, toggleTheme, t } = useAppSettings();
-  const tx = (ru: string, en: string) => (locale === "en" ? en : ru);
 
   const primaryNavigation: NavItem[] = [
     { name: t("nav.overview"), path: "/", icon: TrendingUp },
-    { name: tx("Анализ облигаций", "Bond Analysis"), path: "/bonds", icon: Landmark },
-    { name: tx("Новости + ИИ", "News + AI"), path: "/news-assistant", icon: Newspaper },
+    { name: t({ ru: "Анализ облигаций", en: "Bond Analysis" }), path: "/bonds", icon: Landmark },
+    { name: t({ ru: "Новости + ИИ", en: "News + AI" }), path: "/news-assistant", icon: Newspaper },
     { name: t("nav.fundamentals"), path: "/fundamentals", icon: Database },
   ];
 
@@ -160,7 +159,7 @@ export function Root() {
                   >
                     <Layers className="h-4 w-4" />
                     <span className="font-medium whitespace-nowrap">
-                      {activeModel?.name ?? tx("Модели", "Models")}
+                      {activeModel?.name ?? t({ ru: "Модели", en: "Models" })}
                     </span>
                     <ChevronDown className="h-4 w-4 opacity-70" />
                   </button>
@@ -170,7 +169,7 @@ export function Root() {
                   className="w-72 rounded-2xl border-slate-200/80 bg-white/95 p-2 dark:border-slate-700 dark:bg-slate-900/95"
                 >
                   <DropdownMenuLabel className="px-3 pt-2 pb-1 text-xs uppercase tracking-[0.18em] text-slate-400">
-                    {tx("Аналитические модели", "Analytics models")}
+                    {t({ ru: "Аналитические модели", en: "Analytics models" })}
                   </DropdownMenuLabel>
                   <DropdownMenuSeparator className="bg-slate-200 dark:bg-slate-700" />
                   {modelNavigation.map((item) => {
@@ -239,7 +238,7 @@ export function Root() {
 
               <div className="rounded-2xl border border-slate-200/80 bg-slate-50/80 p-2 dark:border-slate-700 dark:bg-slate-900/60">
                 <div className="px-2 pb-2 text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">
-                  {tx("Аналитические модели", "Analytics models")}
+                  {t({ ru: "Аналитические модели", en: "Analytics models" })}
                 </div>
                 <div className="space-y-1">
                   {modelNavigation.map((item) => {
