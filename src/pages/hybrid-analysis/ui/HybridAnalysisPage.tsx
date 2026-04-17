@@ -545,7 +545,6 @@ export function HybridAnalysis() {
               "Комбинированный сигнал на базе кластеризации, дерева решений и нейросети.",
               "Combined signal based on clustering, decision tree, and neural network.",
             )}
-            badge={t("Ансамбль моделей", "Ensemble pipeline")}
             accent="cyan"
           />
         )}

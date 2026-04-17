@@ -499,7 +499,6 @@ export function DecisionTreeAnalysis() {
           icon={GitBranch}
           title={t("Анализ дерева решений", "Decision Tree Analysis")}
           description={t("Модель и гиперпараметры автоматически подбираются на сервере.", "Model and hyperparameters are selected on the server.")}
-          badge={t("Серверное обучение", "Server-side training")}
           accent="emerald"
         />
       )}

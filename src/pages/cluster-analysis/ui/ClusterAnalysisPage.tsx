@@ -672,7 +672,6 @@ export function ClusterAnalysis() {
             "Кластеризация выполняется на сервере. По умолчанию используется алгоритм K-Means.",
             "Clustering is performed on the server. K-Means is used by default.",
           )}
-          badge={t("Серверный pipeline", "Server-side pipeline")}
           accent="violet"
         />
       )}

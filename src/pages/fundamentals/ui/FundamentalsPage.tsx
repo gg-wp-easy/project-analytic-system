@@ -70,7 +70,6 @@ export function FundamentalsPage() {
         icon={Database}
         title={t("fund.title")}
         description={t("fund.description")}
-        badge={isEn ? "Fundamentals cache" : "Кэш фундаментала"}
         accent="slate"
       />
 

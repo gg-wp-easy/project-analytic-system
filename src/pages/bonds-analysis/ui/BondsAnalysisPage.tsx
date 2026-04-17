@@ -350,7 +350,6 @@ export function BondsAnalysisPage() {
               "Задайте целевую доходность, дюрацию и частоту выплат, затем загрузите полный список облигаций из T-Bank API и пересчитайте портфель на клиенте.",
               "Set the target yield, duration, and payment frequency, then load the full bond universe from the T-Bank API and recalculate the portfolio on the client.",
             )}
-            badge={t("Клиентский режим", "Client-side mode")}
             accent="amber"
             aside={(
               <div className="space-y-2">

@@ -507,7 +507,6 @@ export function NeuralNetworkAnalysis() {
           icon={Brain}
           title={t("Анализ нейросети", "Neural Network Analysis")}
           description={t("Нейросетевая модель подбирается и обучается на сервере.", "Neural model selection and training are performed on the server.")}
-          badge={t("Серверное обучение", "Server-side training")}
           accent="orange"
         />
       )}

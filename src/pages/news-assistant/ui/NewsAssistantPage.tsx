@@ -471,7 +471,6 @@ export function NewsAssistantPage() {
             "Разделены обзор, запросы к ассистенту и новостная лента, чтобы страница читалась спокойнее и без лишнего визуального шума.",
             "Overview, assistant workflows, and the live news feed are split into separate modes so the page feels cleaner and easier to scan.",
           )}
-          badge={t("server-news-analytic", "server-news-analytic")}
           accent="blue"
           aside={(
             <div className="space-y-2">
