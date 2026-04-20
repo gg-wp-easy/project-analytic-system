@@ -9,6 +9,7 @@ import { HybridAnalysis } from "../pages/hybrid-analysis";
 import { BondsAnalysis } from "../pages/bonds-analysis";
 import { FundamentalsDetailsPage, FundamentalsPage } from "../pages/fundamentals";
 import { NewsAssistantPage } from "../pages/news-assistant";
+import { OptionsPage, UnderlyingOptionsPage } from "../pages/options";
 import { NotFound } from "./components/NotFound";
 import { RouteError } from "./components/RouteError";
 
@@ -27,6 +28,8 @@ const routes = [
       { path: "news-assistant", Component: NewsAssistantPage },
       { path: "fundamentals", Component: FundamentalsPage },
       { path: "fundamentals/:figi", Component: FundamentalsDetailsPage },
+      { path: "options", Component: OptionsPage },
+      { path: "options/asset/:underlyingKey", Component: UnderlyingOptionsPage },
       { path: "*", Component: NotFound },
     ],
   },
