@@ -21,6 +21,7 @@ import {
   type UnderlyingSummary,
 } from "../lib/options-helpers";
 import { OptionContractsTable } from "./OptionContractsTable";
+import { OptionStrategyBuilder } from "./OptionStrategyBuilder";
 
 type UnderlyingLocationState = {
   summaryLabel?: string;
@@ -44,6 +45,10 @@ export function UnderlyingOptionsPage() {
   const [reloadKey, setReloadKey] = useState(0);
   const [lastUpdated, setLastUpdated] = useState<string | null>(null);
   const [errorDialogMessage, setErrorDialogMessage] = useState<string | null>(null);
+  const [optionClosePricesById, setOptionClosePricesById] = useState<Record<string, number>>({});
+  const [isPricingLoading, setIsPricingLoading] = useState(false);
+  const [pricingUpdatedAt, setPricingUpdatedAt] = useState<string | null>(null);
+  const [pricingErrorMessage, setPricingErrorMessage] = useState<string | null>(null);
 
   useEffect(() => {
     if (!underlyingKey) {
@@ -107,6 +112,79 @@ export function UnderlyingOptionsPage() {
     setExpirationFilter("all");
   }, [summary?.key]);
 
+  useEffect(() => {
+    if (!summary) {
+      setOptionClosePricesById({});
+      setIsPricingLoading(false);
+      setPricingUpdatedAt(null);
+      setPricingErrorMessage(null);
+      return;
+    }
+
+    const instrumentIds = [...new Set(summary.options.map((option) => option.figi || option.uid).filter(Boolean))];
+    if (instrumentIds.length === 0) {
+      setOptionClosePricesById({});
+      setIsPricingLoading(false);
+      setPricingUpdatedAt(null);
+      setPricingErrorMessage(null);
+      return;
+    }
+
+    let isCancelled = false;
+    setIsPricingLoading(true);
+    setPricingErrorMessage(null);
+
+    api.fetchClosePricesByInstrumentIds(instrumentIds)
+      .then((payload) => {
+        if (isCancelled) {
+          return;
+        }
+
+        const nextPrices: Record<string, number> = {};
+
+        for (const points of Object.values(payload)) {
+          for (const point of points) {
+            if (!Number.isFinite(point.price)) {
+              continue;
+            }
+
+            if (point.figi) {
+              nextPrices[point.figi] = point.price;
+            }
+            if (point.instrumentUid) {
+              nextPrices[point.instrumentUid] = point.price;
+            }
+          }
+        }
+
+        setOptionClosePricesById(nextPrices);
+        setPricingUpdatedAt(new Date().toISOString());
+      })
+      .catch((error) => {
+        if (isCancelled) {
+          return;
+        }
+
+        const message =
+          error instanceof Error
+            ? error.message
+            : isEn
+              ? "Failed to load option close prices for the strategy builder."
+              : "Не удалось загрузить close prices опционов для конструктора стратегий.";
+        setOptionClosePricesById({});
+        setPricingErrorMessage(message);
+      })
+      .finally(() => {
+        if (!isCancelled) {
+          setIsPricingLoading(false);
+        }
+      });
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [api, isEn, summary, reloadKey]);
+
   const expirationChoices = useMemo(() => {
     if (!summary) {
       return [];
@@ -163,8 +241,8 @@ export function UnderlyingOptionsPage() {
         icon={Activity}
         title={displayLabel}
         description={t({
-          ru: "Отдельная страница базового актива и его опционной цепочки. Здесь можно оставить только call или только put контракты.",
-          en: "A dedicated page for the underlying asset and its option chain. Here you can keep only call or only put contracts.",
+          ru: "Отдельная страница базового актива и его опционной цепочки. Здесь можно фильтровать серию, смотреть контракты и собирать типовые стратегии.",
+          en: "A dedicated page for the underlying asset and its option chain. Here you can filter the series, inspect contracts, and assemble common strategies.",
         })}
         accent="amber"
         aside={
@@ -327,6 +405,16 @@ export function UnderlyingOptionsPage() {
               </div>
             </div>
           </SectionCard>
+
+          <OptionStrategyBuilder
+            options={summary.options}
+            activeExpirationKey={expirationFilter === "all" ? "" : expirationFilter}
+            expirationChoices={expirationChoices}
+            closePricesById={optionClosePricesById}
+            isPricingLoading={isPricingLoading}
+            pricingErrorMessage={pricingErrorMessage}
+            pricingUpdatedAt={pricingUpdatedAt}
+          />
 
           <SectionCard
             title={t({ ru: "Опционная цепочка", en: "Option Chain" })}
