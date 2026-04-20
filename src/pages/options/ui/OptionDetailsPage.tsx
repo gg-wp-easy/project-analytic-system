@@ -1,8 +1,8 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { Activity, ArrowLeft, RefreshCw } from "lucide-react";
 import { Link, useLocation, useParams } from "react-router-dom";
 import { useAppSettings } from "../../../app/context/AppSettingsContext";
-import { createTBankInstrumentsApi } from "../../../shared/api/tbank";
+import { useOptionsData } from "../../../entities/options";
 import { AppErrorDialog } from "../../../shared/ui/app-error-dialog";
 import { MetricCard, MetricGrid, PageHero, SectionCard } from "../../../shared/ui/analysis-shell";
 import {
@@ -31,159 +31,22 @@ type UnderlyingLocationState = {
 export function UnderlyingOptionsPage() {
   const { locale, t } = useAppSettings();
   const isEn = locale === "en";
-  const api = useMemo(() => createTBankInstrumentsApi(), []);
+  const { cache, hasData, isLoading, isLoadingClosePrices, loadOptions, loadClosePricesForUnderlying } = useOptionsData();
   const location = useLocation();
   const { underlyingKey: underlyingKeyParam = "" } = useParams();
   const underlyingKey = decodeRoutePart(underlyingKeyParam).trim();
   const locationState = location.state as UnderlyingLocationState | null;
 
-  const [summary, setSummary] = useState<UnderlyingSummary | null>(null);
   const [sideFilter, setSideFilter] = useState<OptionSideFilter>("all");
   const [expirationFilter, setExpirationFilter] = useState("all");
   const [sortDirection, setSortDirection] = useState<OptionSortDirection>("asc");
-  const [isLoading, setIsLoading] = useState(false);
-  const [reloadKey, setReloadKey] = useState(0);
-  const [lastUpdated, setLastUpdated] = useState<string | null>(null);
   const [errorDialogMessage, setErrorDialogMessage] = useState<string | null>(null);
-  const [optionClosePricesById, setOptionClosePricesById] = useState<Record<string, number>>({});
-  const [isPricingLoading, setIsPricingLoading] = useState(false);
-  const [pricingUpdatedAt, setPricingUpdatedAt] = useState<string | null>(null);
-  const [pricingErrorMessage, setPricingErrorMessage] = useState<string | null>(null);
 
-  useEffect(() => {
-    if (!underlyingKey) {
-      setSummary(null);
-      setErrorDialogMessage(
-        isEn ? "The asset route is incomplete." : "Маршрут актива заполнен не полностью.",
-      );
-      return;
-    }
-
-    let isCancelled = false;
-    setIsLoading(true);
-
-    api.fetchOptions({ force: reloadKey > 0 })
-      .then((payload) => {
-        if (isCancelled) {
-          return;
-        }
-
-        const nextSummary =
-          buildUnderlyingSummaries(payload).find((item) => item.key === underlyingKey) ?? null;
-
-        setSummary(nextSummary);
-        setLastUpdated(new Date().toISOString());
-
-        if (!nextSummary) {
-          setErrorDialogMessage(
-            isEn
-              ? "This underlying asset was not found in the current T-Bank option list."
-              : "Этот базовый актив не найден в текущем списке опционов T-Bank.",
-          );
-        }
-      })
-      .catch((error) => {
-        if (isCancelled) {
-          return;
-        }
-
-        const message =
-          error instanceof Error
-            ? error.message
-            : isEn
-              ? "Failed to load the asset option chain."
-              : "Не удалось загрузить опционную цепочку актива.";
-        setSummary(null);
-        setErrorDialogMessage(message);
-      })
-      .finally(() => {
-        if (!isCancelled) {
-          setIsLoading(false);
-        }
-      });
-
-    return () => {
-      isCancelled = true;
-    };
-  }, [api, isEn, reloadKey, underlyingKey]);
-
-  useEffect(() => {
-    setSideFilter("all");
-    setExpirationFilter("all");
-  }, [summary?.key]);
-
-  useEffect(() => {
-    if (!summary) {
-      setOptionClosePricesById({});
-      setIsPricingLoading(false);
-      setPricingUpdatedAt(null);
-      setPricingErrorMessage(null);
-      return;
-    }
-
-    const instrumentIds = [...new Set(summary.options.map((option) => option.figi || option.uid).filter(Boolean))];
-    if (instrumentIds.length === 0) {
-      setOptionClosePricesById({});
-      setIsPricingLoading(false);
-      setPricingUpdatedAt(null);
-      setPricingErrorMessage(null);
-      return;
-    }
-
-    let isCancelled = false;
-    setIsPricingLoading(true);
-    setPricingErrorMessage(null);
-
-    api.fetchClosePricesByInstrumentIds(instrumentIds)
-      .then((payload) => {
-        if (isCancelled) {
-          return;
-        }
-
-        const nextPrices: Record<string, number> = {};
-
-        for (const points of Object.values(payload)) {
-          for (const point of points) {
-            if (!Number.isFinite(point.price)) {
-              continue;
-            }
-
-            if (point.figi) {
-              nextPrices[point.figi] = point.price;
-            }
-            if (point.instrumentUid) {
-              nextPrices[point.instrumentUid] = point.price;
-            }
-          }
-        }
-
-        setOptionClosePricesById(nextPrices);
-        setPricingUpdatedAt(new Date().toISOString());
-      })
-      .catch((error) => {
-        if (isCancelled) {
-          return;
-        }
-
-        const message =
-          error instanceof Error
-            ? error.message
-            : isEn
-              ? "Failed to load option close prices for the strategy builder."
-              : "Не удалось загрузить close prices опционов для конструктора стратегий.";
-        setOptionClosePricesById({});
-        setPricingErrorMessage(message);
-      })
-      .finally(() => {
-        if (!isCancelled) {
-          setIsPricingLoading(false);
-        }
-      });
-
-    return () => {
-      isCancelled = true;
-    };
-  }, [api, isEn, summary, reloadKey]);
+  const summaries = useMemo(() => buildUnderlyingSummaries(cache.options), [cache.options]);
+  const summary = useMemo<UnderlyingSummary | null>(
+    () => summaries.find((item) => item.key === underlyingKey) ?? null,
+    [summaries, underlyingKey],
+  );
 
   const expirationChoices = useMemo(() => {
     if (!summary) {
@@ -218,7 +81,6 @@ export function UnderlyingOptionsPage() {
       const matchesSide = sideFilter === "all" || getOptionSide(option) === sideFilter;
       const matchesExpiration =
         expirationFilter === "all" || getOptionExpirationDateKey(option) === expirationFilter;
-
       return matchesSide && matchesExpiration;
     });
   }, [expirationFilter, sideFilter, summary]);
@@ -230,10 +92,47 @@ export function UnderlyingOptionsPage() {
 
   const displayLabel = summary?.label || locationState?.summaryLabel || underlyingKey || "-";
   const displayCategory = summary?.category || locationState?.category || "other";
+  const pricingMeta = cache.optionClosePricesMetaByUnderlyingKey[summary?.key ?? underlyingKey];
   const selectedExpirationLabel =
     expirationFilter === "all"
       ? t({ ru: "Все даты", en: "All dates" })
       : formatDate(expirationFilter, locale);
+
+  const handleLoadOptions = async () => {
+    try {
+      await loadOptions(true);
+    } catch (error) {
+      setErrorDialogMessage(
+        error instanceof Error
+          ? error.message
+          : isEn
+            ? "Failed to load the asset option chain."
+            : "Не удалось загрузить опционную цепочку актива.",
+      );
+    }
+  };
+
+  const handleLoadPricing = async () => {
+    if (!summary) {
+      return;
+    }
+
+    try {
+      await loadClosePricesForUnderlying({
+        underlyingKey: summary.key,
+        options: summary.options,
+        force: Boolean(pricingMeta?.lastUpdated),
+      });
+    } catch (error) {
+      setErrorDialogMessage(
+        error instanceof Error
+          ? error.message
+          : isEn
+            ? "Failed to load option close prices."
+            : "Не удалось загрузить close prices опционов.",
+      );
+    }
+  };
 
   return (
     <div className="space-y-6">
@@ -241,8 +140,8 @@ export function UnderlyingOptionsPage() {
         icon={Activity}
         title={displayLabel}
         description={t({
-          ru: "Отдельная страница базового актива и его опционной цепочки. Здесь можно фильтровать серию, смотреть контракты и собирать типовые стратегии.",
-          en: "A dedicated page for the underlying asset and its option chain. Here you can filter the series, inspect contracts, and assemble common strategies.",
+          ru: "Страница читает опционную цепочку из сохранённого localStorage, а загрузка и обновление из T-Bank выполняются только по кнопкам.",
+          en: "This page reads the option chain from localStorage, and loading or updating from T-Bank only happens on button click.",
         })}
         accent="amber"
         aside={
@@ -252,7 +151,7 @@ export function UnderlyingOptionsPage() {
             </div>
             <div className="text-lg font-semibold">{getCategoryLabel(displayCategory, locale)}</div>
             <div className="text-sm text-white/80">
-              {t({ ru: "Обновлено", en: "Updated" })}: {formatTimestamp(lastUpdated, locale)}
+              {t({ ru: "Обновлено", en: "Updated" })}: {formatTimestamp(cache.lastUpdated, locale)}
             </div>
           </div>
         }
@@ -267,40 +166,38 @@ export function UnderlyingOptionsPage() {
             </Link>
             <button
               type="button"
-              onClick={() => setReloadKey((current) => current + 1)}
+              onClick={handleLoadOptions}
               disabled={isLoading}
               className="ui-secondary-button border-white/20 bg-white/10 text-white hover:bg-white/16 dark:border-white/20 dark:bg-white/10 dark:text-white"
             >
               {isLoading ? <RefreshCw className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
-              {t({ ru: "Обновить", en: "Refresh" })}
+              {hasData
+                ? t({ ru: "Обновить данные", en: "Update data" })
+                : t({ ru: "Загрузить данные", en: "Load data" })}
             </button>
           </>
         }
       />
 
-      {isLoading ? (
-        <SectionCard>
-          <div className="flex flex-col items-center justify-center gap-3 text-center" role="status" aria-live="polite">
-            <RefreshCw className="h-8 w-8 animate-spin text-slate-700 dark:text-slate-200" />
-            <div className="text-base font-semibold text-slate-900 dark:text-slate-100">
-              {t({ ru: "Загружаем цепочку опционов по активу...", en: "Loading the asset option chain..." })}
-            </div>
-          </div>
-        </SectionCard>
-      ) : null}
-
-      {!isLoading && !summary ? (
+      {!hasData ? (
         <SectionCard>
           <div className="ui-surface-muted text-center text-sm leading-7 text-slate-600 dark:text-slate-300">
             {t({
-              ru: "Не удалось найти этот актив в текущем списке T-Bank. Вернитесь к общему списку и выберите тикер повторно.",
-              en: "This asset could not be found in the current T-Bank list. Go back to the general list and pick the ticker again.",
+              ru: "Опционы ещё не загружены. Нажмите кнопку «Загрузить данные», чтобы получить их из T-Bank и сохранить в localStorage.",
+              en: "Options have not been loaded yet. Click “Load data” to fetch them from T-Bank and save them to localStorage.",
             })}
           </div>
         </SectionCard>
-      ) : null}
-
-      {summary ? (
+      ) : !summary ? (
+        <SectionCard>
+          <div className="ui-surface-muted text-center text-sm leading-7 text-slate-600 dark:text-slate-300">
+            {t({
+              ru: "Этот актив не найден в текущем сохранённом списке опционов. Обновите данные или вернитесь к списку и выберите тикер снова.",
+              en: "This asset was not found in the currently saved option list. Update the data or go back and choose the ticker again.",
+            })}
+          </div>
+        </SectionCard>
+      ) : (
         <>
           <MetricGrid className="xl:grid-cols-5">
             <MetricCard
@@ -410,10 +307,17 @@ export function UnderlyingOptionsPage() {
             options={summary.options}
             activeExpirationKey={expirationFilter === "all" ? "" : expirationFilter}
             expirationChoices={expirationChoices}
-            closePricesById={optionClosePricesById}
-            isPricingLoading={isPricingLoading}
-            pricingErrorMessage={pricingErrorMessage}
-            pricingUpdatedAt={pricingUpdatedAt}
+            closePricesById={cache.optionClosePricesByInstrumentId}
+            isPricingLoading={isLoadingClosePrices}
+            pricingErrorMessage={null}
+            pricingUpdatedAt={pricingMeta?.lastUpdated ?? null}
+            onLoadPricing={handleLoadPricing}
+            pricingActionLabel={
+              pricingMeta?.lastUpdated
+                ? t({ ru: "Обновить цены", en: "Update prices" })
+                : t({ ru: "Загрузить цены", en: "Load prices" })
+            }
+            isPricingActionDisabled={!summary}
           />
 
           <SectionCard
@@ -435,15 +339,15 @@ export function UnderlyingOptionsPage() {
             )}
           </SectionCard>
         </>
-      ) : null}
+      )}
 
       <AppErrorDialog
         message={errorDialogMessage}
         onClose={() => setErrorDialogMessage(null)}
         title={t({ ru: "Ошибка загрузки цепочки", en: "Chain Loading Error" })}
         description={t({
-          ru: "Приложение не смогло получить страницу выбранного актива и его опционов из T-Bank API.",
-          en: "The application could not fetch the selected asset page and its options from the T-Bank API.",
+          ru: "Приложение не смогло загрузить или обновить данные по опционам для выбранного актива.",
+          en: "The application could not load or update option data for the selected asset.",
         })}
         closeLabel={t({ ru: "Закрыть", en: "Close" })}
       />

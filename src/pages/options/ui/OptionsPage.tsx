@@ -1,8 +1,8 @@
-import { useEffect, useMemo, useState } from "react";
-import { Activity, RefreshCw } from "lucide-react";
+import { useMemo, useState } from "react";
+import { Activity, RefreshCw, Trash2 } from "lucide-react";
 import { Link } from "react-router-dom";
 import { useAppSettings } from "../../../app/context/AppSettingsContext";
-import { createTBankInstrumentsApi } from "../../../shared/api/tbank";
+import { useOptionsData } from "../../../entities/options";
 import { AppErrorDialog } from "../../../shared/ui/app-error-dialog";
 import { MetricCard, MetricGrid, PageHero, SectionCard } from "../../../shared/ui/analysis-shell";
 import {
@@ -20,52 +20,12 @@ type UnderlyingRouteState = {
 export function OptionsPage() {
   const { locale, t } = useAppSettings();
   const isEn = locale === "en";
-  const api = useMemo(() => createTBankInstrumentsApi(), []);
+  const { cache, hasData, isLoading, loadOptions, clearCache } = useOptionsData();
   const [groupFilter, setGroupFilter] = useState<UnderlyingCategory>("all");
   const [searchQuery, setSearchQuery] = useState("");
-  const [isLoading, setIsLoading] = useState(false);
-  const [reloadKey, setReloadKey] = useState(0);
-  const [lastUpdated, setLastUpdated] = useState<string | null>(null);
   const [errorDialogMessage, setErrorDialogMessage] = useState<string | null>(null);
-  const [summaries, setSummaries] = useState<ReturnType<typeof buildUnderlyingSummaries>>([]);
 
-  useEffect(() => {
-    let isCancelled = false;
-    setIsLoading(true);
-
-    api.fetchOptions({ force: reloadKey > 0 })
-      .then((payload) => {
-        if (isCancelled) {
-          return;
-        }
-
-        setSummaries(buildUnderlyingSummaries(payload));
-        setLastUpdated(new Date().toISOString());
-      })
-      .catch((error) => {
-        if (isCancelled) {
-          return;
-        }
-
-        const message =
-          error instanceof Error
-            ? error.message
-            : isEn
-              ? "Failed to load T-Bank options."
-              : "Не удалось загрузить список опционов T-Bank.";
-        setSummaries([]);
-        setErrorDialogMessage(message);
-      })
-      .finally(() => {
-        if (!isCancelled) {
-          setIsLoading(false);
-        }
-      });
-
-    return () => {
-      isCancelled = true;
-    };
-  }, [api, isEn, reloadKey]);
+  const summaries = useMemo(() => buildUnderlyingSummaries(cache.options), [cache.options]);
 
   const filteredSummaries = useMemo(() => {
     const normalizedQuery = searchQuery.trim().toLowerCase();
@@ -90,27 +50,66 @@ export function OptionsPage() {
     [filteredSummaries],
   );
 
+  const handleLoadOptions = async () => {
+    try {
+      await loadOptions(true);
+    } catch (error) {
+      setErrorDialogMessage(
+        error instanceof Error
+          ? error.message
+          : isEn
+            ? "Failed to load T-Bank options."
+            : "Не удалось загрузить список опционов T-Bank.",
+      );
+    }
+  };
+
   return (
     <div className="space-y-6">
       <PageHero
         icon={Activity}
         title={t({ ru: "Опционы T-Bank", en: "T-Bank Options" })}
         description={t({
-          ru: "Это общий список базовых тикеров. Выберите нужный актив и перейдите на его отдельную страницу с опционной цепочкой.",
-          en: "This is the general list of underlying tickers. Pick an asset and open its dedicated page with the option chain.",
+          ru: "Страница читает список опционов из localStorage, а загрузка и обновление из T-Bank API происходят только по кнопке.",
+          en: "This page reads the option list from localStorage, and loading or updating from T-Bank API happens only on button click.",
         })}
         accent="amber"
         aside={
           <div className="space-y-2">
             <div className="text-xs uppercase tracking-[0.18em] text-white/60">
-              {t({ ru: "Источник", en: "Source" })}
+              {t({ ru: "Источник данных", en: "Data source" })}
             </div>
-            <div className="text-lg font-semibold">T-Bank API</div>
-            <div className="text-sm text-white/80">InstrumentsService/Options</div>
+            <div className="text-lg font-semibold">
+              {hasData ? t({ ru: "localStorage + T-Bank", en: "localStorage + T-Bank" }) : "localStorage"}
+            </div>
             <div className="text-sm text-white/80">
-              {t({ ru: "Обновлено", en: "Updated" })}: {formatTimestamp(lastUpdated, locale)}
+              {t({ ru: "Обновлено", en: "Updated" })}: {formatTimestamp(cache.lastUpdated, locale)}
             </div>
           </div>
+        }
+        footer={
+          <>
+            <button
+              type="button"
+              onClick={handleLoadOptions}
+              disabled={isLoading}
+              className="ui-secondary-button border-white/20 bg-white/10 text-white hover:bg-white/16 dark:border-white/20 dark:bg-white/10 dark:text-white"
+            >
+              {isLoading ? <RefreshCw className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+              {hasData
+                ? t({ ru: "Обновить данные", en: "Update data" })
+                : t({ ru: "Загрузить данные", en: "Load data" })}
+            </button>
+            <button
+              type="button"
+              onClick={clearCache}
+              disabled={isLoading || !hasData}
+              className="ui-secondary-button border-white/20 bg-white/10 text-white hover:bg-white/16 dark:border-white/20 dark:bg-white/10 dark:text-white"
+            >
+              <Trash2 className="h-4 w-4" />
+              {t({ ru: "Очистить кэш", en: "Clear cache" })}
+            </button>
+          </>
         }
       />
 
@@ -150,15 +149,11 @@ export function OptionsPage() {
               placeholder={isEn ? "Filter underlying tickers" : "Фильтр по базовым тикерам"}
               className="ui-input md:w-80"
             />
-            <button
-              type="button"
-              onClick={() => setReloadKey((current) => current + 1)}
-              disabled={isLoading}
-              className="ui-secondary-button"
-            >
-              {isLoading ? <RefreshCw className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
-              {t({ ru: "Обновить", en: "Refresh" })}
-            </button>
+            <div className="text-sm text-slate-500 dark:text-slate-400">
+              {hasData
+                ? t({ ru: "Страница использует сохранённый локально список.", en: "The page uses the locally saved list." })
+                : t({ ru: "Данных пока нет. Загрузите их кнопкой выше.", en: "There is no data yet. Load it using the button above." })}
+            </div>
           </div>
         </div>
       </SectionCard>
@@ -191,90 +186,87 @@ export function OptionsPage() {
           <div className="flex flex-col items-center justify-center gap-3 text-center" role="status" aria-live="polite">
             <RefreshCw className="h-8 w-8 animate-spin text-slate-700 dark:text-slate-200" />
             <div className="text-base font-semibold text-slate-900 dark:text-slate-100">
-              {t({ ru: "Загружаем общий список базовых тикеров...", en: "Loading the general underlying ticker list..." })}
-            </div>
-            <div className="text-sm text-slate-500 dark:text-slate-400">
-              {t({
-                ru: "После этого можно перейти на отдельную страницу выбранного актива.",
-                en: "After that, you can open the dedicated page for the selected asset.",
-              })}
+              {t({ ru: "Загружаем список опционов из T-Bank API...", en: "Loading the option list from T-Bank API..." })}
             </div>
           </div>
         </SectionCard>
       ) : null}
 
-      {!isLoading ? (
-        <SectionCard
-          title={t({ ru: "Общий список тикеров", en: "General Ticker List" })}
-          description={t({
-            ru: "Рядом с каждым тикером есть кнопка перехода на отдельную страницу актива и его опционов.",
-            en: "Each ticker has a button that opens the dedicated page for that asset and its options.",
-          })}
-        >
-          {filteredSummaries.length === 0 ? (
-            <div className="ui-surface-muted text-center text-sm leading-7 text-slate-600 dark:text-slate-300">
-              {summaries.length === 0
-                ? t({ ru: "T-Bank не вернул ни одного опциона.", en: "T-Bank did not return any options." })
-                : t({ ru: "По текущим фильтрам ничего не найдено.", en: "Nothing matched the current filters." })}
-            </div>
-          ) : (
-            <div className="ui-table-shell overflow-x-auto">
-              <table className="ui-data-table">
-                <thead>
-                  <tr>
-                    <th>{t({ ru: "Тикер", en: "Ticker" })}</th>
-                    <th>{t({ ru: "Группа", en: "Group" })}</th>
-                    <th>{t({ ru: "Всего", en: "Total" })}</th>
-                    <th>{t({ ru: "Коллы", en: "Calls" })}</th>
-                    <th>{t({ ru: "Путы", en: "Puts" })}</th>
-                    <th>{t({ ru: "API-доступно", en: "API tradable" })}</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filteredSummaries.map((summary) => {
-                    const state: UnderlyingRouteState = {
-                      summaryLabel: summary.label,
-                      category: summary.category,
-                    };
+      <SectionCard
+        title={t({ ru: "Общий список тикеров", en: "General Ticker List" })}
+        description={t({
+          ru: "Рядом с каждым тикером есть кнопка перехода на отдельную страницу актива и его опционов.",
+          en: "Each ticker has a button that opens the dedicated page for that asset and its options.",
+        })}
+      >
+        {!hasData ? (
+          <div className="ui-surface-muted text-center text-sm leading-7 text-slate-600 dark:text-slate-300">
+            {t({
+              ru: "Список опционов пока пуст. Нажмите кнопку «Загрузить данные», чтобы получить его из T-Bank и сохранить в localStorage.",
+              en: "The option list is empty. Click “Load data” to fetch it from T-Bank and save it to localStorage.",
+            })}
+          </div>
+        ) : filteredSummaries.length === 0 ? (
+          <div className="ui-surface-muted text-center text-sm leading-7 text-slate-600 dark:text-slate-300">
+            {t({ ru: "По текущим фильтрам ничего не найдено.", en: "Nothing matched the current filters." })}
+          </div>
+        ) : (
+          <div className="ui-table-shell overflow-x-auto">
+            <table className="ui-data-table">
+              <thead>
+                <tr>
+                  <th>{t({ ru: "Тикер", en: "Ticker" })}</th>
+                  <th>{t({ ru: "Группа", en: "Group" })}</th>
+                  <th>{t({ ru: "Всего", en: "Total" })}</th>
+                  <th>{t({ ru: "Коллы", en: "Calls" })}</th>
+                  <th>{t({ ru: "Путы", en: "Puts" })}</th>
+                  <th>{t({ ru: "API-доступно", en: "API tradable" })}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredSummaries.map((summary) => {
+                  const state: UnderlyingRouteState = {
+                    summaryLabel: summary.label,
+                    category: summary.category,
+                  };
 
-                    return (
-                      <tr key={summary.key}>
-                        <td className="ui-cell-name">
-                          <div className="flex items-center justify-between gap-3">
-                            <span className="font-semibold text-slate-900 dark:text-slate-100">
-                              {summary.label}
-                            </span>
-                            <Link
-                              to={`/options/asset/${encodeURIComponent(summary.key)}`}
-                              state={state}
-                              className="ui-secondary-button px-2.5 py-1.5 text-xs"
-                            >
-                              {t({ ru: "Открыть", en: "Open" })}
-                            </Link>
-                          </div>
-                        </td>
-                        <td className="ui-cell-number">{getCategoryLabel(summary.category, locale)}</td>
-                        <td className="ui-cell-number">{summary.options.length}</td>
-                        <td className="ui-cell-number">{summary.calls}</td>
-                        <td className="ui-cell-number">{summary.puts}</td>
-                        <td className="ui-cell-number">{summary.tradableCount}</td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </SectionCard>
-      ) : null}
+                  return (
+                    <tr key={summary.key}>
+                      <td className="ui-cell-name">
+                        <div className="flex items-center justify-between gap-3">
+                          <span className="font-semibold text-slate-900 dark:text-slate-100">
+                            {summary.label}
+                          </span>
+                          <Link
+                            to={`/options/asset/${encodeURIComponent(summary.key)}`}
+                            state={state}
+                            className="ui-secondary-button px-2.5 py-1.5 text-xs"
+                          >
+                            {t({ ru: "Открыть", en: "Open" })}
+                          </Link>
+                        </div>
+                      </td>
+                      <td className="ui-cell-number">{getCategoryLabel(summary.category, locale)}</td>
+                      <td className="ui-cell-number">{summary.options.length}</td>
+                      <td className="ui-cell-number">{summary.calls}</td>
+                      <td className="ui-cell-number">{summary.puts}</td>
+                      <td className="ui-cell-number">{summary.tradableCount}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </SectionCard>
 
       <AppErrorDialog
         message={errorDialogMessage}
         onClose={() => setErrorDialogMessage(null)}
         title={t({ ru: "Ошибка загрузки опционов", en: "Option Loading Error" })}
         description={t({
-          ru: "Приложение не смогло получить общий список опционов из T-Bank API.",
-          en: "The application could not fetch the general option list from the T-Bank API.",
+          ru: "Приложение не смогло получить или обновить список опционов из T-Bank API.",
+          en: "The application could not fetch or update the option list from the T-Bank API.",
         })}
         closeLabel={t({ ru: "Закрыть", en: "Close" })}
       />

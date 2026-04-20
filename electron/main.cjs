@@ -3,6 +3,7 @@ const { spawn } = require("child_process");
 const fs = require("fs");
 const http = require("http");
 const path = require("path");
+const { autoUpdater } = require("electron-updater");
 
 let log;
 try {
@@ -41,7 +42,11 @@ const APP_ID = "com.invest.analytics.desktop";
 const DEFAULT_HOST = "127.0.0.1";
 
 let splashWindow = null;
+let mainWindow = null;
 const managedServices = new Map();
+let autoUpdateHandlersAttached = false;
+let autoUpdateCheckScheduled = false;
+let autoUpdatePromptVisible = false;
 
 const BACKEND_SERVICES = [
   {
@@ -417,7 +422,11 @@ function createSplashWindow() {
     },
   });
 
-  splashWindow.loadFile(path.join(__dirname, "splash.html"));
+  splashWindow.loadFile(path.join(__dirname, "splash.html"), {
+    query: {
+      version: app.getVersion(),
+    },
+  });
   splashWindow.on("closed", () => {
     splashWindow = null;
   });
@@ -425,7 +434,7 @@ function createSplashWindow() {
 
 function createMainWindow() {
   const iconPath = resolveWindowIconPath();
-  const win = new BrowserWindow({
+  mainWindow = new BrowserWindow({
     width: 1400,
     height: 900,
     minWidth: 1100,
@@ -441,24 +450,160 @@ function createMainWindow() {
     },
   });
 
-  win.once("ready-to-show", () => {
+  mainWindow.once("ready-to-show", () => {
     if (splashWindow && !splashWindow.isDestroyed()) {
       splashWindow.close();
     }
-    win.show();
+    mainWindow.show();
+    scheduleAutoUpdateCheck();
   });
 
-  win.webContents.setWindowOpenHandler(({ url }) => {
+  mainWindow.on("closed", () => {
+    mainWindow = null;
+  });
+
+  mainWindow.webContents.setWindowOpenHandler(({ url }) => {
     shell.openExternal(url);
     return { action: "deny" };
   });
 
   if (isDev) {
-    win.loadURL("http://localhost:5173");
-    win.webContents.openDevTools({ mode: "detach" });
+    mainWindow.loadURL("http://localhost:5173");
+    mainWindow.webContents.openDevTools({ mode: "detach" });
   } else {
-    win.loadFile(path.join(__dirname, "..", "dist", "index.html"));
+    mainWindow.loadFile(path.join(__dirname, "..", "dist", "index.html"));
   }
+
+  return mainWindow;
+}
+
+function isPortableBuild() {
+  return process.platform === "win32" && Boolean(process.env.PORTABLE_EXECUTABLE_DIR);
+}
+
+function isInstalledWindowsApp() {
+  if (process.platform !== "win32") {
+    return true;
+  }
+
+  try {
+    const executableDir = path.dirname(process.execPath);
+    const siblingFiles = fs.readdirSync(executableDir);
+    return siblingFiles.some((fileName) => /^uninstall .*\.exe$/i.test(fileName));
+  } catch (error) {
+    log.warn("Failed to detect the Windows installation state:", error);
+    return false;
+  }
+}
+
+function resolveUpdateConfigPath() {
+  return path.join(process.resourcesPath, "app-update.yml");
+}
+
+function shouldEnableAutoUpdate() {
+  if (!app.isPackaged) {
+    return false;
+  }
+
+  if (isPortableBuild()) {
+    log.info("Auto-update is disabled for the portable build.");
+    return false;
+  }
+
+  if (!isInstalledWindowsApp()) {
+    log.info("Auto-update is disabled because the application is not installed.");
+    return false;
+  }
+
+  const updateConfigPath = resolveUpdateConfigPath();
+  if (!fs.existsSync(updateConfigPath)) {
+    log.info(`Auto-update configuration was not found: ${updateConfigPath}`);
+    return false;
+  }
+
+  return true;
+}
+
+function attachAutoUpdateHandlers() {
+  if (autoUpdateHandlersAttached) {
+    return;
+  }
+
+  autoUpdateHandlersAttached = true;
+  autoUpdater.logger = log;
+  autoUpdater.autoDownload = true;
+  autoUpdater.autoInstallOnAppQuit = true;
+
+  autoUpdater.on("checking-for-update", () => {
+    log.info(`Checking for updates. Current version: ${app.getVersion()}`);
+  });
+
+  autoUpdater.on("update-available", (info) => {
+    log.info(`Update available: ${info.version}`);
+  });
+
+  autoUpdater.on("update-not-available", () => {
+    log.info("No application updates are currently available.");
+  });
+
+  autoUpdater.on("download-progress", (progress) => {
+    log.info(`Update download progress: ${Math.round(progress.percent)}%`);
+  });
+
+  autoUpdater.on("update-downloaded", async (info) => {
+    log.info(`Update downloaded: ${info.version}`);
+    await promptForUpdateInstall(info.version);
+  });
+
+  autoUpdater.on("error", (error) => {
+    const message = error instanceof Error ? error.stack || error.message : String(error);
+    log.error(`Auto-update failed: ${message}`);
+  });
+}
+
+async function promptForUpdateInstall(version) {
+  if (autoUpdatePromptVisible) {
+    return;
+  }
+
+  autoUpdatePromptVisible = true;
+
+  try {
+    const dialogTarget = mainWindow && !mainWindow.isDestroyed() ? mainWindow : undefined;
+    const result = await dialog.showMessageBox(dialogTarget, {
+      type: "info",
+      buttons: ["Перезапустить сейчас", "Позже"],
+      defaultId: 0,
+      cancelId: 1,
+      noLink: true,
+      title: "Доступно обновление",
+      message: `Загружено обновление версии ${version}.`,
+      detail: "Приложение уже скачало новый релиз. Можно перезапустить его сейчас или установить обновление при следующем закрытии.",
+    });
+
+    if (result.response === 0) {
+      autoUpdater.quitAndInstall(false, true);
+    }
+  } catch (error) {
+    log.error("Failed to show the update installation dialog:", error);
+  } finally {
+    autoUpdatePromptVisible = false;
+  }
+}
+
+function scheduleAutoUpdateCheck() {
+  if (autoUpdateCheckScheduled || !shouldEnableAutoUpdate()) {
+    return;
+  }
+
+  autoUpdateCheckScheduled = true;
+  attachAutoUpdateHandlers();
+
+  setTimeout(() => {
+    autoUpdater.checkForUpdates().catch((error) => {
+      log.error("Unable to check for updates:", error);
+    });
+  }, 12000);
 }
 
 app.whenReady().then(async () => {

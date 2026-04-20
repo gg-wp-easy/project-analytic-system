@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { RefreshCw } from "lucide-react";
 import {
   Area,
   AreaChart,
@@ -42,6 +43,9 @@ type OptionStrategyBuilderProps = {
   isPricingLoading: boolean;
   pricingErrorMessage: string | null;
   pricingUpdatedAt: string | null;
+  onLoadPricing: () => void;
+  pricingActionLabel: string;
+  isPricingActionDisabled?: boolean;
 };
 
 function createDraftLeg(optionUid: string): StrategyDraftLeg {
@@ -82,6 +86,9 @@ export function OptionStrategyBuilder({
   isPricingLoading,
   pricingErrorMessage,
   pricingUpdatedAt,
+  onLoadPricing,
+  pricingActionLabel,
+  isPricingActionDisabled = false,
 }: OptionStrategyBuilderProps) {
   const { locale, t } = useAppSettings();
   const isEn = locale === "en";
@@ -538,8 +545,19 @@ export function OptionStrategyBuilder({
           </div>
 
           <div className="rounded-3xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600 dark:border-slate-800 dark:bg-slate-900/60 dark:text-slate-300">
-            <div className="font-semibold text-slate-900 dark:text-slate-100">
-              {t({ ru: "Ценообразование для ног", en: "Leg pricing" })}
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="font-semibold text-slate-900 dark:text-slate-100">
+                {t({ ru: "Ценообразование для ног", en: "Leg pricing" })}
+              </div>
+              <button
+                type="button"
+                onClick={onLoadPricing}
+                disabled={isPricingLoading || isPricingActionDisabled}
+                className="ui-secondary-button px-3 py-1.5 text-xs"
+              >
+                {isPricingLoading ? <RefreshCw className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+                {pricingActionLabel}
+              </button>
             </div>
             <div className="mt-2 leading-6">
               {isPricingLoading

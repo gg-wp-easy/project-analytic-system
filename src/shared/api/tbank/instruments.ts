@@ -4,6 +4,8 @@ const INDICATIVES_ENDPOINT =
   "https://invest-public-api.tbank.ru/rest/tinkoff.public.invest.api.contract.v1.InstrumentsService/Indicatives";
 const BONDS_ENDPOINT =
   "https://invest-public-api.tbank.ru/rest/tinkoff.public.invest.api.contract.v1.InstrumentsService/Bonds";
+const FUTURES_ENDPOINT =
+  "https://invest-public-api.tbank.ru/rest/tinkoff.public.invest.api.contract.v1.InstrumentsService/Futures";
 const OPTIONS_ENDPOINT =
   "https://invest-public-api.tbank.ru/rest/tinkoff.public.invest.api.contract.v1.InstrumentsService/Options";
 const OPTIONS_BY_ENDPOINT =
@@ -12,6 +14,8 @@ const OPTION_BY_ENDPOINT =
   "https://invest-public-api.tbank.ru/rest/tinkoff.public.invest.api.contract.v1.InstrumentsService/OptionBy";
 const FIND_INSTRUMENT_ENDPOINT =
   "https://invest-public-api.tbank.ru/rest/tinkoff.public.invest.api.contract.v1.InstrumentsService/FindInstrument";
+const ASSETS_ENDPOINT =
+  "https://invest-public-api.tbank.ru/rest/tinkoff.public.invest.api.contract.v1.InstrumentsService/GetAssets";
 const BOND_COUPONS_ENDPOINT =
   "https://invest-public-api.tbank.ru/rest/tinkoff.public.invest.api.contract.v1.InstrumentsService/GetBondCoupons";
 const ASSET_FUNDAMENTALS_ENDPOINT =
@@ -28,11 +32,27 @@ const LEGACY_OPTIONS_CACHE_STORAGE_KEY = "tbank_options_cache_v1";
 const OPTIONS_CACHE_STORAGE_KEY = "tbank_options_cache_v2";
 const OPTIONS_CACHE_TTL_MS = 5 * 60 * 1000;
 const OPTIONS_CACHE_STORAGE_LIMIT_CHARS = 4_000_000;
+const OPTIONS_DISCOVERY_PARALLEL_LIMIT = 6;
+const OPTIONS_DISCOVERY_ASSET_TYPES = [
+  "INSTRUMENT_TYPE_BOND",
+  "INSTRUMENT_TYPE_SHARE",
+  "INSTRUMENT_TYPE_CURRENCY",
+  "INSTRUMENT_TYPE_ETF",
+  "INSTRUMENT_TYPE_SP",
+  "INSTRUMENT_TYPE_COMMODITY",
+  "INSTRUMENT_TYPE_INDEX",
+  "INSTRUMENT_TYPE_CLEARING_CERTIFICATE",
+] as const;
+const OPTIONS_DISCOVERY_ERROR_PREVIEW_LIMIT = 6;
 
 type AnyRecord = Record<string, unknown>;
 type TBankOptionsCachePayload = {
   savedAt: string;
   items: CachedTBankOption[];
+};
+type TBankOptionsLoadTarget = {
+  key: string;
+  payload: Record<string, string>;
 };
 type CachedTBankOption = Pick<
   TBankOption,
@@ -40,6 +60,7 @@ type CachedTBankOption = Pick<
   | "figi"
   | "positionUid"
   | "assetUid"
+  | "basicAssetUid"
   | "basicAssetPositionUid"
   | "ticker"
   | "classCode"
@@ -104,6 +125,7 @@ export type TBankOption = {
   uid: string;
   positionUid: string;
   assetUid: string;
+  basicAssetUid: string;
   basicAssetPositionUid: string;
   ticker: string;
   classCode: string;
@@ -292,6 +314,29 @@ function chunkArray<T>(source: T[], size: number): T[][] {
   return chunks;
 }
 
+async function mapWithConcurrency<T, TResult>(
+  items: T[],
+  limit: number,
+  worker: (item: T, index: number) => Promise<TResult>,
+): Promise<TResult[]> {
+  if (items.length === 0) {
+    return [];
+  }
+
+  const results = new Array<TResult>(items.length);
+  let nextIndex = 0;
+  const workers = Array.from({ length: Math.min(limit, items.length) }, async () => {
+    while (nextIndex < items.length) {
+      const currentIndex = nextIndex;
+      nextIndex += 1;
+      results[currentIndex] = await worker(items[currentIndex], currentIndex);
+    }
+  });
+
+  await Promise.all(workers);
+  return results;
+}
+
 function normalizeFundamentalItem(item: AnyRecord, nowIso: string): TBankFundamental {
   const marketCapRaw = pickNumber(item, [
     "market_capitalization",
@@ -456,6 +501,150 @@ function scoreInstrumentReference(instrument: TBankInstrumentReference, query: s
   return score;
 }
 
+function getErrorStatusCode(error: unknown): number | null {
+  if (!(error instanceof Error)) {
+    return null;
+  }
+
+  const match = error.message.match(/T-Bank API (\d{3})\b/);
+  if (!match) {
+    return null;
+  }
+
+  const status = Number(match[1]);
+  return Number.isFinite(status) ? status : null;
+}
+
+function shouldSkipOptionsByError(error: unknown): boolean {
+  const status = getErrorStatusCode(error);
+  return status === 400 || status === 404;
+}
+
+function createOptionsLoadTarget(params: {
+  basicAssetUid?: string;
+  basicAssetPositionUid?: string;
+  keyPrefix?: string;
+}): TBankOptionsLoadTarget | null {
+  const normalizedAssetUid = params.basicAssetUid?.trim() ?? "";
+  const normalizedPositionUid = params.basicAssetPositionUid?.trim() ?? "";
+  const keyPrefix = params.keyPrefix?.trim() || "asset";
+
+  if (!normalizedAssetUid) {
+    return null;
+  }
+
+  return {
+    key: normalizedPositionUid
+      ? `${keyPrefix}:${normalizedAssetUid}:${normalizedPositionUid}`
+      : `${keyPrefix}:${normalizedAssetUid}`,
+    payload: normalizedPositionUid
+      ? {
+          basicAssetUid: normalizedAssetUid,
+          basicAssetPositionUid: normalizedPositionUid,
+        }
+      : {
+          basicAssetUid: normalizedAssetUid,
+        },
+  };
+}
+
+function createBasicAssetUidLoadTarget(value: string): TBankOptionsLoadTarget | null {
+  const normalized = value.trim();
+  if (!normalized) {
+    return null;
+  }
+
+  return createOptionsLoadTarget({
+    basicAssetUid: normalized,
+    keyPrefix: "asset",
+  });
+}
+
+function dedupeOptionsLoadTargets(targets: Array<TBankOptionsLoadTarget | null>): TBankOptionsLoadTarget[] {
+  const map = new Map<string, TBankOptionsLoadTarget>();
+
+  for (const target of targets) {
+    if (!target) {
+      continue;
+    }
+
+    if (!map.has(target.key)) {
+      map.set(target.key, target);
+    }
+  }
+
+  return [...map.values()];
+}
+
+function buildKnownOptionsLoadTargets(items: TBankOption[]): TBankOptionsLoadTarget[] {
+  return dedupeOptionsLoadTargets(
+    items.map((item) =>
+      createOptionsLoadTarget({
+        basicAssetUid: item.basicAssetUid || item.assetUid,
+        basicAssetPositionUid: item.basicAssetPositionUid,
+        keyPrefix: "known",
+      }),
+    ),
+  );
+}
+
+function createFutureLoadTarget(item: AnyRecord): TBankOptionsLoadTarget | null {
+  return createOptionsLoadTarget({
+    basicAssetUid: pickString(item, ["assetUid", "asset_uid"]),
+    basicAssetPositionUid: pickString(item, ["positionUid", "position_uid"]),
+    keyPrefix: "future",
+  });
+}
+
+function dedupeOptions(items: TBankOption[]): TBankOption[] {
+  const byUid = new Map<string, TBankOption>();
+
+  for (const item of items) {
+    if (!item.uid) {
+      continue;
+    }
+
+    const current = byUid.get(item.uid);
+    if (!current) {
+      byUid.set(item.uid, item);
+      continue;
+    }
+
+    const currentScore =
+      Number(Boolean(current.apiTradeAvailableFlag)) +
+      Number(Boolean(current.buyAvailableFlag)) +
+      Number(Boolean(current.sellAvailableFlag));
+    const nextScore =
+      Number(Boolean(item.apiTradeAvailableFlag)) +
+      Number(Boolean(item.buyAvailableFlag)) +
+      Number(Boolean(item.sellAvailableFlag));
+
+    if (nextScore >= currentScore) {
+      byUid.set(item.uid, item);
+    }
+  }
+
+  return [...byUid.values()].sort((left, right) => {
+    const assetCompare = left.basicAsset.localeCompare(right.basicAsset, "ru");
+    if (assetCompare !== 0) {
+      return assetCompare;
+    }
+
+    const expirationCompare =
+      (Date.parse(left.expirationDate || "") || Number.MAX_SAFE_INTEGER) -
+      (Date.parse(right.expirationDate || "") || Number.MAX_SAFE_INTEGER);
+    if (expirationCompare !== 0) {
+      return expirationCompare;
+    }
+
+    if (left.strikePrice !== right.strikePrice) {
+      return left.strikePrice - right.strikePrice;
+    }
+
+    return left.ticker.localeCompare(right.ticker, "ru");
+  });
+}
+
 function normalizeOptionItem(item: AnyRecord, nowIso: string): TBankOption | null {
   const uid = pickString(item, ["uid", "instrumentUid", "instrument_uid"]);
   const ticker = pickString(item, ["ticker"]);
@@ -468,6 +657,7 @@ function normalizeOptionItem(item: AnyRecord, nowIso: string): TBankOption | nul
     uid,
     positionUid: pickString(item, ["positionUid", "position_uid"]),
     assetUid: pickString(item, ["assetUid", "asset_uid"]),
+    basicAssetUid: pickString(item, ["basicAssetUid", "basic_asset_uid"]),
     basicAssetPositionUid: pickString(item, ["basicAssetPositionUid", "basic_asset_position_uid"]),
     ticker,
     classCode: pickString(item, ["classCode", "class_code"]),
@@ -618,6 +808,7 @@ function normalizeCachedOptionItem(item: unknown): TBankOption | null {
     uid,
     positionUid: pickString(raw, ["positionUid"]),
     assetUid: pickString(raw, ["assetUid"]),
+    basicAssetUid: pickString(raw, ["basicAssetUid"]),
     basicAssetPositionUid: pickString(raw, ["basicAssetPositionUid"]),
     ticker,
     classCode: pickString(raw, ["classCode"]),
@@ -699,6 +890,7 @@ function saveOptionsCacheToStorage(items: TBankOption[]): void {
         uid: item.uid,
         positionUid: item.positionUid,
         assetUid: item.assetUid,
+        basicAssetUid: item.basicAssetUid,
         basicAssetPositionUid: item.basicAssetPositionUid,
         ticker: item.ticker,
         classCode: item.classCode,
@@ -831,21 +1023,127 @@ export function createTBankInstrumentsApi(token?: string) {
 
     const authToken = ensureToken();
     const loadOptionsFromApi = async (): Promise<TBankOption[]> => {
-      const payload = await requestJson<AnyRecord>(OPTIONS_ENDPOINT, authToken, {
-        instrumentStatus: "INSTRUMENT_STATUS_BASE",
-      });
+      const knownTargets = buildKnownOptionsLoadTargets(
+        optionsCacheMemory?.items.length ? optionsCacheMemory.items : staleCache?.items ?? [],
+      );
+      const discoveredTargets = await (async () => {
+        const assetResults = await Promise.allSettled(
+          OPTIONS_DISCOVERY_ASSET_TYPES.map(async (instrumentType) => {
+            const payload = await requestJson<AnyRecord>(ASSETS_ENDPOINT, authToken, {
+              instrumentType,
+              instrumentStatus: "INSTRUMENT_STATUS_BASE",
+            });
+            const assets =
+              (Array.isArray(payload.assets) && payload.assets) ||
+              (Array.isArray(payload.items) && payload.items) ||
+              (Array.isArray(payload.data) && payload.data) ||
+              [];
 
-      const instruments =
-        (Array.isArray(payload.instruments) && payload.instruments) ||
-        (Array.isArray(payload.options) && payload.options) ||
-        (Array.isArray(payload.items) && payload.items) ||
-        (Array.isArray(payload.data) && payload.data) ||
-        [];
+            return assets.map((raw) => {
+              const item = (raw ?? {}) as AnyRecord;
+              const assetUid = pickString(item, ["uid", "assetUid", "asset_uid"]);
+              return createBasicAssetUidLoadTarget(assetUid);
+            });
+          }),
+        );
 
-      const nowIso = new Date().toISOString();
-      const items = instruments
-        .map((raw) => normalizeOptionItem((raw ?? {}) as AnyRecord, nowIso))
-        .filter((option): option is TBankOption => Boolean(option));
+        const futureResult = await Promise.allSettled([
+          (async () => {
+            const payload = await requestJson<AnyRecord>(FUTURES_ENDPOINT, authToken, {
+              instrumentStatus: "INSTRUMENT_STATUS_BASE",
+            });
+            const instruments =
+              (Array.isArray(payload.instruments) && payload.instruments) ||
+              (Array.isArray(payload.futures) && payload.futures) ||
+              (Array.isArray(payload.items) && payload.items) ||
+              (Array.isArray(payload.data) && payload.data) ||
+              [];
+
+            return instruments.map((raw) => createFutureLoadTarget((raw ?? {}) as AnyRecord));
+          })(),
+        ]);
+
+        const targets = dedupeOptionsLoadTargets([
+          ...knownTargets,
+          ...assetResults.flatMap((result) => (result.status === "fulfilled" ? result.value : [])),
+          ...futureResult.flatMap((result) => (result.status === "fulfilled" ? result.value : [])),
+        ]);
+
+        if (targets.length > 0) {
+          return targets;
+        }
+
+        const discoveryErrors = [
+          ...assetResults.flatMap((result) =>
+            result.status === "rejected"
+              ? [result.reason instanceof Error ? result.reason.message : String(result.reason)]
+              : [],
+          ),
+          ...futureResult.flatMap((result) =>
+            result.status === "rejected"
+              ? [result.reason instanceof Error ? result.reason.message : String(result.reason)]
+              : [],
+          ),
+        ].filter(Boolean);
+
+        throw new Error(
+          discoveryErrors.slice(0, OPTIONS_DISCOVERY_ERROR_PREVIEW_LIMIT).join(" | ") ||
+            "T-Bank did not return any option discovery targets.",
+        );
+      })();
+
+      if (discoveredTargets.length === 0) {
+        return [];
+      }
+
+      const optionBuckets = await mapWithConcurrency(
+        discoveredTargets,
+        OPTIONS_DISCOVERY_PARALLEL_LIMIT,
+        async (target) => {
+          try {
+            const payload = await requestJson<AnyRecord>(OPTIONS_BY_ENDPOINT, authToken, target.payload);
+            const instruments =
+              (Array.isArray(payload.instruments) && payload.instruments) ||
+              (Array.isArray(payload.options) && payload.options) ||
+              (Array.isArray(payload.items) && payload.items) ||
+              (Array.isArray(payload.data) && payload.data) ||
+              [];
+
+            const nowIso = new Date().toISOString();
+            return {
+              items: instruments
+                .map((raw) => normalizeOptionItem((raw ?? {}) as AnyRecord, nowIso))
+                .filter((option): option is TBankOption => Boolean(option)),
+              errorMessage: "",
+            };
+          } catch (error) {
+            if (shouldSkipOptionsByError(error)) {
+              return { items: [], errorMessage: "" };
+            }
+
+            return {
+              items: [],
+              errorMessage:
+                error instanceof Error
+                  ? `${target.key}: ${error.message}`
+                  : `${target.key}: ${String(error)}`,
+            };
+          }
+        },
+      );
+
+      const items = dedupeOptions(optionBuckets.flatMap((bucket) => bucket.items));
+      const optionErrors = optionBuckets
+        .map((bucket) => bucket.errorMessage)
+        .filter((message): message is string => Boolean(message));
+
+      if (items.length === 0 && optionErrors.length > 0) {
+        throw new Error(optionErrors.slice(0, OPTIONS_DISCOVERY_ERROR_PREVIEW_LIMIT).join(" | "));
+      }
+
+      if (items.length === 0 && staleCache?.items.length) {
+        throw new Error("T-Bank chunked refresh returned an empty option list.");
+      }
 
       optionsCacheMemory = {
         savedAtMs: Date.now(),
@@ -868,7 +1166,11 @@ export function createTBankInstrumentsApi(token?: string) {
             return staleCache.items;
           }
 
-          throw secondError instanceof Error ? secondError : firstError;
+          const errors = [firstError, secondError]
+            .map((error) => (error instanceof Error ? error.message : String(error)))
+            .filter(Boolean);
+          const preview = errors.slice(0, OPTIONS_DISCOVERY_ERROR_PREVIEW_LIMIT).join(" | ");
+          throw new Error(preview || (secondError instanceof Error ? secondError.message : String(firstError)));
         }
       }
     })().finally(() => {
@@ -1154,10 +1456,12 @@ export function createTBankInstrumentsApi(token?: string) {
       shares: SHARES_ENDPOINT,
       indicatives: INDICATIVES_ENDPOINT,
       bonds: BONDS_ENDPOINT,
+      futures: FUTURES_ENDPOINT,
       options: OPTIONS_ENDPOINT,
       optionsBy: OPTIONS_BY_ENDPOINT,
       optionBy: OPTION_BY_ENDPOINT,
       findInstrument: FIND_INSTRUMENT_ENDPOINT,
+      assets: ASSETS_ENDPOINT,
       bondCoupons: BOND_COUPONS_ENDPOINT,
       assetFundamentals: ASSET_FUNDAMENTALS_ENDPOINT,
       closePrices: CLOSE_PRICES_ENDPOINT,

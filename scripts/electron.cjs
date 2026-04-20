@@ -23,6 +23,7 @@ const beforeBuildScript = path.join(scriptsDir, "before-build.cjs");
 const protectAsarScript = path.join(scriptsDir, "protect-asar.cjs");
 const viteCli = path.join(repoRoot, "node_modules", "vite", "bin", "vite.js");
 const electronBuilderCli = path.join(repoRoot, "node_modules", "electron-builder", "cli.js");
+const packageJsonPath = path.join(repoRoot, "package.json");
 
 
 async function main() {
@@ -61,6 +62,8 @@ function parseArgs(argv) {
     vitePort: 5173,
     viteHost: "127.0.0.1",
     outputDir: null,
+    appVersion: null,
+    versionMode: "timestamp",
   };
 
   for (const arg of argv.slice(1)) {
@@ -86,9 +89,17 @@ function parseArgs(argv) {
       options.viteHost = arg.slice("--vite-host=".length);
     } else if (arg.startsWith("--output-dir=")) {
       options.outputDir = path.resolve(repoRoot, arg.slice("--output-dir=".length));
+    } else if (arg.startsWith("--app-version=")) {
+      options.appVersion = arg.slice("--app-version=".length);
+    } else if (arg.startsWith("--version-mode=")) {
+      options.versionMode = arg.slice("--version-mode=".length);
     } else {
       throw new Error(`Unknown argument: ${arg}`);
     }
+  }
+
+  if (!["package", "timestamp"].includes(options.versionMode)) {
+    throw new Error(`Unsupported version mode: ${options.versionMode}`);
   }
 
   return { mode, options };
@@ -101,11 +112,13 @@ Usage:
   node scripts/electron.cjs dev [--skip-server-install] [--vite-port=5173]
   node scripts/electron.cjs build [--platform=current|win|linux|mac] [--profile=standard|msi|store]
                                 [--skip-icons] [--skip-server-build] [--skip-builder] [--skip-protect-asar]
+                                [--version-mode=timestamp|package] [--app-version=x.y.z]
 
 Examples:
   node scripts/electron.cjs dev
   node scripts/electron.cjs build
   node scripts/electron.cjs build --platform=win --profile=msi
+  node scripts/electron.cjs build --app-version=2026.111.44113
 `);
 }
 
@@ -164,6 +177,7 @@ async function runBuild(options) {
   assertFileExists(electronBuilderCli, "electron-builder CLI");
 
   const targetPlatform = resolveElectronPlatform(options.platform);
+  const buildVersion = resolveBuildVersion(options);
   const outputDir = options.outputDir || path.join(
     repoRoot,
     "release",
@@ -175,6 +189,7 @@ async function runBuild(options) {
   };
 
   console.log(`Electron build output directory: ${outputDir}`);
+  console.log(`Electron app version: ${buildVersion.value} (${buildVersion.source})`);
 
   if (!options.skipIcons) {
     logStep("Generating icon assets");
@@ -193,7 +208,7 @@ async function runBuild(options) {
   }
 
   logStep("Building frontend with Vite");
-  await runCommand(nodeBinary, [viteCli, "build", "--configLoader", "native"], {
+  await runCommand(nodeBinary, [viteCli, "build", "--configLoader", "bundle"], {
     cwd: repoRoot,
     env: process.env,
   });
@@ -209,6 +224,8 @@ async function runBuild(options) {
       electronBuilderCli,
       ...resolveBuilderArgs(targetPlatform.key, options.profile),
       `--config.directories.output=${outputDir}`,
+      `--config.extraMetadata.version=${buildVersion.value}`,
+      `--config.buildVersion=${buildVersion.value}`,
     ];
 
     logStep(`Packaging Electron app for ${targetPlatform.label}`);
@@ -290,6 +307,67 @@ function assertFileExists(targetPath, label) {
   if (!fs.existsSync(targetPath)) {
     throw new Error(`${label} was not found: ${targetPath}`);
   }
+}
+
+
+function resolveBuildVersion(options) {
+  const packageMetadata = JSON.parse(fs.readFileSync(packageJsonPath, "utf8"));
+  const packageVersion = packageMetadata.version;
+
+  if (!isValidSemver(packageVersion)) {
+    throw new Error(`package.json version is not a valid semver value: ${packageVersion}`);
+  }
+
+  const explicitVersion = options.appVersion || process.env.ELECTRON_APP_VERSION || process.env.APP_VERSION;
+  if (explicitVersion) {
+    if (!isValidSemver(explicitVersion)) {
+      throw new Error(`Build version must be a valid semver value: ${explicitVersion}`);
+    }
+
+    return {
+      value: explicitVersion,
+      source: options.appVersion ? "cli --app-version" : "environment",
+    };
+  }
+
+  if (options.versionMode === "package") {
+    return {
+      value: packageVersion,
+      source: "package.json",
+    };
+  }
+
+  return {
+    value: createTimestampSemver(new Date()),
+    source: "generated UTC timestamp",
+  };
+}
+
+
+function createTimestampSemver(now) {
+  const year = now.getUTCFullYear();
+  const startOfYearUtcMs = Date.UTC(year, 0, 1);
+  const nowUtcMs = Date.UTC(
+    year,
+    now.getUTCMonth(),
+    now.getUTCDate(),
+    now.getUTCHours(),
+    now.getUTCMinutes(),
+    now.getUTCSeconds(),
+  );
+  const dayOfYear = Math.floor((nowUtcMs - startOfYearUtcMs) / 86400000) + 1;
+  const secondsSinceMidnight = (
+    now.getUTCHours() * 3600
+    + now.getUTCMinutes() * 60
+    + now.getUTCSeconds()
+  );
+
+  return `${year}.${dayOfYear}.${secondsSinceMidnight}`;
+}
+
+
+function isValidSemver(value) {
+  return /^\d+\.\d+\.\d+(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$/.test(value);
 }
 
 

@@ -9,9 +9,13 @@
     "name": "Nikita Kaev",
     "email": "nikitakaev25@gmail.com"
   },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/gg-wp-easy/project-site-analytic-system.git"
+  },
   "scripts": {
     "start": "electron .",
-    "build": "vite build --configLoader native",
+    "build": "vite build --configLoader bundle",
     "dev": "vite",
     "icons:create": "node scripts/create-icons.cjs",
     "prebuild": "npm run icons:create",
@@ -303,6 +307,8 @@
     "publish": [
       {
         "provider": "github",
+        "owner": "gg-wp-easy",
+        "repo": "project-site-analytic-system",
         "releaseType": "release"
       }
     ],

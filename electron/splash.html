@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>NK-Invest Analytics Loading</title>
+    <title>Загрузка приложения инвестиционной аналитики</title>
     <style>
       :root {
         color-scheme: dark;
@@ -54,6 +54,12 @@
         color: #94a3b8;
         font-size: 13px;
       }
+      .meta {
+        margin-top: 12px;
+        color: #64748b;
+        font-size: 12px;
+        letter-spacing: 0.18px;
+      }
       .bar {
         margin-top: 20px;
         width: 100%;
@@ -94,12 +100,22 @@
     <main class="card">
       <div class="header">
         <span class="dot"></span>
-        <h1>Invest Analytics</h1>
+        <h1>Инвестиционная аналитика</h1>
       </div>
       <p>Запуск аналитического ядра и подключение сервисов...</p>
+      <div class="meta">Версия <span id="app-version">1.0.0</span></div>
       <div class="bar">
         <div class="bar-fill"></div>
       </div>
     </main>
+    <script>
+      const params = new URLSearchParams(window.location.search);
+      const version = params.get("version");
+      const versionNode = document.getElementById("app-version");
+
+      if (version && versionNode) {
+        versionNode.textContent = version;
+      }
+    </script>
   </body>
 </html>
