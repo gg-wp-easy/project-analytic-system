@@ -15,7 +15,7 @@
   },
   "scripts": {
     "start": "electron .",
-    "build": "vite build --configLoader bundle",
+    "build": "vite build",
     "dev": "vite",
     "icons:create": "node scripts/create-icons.cjs",
     "prebuild": "npm run icons:create",
