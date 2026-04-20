@@ -193,7 +193,7 @@ async function runBuild(options) {
   }
 
   logStep("Building frontend with Vite");
-  await runCommand(nodeBinary, [viteCli, "build", "--configLoader", "native"], {
+  await runCommand(nodeBinary, [viteCli, "build"], {
     cwd: repoRoot,
     env: process.env,
   });
