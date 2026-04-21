@@ -6,6 +6,7 @@ import {
   Brain,
   ChevronDown,
   Database,
+  FolderOpen,
   GitBranch,
   Landmark,
   Layers,
@@ -33,6 +34,28 @@ type NavItem = {
   icon: LucideIcon;
 };
 
+type DesktopLogApi = {
+  debug?: (...data: unknown[]) => void;
+  info?: (...data: unknown[]) => void;
+  warn?: (...data: unknown[]) => void;
+  error?: (...data: unknown[]) => void;
+};
+
+type DesktopApi = {
+  isDesktop?: boolean;
+  openLogsDirectory?: () => Promise<string>;
+  getLogsDirectory?: () => Promise<string>;
+  log?: DesktopLogApi;
+};
+
+function getDesktopApi(): DesktopApi | undefined {
+  if (typeof window === "undefined") {
+    return undefined;
+  }
+
+  return (window as Window & { electron?: DesktopApi }).electron;
+}
+
 function isActivePath(currentPath: string, targetPath: string): boolean {
   if (targetPath === "/") {
     return currentPath === "/";
@@ -44,7 +67,28 @@ function isActivePath(currentPath: string, targetPath: string): boolean {
 export function Root() {
   const location = useLocation();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [isOpeningLogs, setIsOpeningLogs] = useState(false);
   const { locale, setLocale, theme, toggleTheme, t } = useAppSettings();
+  const desktopApi = getDesktopApi();
+  const canOpenLogsDirectory = Boolean(desktopApi?.openLogsDirectory);
+
+  const handleOpenLogsDirectory = async () => {
+    const api = getDesktopApi();
+    if (!api?.openLogsDirectory) {
+      return;
+    }
+
+    setIsOpeningLogs(true);
+    try {
+      const logsDir = await api.openLogsDirectory();
+      api.log?.info?.("Opened logs directory", logsDir);
+    } catch (error) {
+      console.error("Failed to open logs directory.", error);
+      api.log?.error?.("Failed to open logs directory", error);
+    } finally {
+      setIsOpeningLogs(false);
+    }
+  };
 
   const primaryNavigation: NavItem[] = [
     { name: t("nav.overview"), path: "/", icon: TrendingUp },
@@ -126,6 +170,18 @@ export function Root() {
                   {t("switch.langEn")}
                 </button>
               </div>
+              {canOpenLogsDirectory ? (
+                <button
+                  type="button"
+                  onClick={handleOpenLogsDirectory}
+                  disabled={isOpeningLogs}
+                  title={t({ ru: "Открыть папку логов", en: "Open logs folder" })}
+                  className="inline-flex items-center gap-2 rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 disabled:cursor-wait disabled:opacity-60 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
+                >
+                  <FolderOpen className="h-4 w-4" />
+                  <span>{isOpeningLogs ? t({ ru: "Открытие...", en: "Opening..." }) : t({ ru: "Логи", en: "Logs" })}</span>
+                </button>
+              ) : null}
             </div>
 
             <button
@@ -199,7 +255,7 @@ export function Root() {
 
         {mobileMenuOpen ? (
           <div className="border-t border-slate-200 bg-white/95 dark:border-slate-800 dark:bg-slate-900/95 lg:hidden">
-            <div className="flex items-center gap-2 px-4 py-4">
+            <div className="flex flex-wrap items-center gap-2 px-4 py-4">
               <button
                 type="button"
                 onClick={toggleTheme}
@@ -216,6 +272,18 @@ export function Root() {
                 <option value="ru">{t("switch.langRu")}</option>
                 <option value="en">{t("switch.langEn")}</option>
               </select>
+              {canOpenLogsDirectory ? (
+                <button
+                  type="button"
+                  onClick={handleOpenLogsDirectory}
+                  disabled={isOpeningLogs}
+                  title={t({ ru: "Открыть папку логов", en: "Open logs folder" })}
+                  className="inline-flex items-center gap-2 rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-700 disabled:cursor-wait disabled:opacity-60 dark:border-slate-700 dark:text-slate-200"
+                >
+                  <FolderOpen className="h-4 w-4" />
+                  <span>{isOpeningLogs ? t({ ru: "Открытие...", en: "Opening..." }) : t({ ru: "Логи", en: "Logs" })}</span>
+                </button>
+              ) : null}
             </div>
 
             <nav className="space-y-4 px-4 pb-5">

@@ -33,6 +33,8 @@ const OPTIONS_CACHE_STORAGE_KEY = "tbank_options_cache_v2";
 const OPTIONS_CACHE_TTL_MS = 5 * 60 * 1000;
 const OPTIONS_CACHE_STORAGE_LIMIT_CHARS = 4_000_000;
 const OPTIONS_DISCOVERY_PARALLEL_LIMIT = 6;
+const DEFAULT_REQUEST_TIMEOUT_MS = 20_000;
+const OPTIONS_REQUEST_TIMEOUT_MS = 35_000;
 const OPTIONS_DISCOVERY_ASSET_TYPES = [
   "INSTRUMENT_TYPE_BOND",
   "INSTRUMENT_TYPE_SHARE",
@@ -724,16 +726,45 @@ async function requestJson<T>(
   endpoint: string,
   token: string,
   body: Record<string, unknown>,
+  options?: {
+    timeoutMs?: number;
+  },
 ): Promise<T> {
-  const response = await fetch(endpoint, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${token}`,
-      "Content-Type": "application/json",
-      Accept: "application/json",
-    },
-    body: JSON.stringify(body),
-  });
+  const timeoutMs = options?.timeoutMs ?? DEFAULT_REQUEST_TIMEOUT_MS;
+  const controller = typeof AbortController === "undefined" ? null : new AbortController();
+  const timeoutId = controller
+    ? setTimeout(() => controller.abort(), timeoutMs)
+    : null;
+
+  let response: Response;
+  try {
+    response = await fetch(endpoint, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+        Accept: "application/json",
+      },
+      body: JSON.stringify(body),
+      signal: controller?.signal,
+    });
+  } catch (error) {
+    if (timeoutId) {
+      clearTimeout(timeoutId);
+    }
+
+    const message =
+      error instanceof Error
+        ? error.name === "AbortError"
+          ? `T-Bank API request timed out for ${endpoint}.`
+          : `T-Bank API request failed for ${endpoint}. ${error.message}`
+        : `T-Bank API request failed for ${endpoint}. ${String(error)}`;
+    throw new Error(message);
+  }
+
+  if (timeoutId) {
+    clearTimeout(timeoutId);
+  }
 
   if (!response.ok) {
     let details = "";
@@ -1023,6 +1054,43 @@ export function createTBankInstrumentsApi(token?: string) {
 
     const authToken = ensureToken();
     const loadOptionsFromApi = async (): Promise<TBankOption[]> => {
+      let directLoadError: Error | null = null;
+      try {
+        // Prefer the single bulk endpoint first: it is much faster than scanning every asset via OptionsBy.
+        const directPayload = await requestJson<AnyRecord>(
+          OPTIONS_ENDPOINT,
+          authToken,
+          {
+            instrumentStatus: "INSTRUMENT_STATUS_BASE",
+          },
+          {
+            timeoutMs: OPTIONS_REQUEST_TIMEOUT_MS,
+          },
+        );
+        const directInstruments =
+          (Array.isArray(directPayload.instruments) && directPayload.instruments) ||
+          (Array.isArray(directPayload.options) && directPayload.options) ||
+          (Array.isArray(directPayload.items) && directPayload.items) ||
+          (Array.isArray(directPayload.data) && directPayload.data) ||
+          [];
+        const directNowIso = new Date().toISOString();
+        const directItems = directInstruments
+          .map((raw) => normalizeOptionItem((raw ?? {}) as AnyRecord, directNowIso))
+          .filter((option): option is TBankOption => Boolean(option));
+
+        if (directItems.length > 0) {
+          const items = dedupeOptions(directItems);
+          optionsCacheMemory = {
+            savedAtMs: Date.now(),
+            items,
+          };
+          saveOptionsCacheToStorage(items);
+          return items;
+        }
+      } catch (error) {
+        directLoadError = error instanceof Error ? error : new Error(String(error));
+      }
+
       const knownTargets = buildKnownOptionsLoadTargets(
         optionsCacheMemory?.items.length ? optionsCacheMemory.items : staleCache?.items ?? [],
       );
@@ -1092,6 +1160,10 @@ export function createTBankInstrumentsApi(token?: string) {
         );
       })();
 
+      if (discoveredTargets.length === 0 && directLoadError) {
+        throw directLoadError;
+      }
+
       if (discoveredTargets.length === 0) {
         return [];
       }
@@ -1136,9 +1208,13 @@ export function createTBankInstrumentsApi(token?: string) {
       const optionErrors = optionBuckets
         .map((bucket) => bucket.errorMessage)
         .filter((message): message is string => Boolean(message));
+      const combinedErrors = [
+        ...(directLoadError ? [directLoadError.message] : []),
+        ...optionErrors,
+      ];
 
-      if (items.length === 0 && optionErrors.length > 0) {
-        throw new Error(optionErrors.slice(0, OPTIONS_DISCOVERY_ERROR_PREVIEW_LIMIT).join(" | "));
+      if (items.length === 0 && combinedErrors.length > 0) {
+        throw new Error(combinedErrors.slice(0, OPTIONS_DISCOVERY_ERROR_PREVIEW_LIMIT).join(" | "));
       }
 
       if (items.length === 0 && staleCache?.items.length) {

@@ -1,15 +1,22 @@
-const { app, BrowserWindow, dialog, shell } = require("electron");
+const { app, BrowserWindow, dialog, ipcMain, shell } = require("electron");
 const { spawn } = require("child_process");
 const fs = require("fs");
 const http = require("http");
+const os = require("os");
 const path = require("path");
 const { autoUpdater } = require("electron-updater");
+
+const LOG_FILE_NAME = "app.log";
+const LOG_IPC_CHANNEL = "app:log";
+const OPEN_LOGS_DIRECTORY_CHANNEL = "app:open-logs-directory";
+const GET_LOGS_DIRECTORY_CHANNEL = "app:get-logs-directory";
+const LOG_LEVELS = new Set(["debug", "info", "warn", "error"]);
 
 let log;
 try {
   log = require("electron-log");
   if (typeof log.initialize === "function") {
-    log.initialize();
+    log.initialize({ spyRendererConsole: true });
   }
 } catch (error) {
   console.error("electron-log is unavailable, using console fallback.", error);
@@ -31,8 +38,14 @@ if (log.transports && log.transports.console) {
 }
 
 if (log.transports && log.transports.file) {
-  log.transports.file.level = "info";
+  log.transports.file.level = "debug";
+  log.transports.file.fileName = LOG_FILE_NAME;
   log.transports.file.format = "[{y}-{m}-{d} {h}:{i}:{s}.{ms}] [{level}] {text}";
+  log.transports.file.resolvePathFn = () => getAppLogFilePath();
+}
+
+if (typeof log.catchErrors === "function") {
+  log.catchErrors({ showDialog: false });
 }
 
 app.commandLine.appendSwitch("ignore-certificate-errors");
@@ -69,8 +82,87 @@ const BACKEND_SERVICES = [
   },
 ];
 
+registerAppIpcHandlers();
+
 function getProjectRoot() {
   return path.join(__dirname, "..");
+}
+
+function ensureDirectorySilent(targetPath) {
+  try {
+    fs.mkdirSync(targetPath, { recursive: true });
+  } catch {
+    // The file transport will report write errors if the directory is not usable.
+  }
+}
+
+function configureAppLogsDirectory() {
+  try {
+    const logsDir = path.join(app.getPath("userData"), "logs");
+    app.setAppLogsPath(logsDir);
+    ensureDirectorySilent(logsDir);
+  } catch (error) {
+    console.warn("Failed to configure application logs directory.", error);
+  }
+}
+
+function getAppLogsDirectory() {
+  const candidates = [
+    () => app.getPath("logs"),
+    () => path.join(app.getPath("userData"), "logs"),
+    () => path.join(os.tmpdir(), "nk-invest-analytics-logs"),
+  ];
+
+  for (const resolveCandidate of candidates) {
+    try {
+      const logsDir = resolveCandidate();
+      ensureDirectorySilent(logsDir);
+      return logsDir;
+    } catch {
+      // Try the next candidate.
+    }
+  }
+
+  const fallbackDir = path.join(os.tmpdir(), "nk-invest-analytics-logs");
+  ensureDirectorySilent(fallbackDir);
+  return fallbackDir;
+}
+
+function getAppLogFilePath() {
+  return path.join(getAppLogsDirectory(), LOG_FILE_NAME);
+}
+
+function normalizeRendererLogArg(value) {
+  if (value && typeof value === "object" && typeof value.message === "string") {
+    const name = typeof value.name === "string" ? value.name : "Error";
+    const stack = typeof value.stack === "string" ? `\n${value.stack}` : "";
+    return `${name}: ${value.message}${stack}`;
+  }
+
+  return value;
+}
+
+function registerAppIpcHandlers() {
+  ipcMain.on(LOG_IPC_CHANNEL, (_event, payload = {}) => {
+    const level = LOG_LEVELS.has(payload.level) ? payload.level : "info";
+    const data = Array.isArray(payload.data) ? payload.data.map(normalizeRendererLogArg) : [];
+    log[level]("[renderer]", ...data);
+  });
+
+  ipcMain.handle(GET_LOGS_DIRECTORY_CHANNEL, () => getAppLogsDirectory());
+
+  ipcMain.handle(OPEN_LOGS_DIRECTORY_CHANNEL, async () => {
+    const logsDir = getAppLogsDirectory();
+    log.info(`Opening logs directory: ${logsDir}`);
+
+    const errorMessage = await shell.openPath(logsDir);
+    if (errorMessage) {
+      log.warn(`Unable to open logs directory ${logsDir}: ${errorMessage}`);
+      throw new Error(errorMessage);
+    }
+
+    return logsDir;
+  });
 }
 
 function resolveWindowIconPath() {
@@ -607,6 +699,9 @@ function scheduleAutoUpdateCheck() {
 }
 
 app.whenReady().then(async () => {
+  configureAppLogsDirectory();
+  log.info(`Application started. Version=${app.getVersion()}, packaged=${app.isPackaged}, logFile=${getAppLogFilePath()}`);
+
   if (process.platform === "win32") {
     app.setAppUserModelId(APP_ID);
   }
