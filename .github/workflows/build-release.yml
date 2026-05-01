@@ -1,0 +1,110 @@
+name: Build and Release
+
+on:
+  push:
+    branches:
+      - "**"
+    tags:
+      - "v*"
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      publish_release:
+        description: "Create a GitHub Release from this run"
+        required: true
+        type: boolean
+        default: false
+      release_tag:
+        description: "Release tag for manual publishing, for example v1.0.0"
+        required: false
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  build-windows:
+    name: Build Windows zip
+    runs-on: windows-latest
+    env:
+      CSC_IDENTITY_AUTO_DISCOVERY: "false"
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install Node dependencies
+        run: npm ci
+
+      - name: Sync backend repositories
+        run: npm run servers:prepare
+
+      - name: Build Electron app
+        run: npm run electron:build:win -- --version-mode=package --output-dir=release\windows
+
+      - name: Create release zip
+        id: package
+        shell: pwsh
+        run: |
+          $rawName = if ("${{ github.ref_type }}" -eq "tag") { "${{ github.ref_name }}" } else { "run-${{ github.run_number }}" }
+          if ("${{ github.event_name }}" -eq "workflow_dispatch" -and "${{ inputs.release_tag }}" -ne "") {
+            $rawName = "${{ inputs.release_tag }}"
+          }
+
+          $safeName = $rawName -replace '[^A-Za-z0-9_.-]', '-'
+          $zipName = "NK-Invest-Analytics-Windows-$safeName.zip"
+          $stagingDir = "release-artifacts"
+
+          New-Item -ItemType Directory -Path $stagingDir -Force | Out-Null
+          Copy-Item -Path "release\windows\*" -Destination $stagingDir -Recurse -Force
+          Compress-Archive -Path "$stagingDir\*" -DestinationPath $zipName -Force
+
+          "zip_name=$zipName" >> $env:GITHUB_OUTPUT
+          "zip_path=$zipName" >> $env:GITHUB_OUTPUT
+
+      - name: Upload build zip
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.package.outputs.zip_name }}
+          path: ${{ steps.package.outputs.zip_path }}
+          if-no-files-found: error
+
+  release:
+    name: Publish GitHub Release
+    runs-on: ubuntu-latest
+    needs: build-windows
+    if: startsWith(github.ref, 'refs/tags/') || (github.event_name == 'workflow_dispatch' && inputs.publish_release)
+
+    steps:
+      - name: Download build zip
+        uses: actions/download-artifact@v4
+        with:
+          path: release-assets
+
+      - name: Validate manual release tag
+        if: github.event_name == 'workflow_dispatch' && inputs.publish_release && inputs.release_tag == ''
+        run: |
+          echo "release_tag is required when publish_release is enabled."
+          exit 1
+
+      - name: Publish release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || inputs.release_tag }}
+          files: release-assets/**/*.zip
+          fail_on_unmatched_files: true
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
