@@ -13,7 +13,6 @@ import {
   Menu,
   Moon,
   Network,
-  Newspaper,
   Sun,
   TrendingUp,
   X,
@@ -93,7 +92,6 @@ export function Root() {
   const primaryNavigation: NavItem[] = [
     { name: t("nav.overview"), path: "/", icon: TrendingUp },
     { name: t({ ru: "Анализ облигаций", en: "Bond Analysis" }), path: "/bonds", icon: Landmark },
-    { name: t({ ru: "Новости + ИИ", en: "News + AI" }), path: "/news-assistant", icon: Newspaper },
     { name: t("nav.fundamentals"), path: "/fundamentals", icon: Database },
     { name: t({ ru: "Опционы", en: "Options" }), path: "/options", icon: Activity },
   ];

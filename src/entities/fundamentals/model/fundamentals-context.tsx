@@ -26,6 +26,11 @@ export type ShareRecord = {
   lot: number;
   currency: string;
   exchange: string;
+  liquidityFlag?: boolean;
+  apiTradeAvailableFlag?: boolean;
+  buyAvailableFlag?: boolean;
+  sellAvailableFlag?: boolean;
+  otcFlag?: boolean;
 };
 
 export type AssetFundamentalRecord = {

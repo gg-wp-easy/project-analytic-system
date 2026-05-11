@@ -17,12 +17,6 @@ const REPOSITORIES = {
     dirName: "server-analytic-system",
     url: "https://github.com/gg-wp-easy/server-analytic-system.git",
   },
-  news: {
-    key: "news",
-    aliases: ["news", "news-server", "server-news-analytic"],
-    dirName: "server-news-analytic",
-    url: "https://github.com/gg-wp-easy/server-news-analytic.git",
-  },
 };
 
 async function main() {
@@ -73,7 +67,7 @@ function parseArgs(argv) {
 function printHelp() {
   console.log(`
 Usage:
-  node scripts/prepare.cjs [analytics|news|all] [--reclone]
+  node scripts/prepare.cjs [analytics|all] [--reclone]
 
 Behavior:
   - clones the server repository if it is missing
@@ -83,7 +77,6 @@ Behavior:
 Examples:
   node scripts/prepare.cjs
   node scripts/prepare.cjs analytics
-  node scripts/prepare.cjs news --reclone
 `);
 }
 

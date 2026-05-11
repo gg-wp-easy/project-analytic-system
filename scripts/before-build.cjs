@@ -6,7 +6,6 @@ exports.default = async function beforeBuild() {
   console.log("Checking project state before packaging...");
 
   await checkBundledServer("server-analytic-system", ["dist", "server-analytic-system"]);
-  await checkBundledServer("server-news-analytic", ["dist", "news-assistant"]);
   await checkDependencies();
   await checkIcons();
 

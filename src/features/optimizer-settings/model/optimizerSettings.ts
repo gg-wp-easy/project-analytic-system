@@ -7,6 +7,7 @@ export type OptimizerSettings = {
   riskFreeRate: string;
   sharpeBlendWeight: string;
   minRiskBlendWeight: string;
+  optimizationObjective: "max_sharpe" | "min_risk";
   portfolioAssetsCount: string;
 };
 
@@ -18,8 +19,13 @@ const defaultOptimizerSettings: OptimizerSettings = {
   maxWeight: "1",
   sharpeBlendWeight: "0",
   minRiskBlendWeight: "0",
+  optimizationObjective: "max_sharpe",
   portfolioAssetsCount: "0",
 };
+
+function normalizeOptimizationObjective(value: unknown): OptimizerSettings["optimizationObjective"] {
+  return value === "min_risk" ? "min_risk" : "max_sharpe";
+}
 
 function numberOr(value: unknown, fallback: number): number {
   if (typeof value === "number" && Number.isFinite(value)) {
@@ -44,12 +50,17 @@ export function useOptimizerSettings() {
         return;
       }
       const parsed = JSON.parse(raw) as Partial<OptimizerSettings>;
+      const legacyObjective =
+        numberOr(parsed.minRiskBlendWeight, 0) > numberOr(parsed.sharpeBlendWeight, 0)
+          ? "min_risk"
+          : "max_sharpe";
       setSettings({
         minWeight: String(parsed.minWeight ?? defaultOptimizerSettings.minWeight),
         maxWeight: String(parsed.maxWeight ?? defaultOptimizerSettings.maxWeight),
         riskFreeRate: String(parsed.riskFreeRate ?? defaultOptimizerSettings.riskFreeRate),
         sharpeBlendWeight: String(parsed.sharpeBlendWeight ?? defaultOptimizerSettings.sharpeBlendWeight),
         minRiskBlendWeight: String(parsed.minRiskBlendWeight ?? defaultOptimizerSettings.minRiskBlendWeight),
+        optimizationObjective: normalizeOptimizationObjective(parsed.optimizationObjective ?? legacyObjective),
         portfolioAssetsCount: String(parsed.portfolioAssetsCount ?? defaultOptimizerSettings.portfolioAssetsCount),
       });
     } catch {
@@ -80,13 +91,15 @@ export async function submitOptimizerSettings(settings: OptimizerSettings): Prom
     settings.portfolioAssetsCount,
     numberOr(defaultOptimizerSettings.portfolioAssetsCount, 0),
   );
+  const optimizationObjective = normalizeOptimizationObjective(settings.optimizationObjective);
 
   const payload = {
     risk_free_rate: riskFreeRate,
     min_weight: minWeight,
     max_weight: maxWeight,
-    sharpe_blend_weight: sharpeBlendWeight,
-    min_risk_blend_weight: minRiskBlendWeight,
+    sharpe_blend_weight: optimizationObjective === "max_sharpe" ? Math.max(sharpeBlendWeight, 100) : 0,
+    min_risk_blend_weight: optimizationObjective === "min_risk" ? Math.max(minRiskBlendWeight, 100) : 0,
+    optimization_objective: optimizationObjective,
     portfolio_assets_count: portfolioAssetsCount,
   };
 

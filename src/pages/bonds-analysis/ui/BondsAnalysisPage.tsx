@@ -40,7 +40,14 @@ const DEFAULT_ANALYSIS_PREFERENCES: BondAnalysisPreferences = {
   targetYield: "12",
   targetDuration: "3.5",
   paymentFrequency: "quarterly",
+  targetRiskLevel: "3",
 };
+
+const RISK_LEVEL_OPTIONS = ["0", "1", "2", "3"] as const;
+
+function normalizeRiskPreference(value: unknown): BondAnalysisPreferences["targetRiskLevel"] {
+  return value === "0" || value === "1" || value === "2" || value === "3" ? value : DEFAULT_ANALYSIS_PREFERENCES.targetRiskLevel;
+}
 
 function createPreviewRows(rows: BondSourceRow[]): BondPreviewRow[] {
   return rows.map((row, index) => ({
@@ -111,6 +118,7 @@ export function BondsAnalysisPage() {
           targetYield: String(parsed.analysisPreferences.targetYield ?? DEFAULT_ANALYSIS_PREFERENCES.targetYield),
           targetDuration: String(parsed.analysisPreferences.targetDuration ?? DEFAULT_ANALYSIS_PREFERENCES.targetDuration),
           paymentFrequency: parsed.analysisPreferences.paymentFrequency === "monthly" ? "monthly" : "quarterly",
+          targetRiskLevel: normalizeRiskPreference(parsed.analysisPreferences.targetRiskLevel),
         });
       }
       if (Array.isArray(parsed.positions)) setPositions(parsed.positions);
@@ -186,6 +194,10 @@ export function BondsAnalysisPage() {
             { label: t("Целевая доходность", "Target yield"), value: `${analysisPreferences.targetYield}%` },
             { label: t("Целевая дюрация", "Target duration"), value: analysisPreferences.targetDuration },
             {
+              label: t("Уровень риска", "Risk level"),
+              value: analysisPreferences.targetRiskLevel,
+            },
+            {
               label: t("Платежи", "Payments"),
               value: analysisPreferences.paymentFrequency === "monthly" ? t("Ежемесячные", "Monthly") : t("Ежеквартальные", "Quarterly"),
             },
@@ -199,6 +211,7 @@ export function BondsAnalysisPage() {
       { header: t("Тикер", "Ticker"), render: (row) => row.ticker },
       { header: t("Облигация", "Bond"), render: (row) => row.name },
       { header: t("Вес, %", "Weight, %"), render: (row) => row.weight.toFixed(2) },
+      { header: t("Риск", "Risk"), render: (row) => row.riskLevel.toFixed(0) },
       { header: t("Доходность", "Yield"), render: (row) => formatPercentOrNumber(row.currentYield) },
       { header: t("Дюрация", "Duration"), render: (row) => row.modifiedDuration.toFixed(2) },
     ],
@@ -211,6 +224,7 @@ export function BondsAnalysisPage() {
       { header: t("Облигация", "Bond"), render: (row) => row.name },
       { header: t("Сектор", "Sector"), render: (row) => row.sector },
       { header: t("Валюта", "Currency"), render: (row) => row.currency },
+      { header: t("Риск", "Risk"), render: (row) => row.riskLevel.toFixed(0) },
       { header: t("Доходность", "Yield"), render: (row) => formatPercentOrNumber(row.currentYield) },
       { header: t("Лет до погашения", "Years to maturity"), render: (row) => row.yearsToMaturity.toFixed(2) },
       { header: t("Дюрация", "Duration"), render: (row) => row.modifiedDuration.toFixed(2) },
@@ -415,6 +429,26 @@ export function BondsAnalysisPage() {
                 </select>
               </label>
 
+              <label className="block text-xs text-slate-600 dark:text-slate-400">
+                {t("Максимальный уровень риска", "Maximum risk level")}
+                <select
+                  className="ui-input mt-1"
+                  value={analysisPreferences.targetRiskLevel}
+                  onChange={(event) =>
+                    setAnalysisPreferences((current) => ({
+                      ...current,
+                      targetRiskLevel: normalizeRiskPreference(event.target.value),
+                    }))
+                  }
+                >
+                  {RISK_LEVEL_OPTIONS.map((level) => (
+                    <option key={level} value={level}>
+                      {t(`Риск ${level}`, `Risk ${level}`)}
+                    </option>
+                  ))}
+                </select>
+              </label>
+
               {!canRunAnalysis ? (
                 <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs leading-5 text-amber-700 dark:border-amber-900/50 dark:bg-amber-950/40 dark:text-amber-300">
                   {t("Укажите положительные значения для целевой доходности и дюрации.", "Enter positive values for the target yield and duration.")}
@@ -552,8 +586,8 @@ export function BondsAnalysisPage() {
           <SectionCard
             title={t("Оптимальный портфель облигаций", "Optimal bond portfolio")}
             description={t(
-              `Портфель собран под доходность ${analysisPreferences.targetYield}% и дюрацию ${analysisPreferences.targetDuration}.`,
-              `The portfolio is built for a ${analysisPreferences.targetYield}% target yield and ${analysisPreferences.targetDuration} duration.`,
+              `Портфель собран под доходность ${analysisPreferences.targetYield}%, дюрацию ${analysisPreferences.targetDuration} и риск до ${analysisPreferences.targetRiskLevel}.`,
+              `The portfolio is built for a ${analysisPreferences.targetYield}% target yield, ${analysisPreferences.targetDuration} duration, and risk up to ${analysisPreferences.targetRiskLevel}.`,
             )}
             action={(
               <div className="flex items-center gap-2">
@@ -624,6 +658,7 @@ export function BondsAnalysisPage() {
                       <th>{t("Облигация", "Bond")}</th>
                       <th>{t("Сектор", "Sector")}</th>
                       <th>{t("Валюта", "Currency")}</th>
+                      <th>{t("Риск", "Risk")}</th>
                       <th>{t("Доходность", "Yield")}</th>
                       <th>{t("Лет до погашения", "Years to maturity")}</th>
                       <th>{t("Дюрация", "Duration")}</th>
@@ -636,6 +671,7 @@ export function BondsAnalysisPage() {
                         <td className="ui-cell-name">{bond.name}</td>
                         <td>{bond.sector}</td>
                         <td>{bond.currency}</td>
+                        <td>{bond.riskLevel.toFixed(0)}</td>
                         <td>{formatPercentOrNumber(bond.currentYield)}</td>
                         <td>{bond.yearsToMaturity.toFixed(2)}</td>
                         <td>{bond.modifiedDuration.toFixed(2)}</td>

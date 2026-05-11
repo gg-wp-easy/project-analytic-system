@@ -24,12 +24,8 @@
     "analytics-server:install": "node scripts/servers.cjs install analytics",
     "analytics-server:build": "node scripts/servers.cjs build analytics",
     "analytics-server:dev": "node scripts/servers.cjs dev analytics",
-    "news-server:install": "node scripts/servers.cjs install news",
-    "news-server:build": "node scripts/servers.cjs build news",
-    "news-server:dev": "node scripts/servers.cjs dev news",
     "servers:prepare": "node scripts/prepare.cjs",
     "analytics-server:prepare": "node scripts/prepare.cjs analytics",
-    "news-server:prepare": "node scripts/prepare.cjs news",
     "electron:dev": "node scripts/electron.cjs dev",
     "electron:build": "node scripts/electron.cjs build",
     "electron:build:win": "node scripts/electron.cjs build --platform=win",
@@ -148,20 +144,12 @@
         "filter": [
           "**/*"
         ]
-      },
-      {
-        "from": "server-news-analytic/dist/news-assistant/",
-        "to": "news-server",
-        "filter": [
-          "**/*"
-        ]
       }
     ],
     "asar": true,
     "asarUnpack": [
       "node_modules/@*/**/*.node",
-      "server/**/*",
-      "news-server/**/*"
+      "server/**/*"
     ],
     "executableName": "nk-invest-analytics",
     "win": {

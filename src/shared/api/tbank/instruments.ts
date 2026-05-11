@@ -92,6 +92,11 @@ export type TBankShare = {
   lot: number;
   currency: string;
   exchange: string;
+  liquidityFlag?: boolean;
+  apiTradeAvailableFlag?: boolean;
+  buyAvailableFlag?: boolean;
+  sellAvailableFlag?: boolean;
+  otcFlag?: boolean;
 };
 
 export type TBankIndicative = {
@@ -248,6 +253,28 @@ function pickNumber(source: AnyRecord, keys: string[]): number {
     }
   }
   return 0;
+}
+
+function pickOptionalBoolean(source: AnyRecord, keys: string[]): boolean | undefined {
+  for (const key of keys) {
+    const value = source[key];
+    if (typeof value === "boolean") {
+      return value;
+    }
+    if (typeof value === "number" && Number.isFinite(value)) {
+      return Boolean(value);
+    }
+    if (typeof value === "string" && value.trim()) {
+      const normalized = value.trim().toLowerCase();
+      if (["true", "1", "yes"].includes(normalized)) {
+        return true;
+      }
+      if (["false", "0", "no"].includes(normalized)) {
+        return false;
+      }
+    }
+  }
+  return undefined;
 }
 
 function pickTimestampIso(source: AnyRecord, keys: string[]): string {
@@ -993,10 +1020,16 @@ export function createTBankInstrumentsApi(token?: string) {
           lot: pickNumber(item, ["lot"]),
           currency: pickString(item, ["currency"]),
           exchange: pickString(item, ["exchange", "realExchange", "real_exchange"]),
+          liquidityFlag: pickOptionalBoolean(item, ["liquidityFlag", "liquidity_flag"]),
+          apiTradeAvailableFlag: pickOptionalBoolean(item, ["apiTradeAvailableFlag", "api_trade_available_flag"]),
+          buyAvailableFlag: pickOptionalBoolean(item, ["buyAvailableFlag", "buy_available_flag"]),
+          sellAvailableFlag: pickOptionalBoolean(item, ["sellAvailableFlag", "sell_available_flag"]),
+          otcFlag: pickOptionalBoolean(item, ["otcFlag", "otc_flag"]),
         } satisfies TBankShare;
       })
       .filter((share): share is TBankShare => Boolean(share))
-      .filter((share) => share.currency.toUpperCase() === "RUB");
+      .filter((share) => share.currency.toUpperCase() === "RUB")
+      .filter((share) => share.otcFlag !== true);
   }
 
   async function fetchIndicatives(): Promise<TBankIndicative[]> {

@@ -1,9 +1,8 @@
 # Project Site Analytic System
 
-Electron desktop application with two Python backends:
+Electron desktop application with one Python backend:
 
 - `server-analytic-system`
-- `server-news-analytic`
 
 All orchestration is now done through Node.js scripts from `scripts/`. No `.sh` or `.ps1` entrypoints are required.
 
@@ -16,26 +15,21 @@ All orchestration is now done through Node.js scripts from `scripts/`. No `.sh` 
 
 ### Server Repository Sync
 
-- `npm run servers:prepare` - fetch/pull both server repositories
+- `npm run servers:prepare` - fetch/pull the server repository
 - `npm run analytics-server:prepare` - sync only `server-analytic-system`
-- `npm run news-server:prepare` - sync only `server-news-analytic`
 
 To replace a local server checkout from scratch:
 
 - `node scripts/prepare.cjs --reclone`
 - `node scripts/prepare.cjs analytics --reclone`
-- `node scripts/prepare.cjs news --reclone`
 
 ### Python Backends
 
-- `npm run servers:install` - install Python dependencies for both backends
-- `npm run servers:build` - build both backends with PyInstaller
+- `npm run servers:install` - install Python dependencies for the backend
+- `npm run servers:build` - build the backend with PyInstaller
 - `npm run analytics-server:install` - install dependencies only for `server-analytic-system`
 - `npm run analytics-server:build` - build only `server-analytic-system`
 - `npm run analytics-server:dev` - run only `server-analytic-system` in dev mode
-- `npm run news-server:install` - install dependencies only for `server-news-analytic`
-- `npm run news-server:build` - build only `server-news-analytic`
-- `npm run news-server:dev` - run only `server-news-analytic` in dev mode
 
 ### Electron
 

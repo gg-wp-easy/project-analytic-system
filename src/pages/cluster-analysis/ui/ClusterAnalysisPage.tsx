@@ -486,6 +486,11 @@ export function ClusterAnalysis() {
             exchange: share.exchange,
             currency: share.currency,
             lot: share.lot,
+            liquidity_flag: share.liquidityFlag,
+            api_trade_available_flag: share.apiTradeAvailableFlag,
+            buy_available_flag: share.buyAvailableFlag,
+            sell_available_flag: share.sellAvailableFlag,
+            otc_flag: share.otcFlag,
             market_cap_bn: f.marketCapBn,
             pe_ratio: f.peRatio,
             pb_ratio: f.pbRatio,
@@ -967,4 +972,3 @@ export function ClusterAnalysis() {
     </>
   );
 }
-

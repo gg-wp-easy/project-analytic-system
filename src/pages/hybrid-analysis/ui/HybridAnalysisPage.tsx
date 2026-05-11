@@ -108,8 +108,11 @@ function extractMetrics(parsed: Record<string, unknown>): MetricItem[] {
   const stats = (parsed.stats as Record<string, unknown> | undefined) ?? {};
   const summary = (parsed.summary as Record<string, unknown> | undefined) ?? {};
   const portfolios = (parsed.portfolios as Record<string, unknown> | undefined) ?? {};
-  const maxSharpe = (portfolios.max_sharpe as Record<string, unknown> | undefined) ?? {};
-  const maxSharpeMetrics = (maxSharpe.metrics as Record<string, unknown> | undefined) ?? {};
+  const selectedPortfolio =
+    (portfolios.selected_portfolio as Record<string, unknown> | undefined) ??
+    (portfolios.max_sharpe as Record<string, unknown> | undefined) ??
+    {};
+  const maxSharpeMetrics = (selectedPortfolio.metrics as Record<string, unknown> | undefined) ?? {};
 
   const rows: MetricItem[] = [];
   const countMapping: Array<{ key: string; label: string }> = [
@@ -156,6 +159,7 @@ function extractPortfolioStrategies(parsed: Record<string, unknown>): StrategyPo
   const mapping: Record<string, string> = {
     max_sharpe: "Max Sharpe",
     min_volatility: "Min Volatility",
+    selected_portfolio: "Selected",
   };
 
   return Object.entries(portfolios as Record<string, unknown>)
@@ -177,9 +181,12 @@ function extractPortfolioStrategies(parsed: Record<string, unknown>): StrategyPo
 
 function extractPortfolioPositions(parsed: Record<string, unknown>): PortfolioPosition[] {
   const portfolios = (parsed.portfolios as Record<string, unknown> | undefined) ?? {};
-  const maxSharpe = (portfolios.max_sharpe as Record<string, unknown> | undefined) ?? {};
-  const maxSharpeMetrics = (maxSharpe.metrics as Record<string, unknown> | undefined) ?? {};
-  const positions = Array.isArray(maxSharpe.positions) ? maxSharpe.positions : [];
+  const selectedPortfolio =
+    (portfolios.selected_portfolio as Record<string, unknown> | undefined) ??
+    (portfolios.max_sharpe as Record<string, unknown> | undefined) ??
+    {};
+  const maxSharpeMetrics = (selectedPortfolio.metrics as Record<string, unknown> | undefined) ?? {};
+  const positions = Array.isArray(selectedPortfolio.positions) ? selectedPortfolio.positions : [];
 
   const tickerMap = new Map<string, { name: string; expectedReturn: number }>();
   const merged = [
@@ -224,7 +231,10 @@ function extractPortfolioAssetsCount(parsed: Record<string, unknown>): number {
   const stats = (parsed.stats as Record<string, unknown> | undefined) ?? {};
   const summary = (parsed.summary as Record<string, unknown> | undefined) ?? {};
   const portfolios = (parsed.portfolios as Record<string, unknown> | undefined) ?? {};
-  const maxSharpe = (portfolios.max_sharpe as Record<string, unknown> | undefined) ?? {};
+  const maxSharpe =
+    (portfolios.selected_portfolio as Record<string, unknown> | undefined) ??
+    (portfolios.max_sharpe as Record<string, unknown> | undefined) ??
+    {};
 
   return numberOr(maxSharpe.assets_count, numberOr(stats.portfolio_assets_count, numberOr(summary.portfolio_assets_count, 0)));
 }
@@ -314,6 +324,11 @@ export function HybridAnalysis() {
             exchange: share.exchange,
             currency: share.currency,
             lot: share.lot,
+            liquidity_flag: share.liquidityFlag,
+            api_trade_available_flag: share.apiTradeAvailableFlag,
+            buy_available_flag: share.buyAvailableFlag,
+            sell_available_flag: share.sellAvailableFlag,
+            otc_flag: share.otcFlag,
             market_cap_bn: f.marketCapBn,
             pe_ratio: f.peRatio,
             pb_ratio: f.pbRatio,
@@ -725,7 +740,5 @@ export function HybridAnalysis() {
     </>
   );
 }
-
-
 
 

@@ -72,6 +72,7 @@ type ResolvedBondAnalysisPreferences = {
   targetDuration: number;
   paymentFrequency: BondAnalysisPreferences["paymentFrequency"];
   desiredPaymentsPerYear: number;
+  targetRiskLevel: number;
 };
 
 function clamp(value: number, min: number, max: number): number {
@@ -85,11 +86,13 @@ function parsePositiveNumber(value: string, fallback: number): number {
 
 function resolvePreferences(preferences?: BondAnalysisPreferences): ResolvedBondAnalysisPreferences {
   const paymentFrequency = preferences?.paymentFrequency === "monthly" ? "monthly" : "quarterly";
+  const parsedRiskLevel = Number(preferences?.targetRiskLevel ?? "3");
   return {
     targetYield: parsePositiveNumber(preferences?.targetYield ?? "", DEFAULT_TARGET_YIELD * 100) / 100,
     targetDuration: parsePositiveNumber(preferences?.targetDuration ?? "", DEFAULT_TARGET_DURATION),
     paymentFrequency,
     desiredPaymentsPerYear: paymentFrequency === "monthly" ? 12 : 4,
+    targetRiskLevel: Number.isFinite(parsedRiskLevel) ? clamp(parsedRiskLevel, 0, 3) : 3,
   };
 }
 
@@ -437,7 +440,17 @@ function buildCurrencyStats(bonds: InternalBond[]): BondCurrencyStatRow[] {
 }
 
 export function getRiskProfileName(level: number): string {
-  return `Risk ${level}`;
+  switch (level) {
+    case 0:
+      return "Conservative";
+    case 1:
+      return "Moderate";
+    case 2:
+      return "Balanced";
+    case 3:
+    default:
+      return "Aggressive";
+  }
 }
 
 export function analyzeBondSource(rows: BondSourceRow[], preferences?: BondAnalysisPreferences): AnalysisResult {
@@ -448,11 +461,6 @@ export function analyzeBondSource(rows: BondSourceRow[], preferences?: BondAnaly
 
   const scored = scoreBonds(normalized, resolvedPreferences);
   const allBonds = buildAllBonds(scored);
-  const optimalPortfolio = buildPortfolio(
-    scored.slice().sort((left, right) => right.totalScore - left.totalScore).slice(0, 50),
-    resolvedPreferences,
-  );
-
   const riskPortfolios: BondRiskPortfolio[] = [0, 1, 2, 3]
     .map((riskLevel) => {
       const candidates = scored
@@ -474,19 +482,36 @@ export function analyzeBondSource(rows: BondSourceRow[], preferences?: BondAnaly
       } satisfies BondRiskPortfolio;
     })
     .filter((portfolio): portfolio is BondRiskPortfolio => Boolean(portfolio));
+  const selectedRiskPortfolio = riskPortfolios.find((portfolio) => portfolio.riskLevel === resolvedPreferences.targetRiskLevel);
+  const selectedPortfolio = selectedRiskPortfolio
+    ? {
+        positions: selectedRiskPortfolio.portfolio,
+        statistics: selectedRiskPortfolio.statistics,
+      }
+    : {
+        positions: [],
+        statistics: {
+          yield: 0,
+          duration: 0,
+          riskScore: 0,
+          convexity: 0,
+          diversification: 0,
+          bondsCount: 0,
+        },
+      };
 
   return {
-    positions: optimalPortfolio.positions,
+    positions: selectedPortfolio.positions,
     allBonds,
     riskPortfolios,
     byRiskStats: buildRiskStats(scored),
     byCurrencyStats: buildCurrencyStats(scored),
     summary: {
       analyzedBondsCount: allBonds.length,
-      selectedBondsCount: optimalPortfolio.positions.length,
-      portfolioYield: optimalPortfolio.statistics.yield,
-      portfolioDuration: optimalPortfolio.statistics.duration,
-      portfolioRisk: optimalPortfolio.statistics.riskScore,
+      selectedBondsCount: selectedPortfolio.positions.length,
+      portfolioYield: selectedPortfolio.statistics.yield,
+      portfolioDuration: selectedPortfolio.statistics.duration,
+      portfolioRisk: selectedPortfolio.statistics.riskScore,
     },
   };
 }

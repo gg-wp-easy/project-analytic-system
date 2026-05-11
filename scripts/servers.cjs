@@ -22,14 +22,6 @@ const SERVER_CONFIG = {
     entrypoint: ["main.py"],
     pythonEnvVar: "SERVER_ANALYTIC_PYTHON",
   },
-  news: {
-    key: "news",
-    aliases: ["news", "news-server", "server-news-analytic"],
-    dirName: "server-news-analytic",
-    projectName: "news-assistant",
-    entrypoint: ["pipeline", "run_assistant_api.py"],
-    pythonEnvVar: "SERVER_NEWS_ANALYTIC_PYTHON",
-  },
 };
 
 
@@ -117,15 +109,14 @@ function parseArgs(argv) {
 function printHelp() {
   console.log(`
 Usage:
-  node scripts/servers.cjs install [analytics|news|all]
-  node scripts/servers.cjs build [analytics|news|all] [--skip-install] [--skip-build]
-  node scripts/servers.cjs dev [analytics|news] [--skip-install] [-- <extra args>]
+  node scripts/servers.cjs install [analytics|all]
+  node scripts/servers.cjs build [analytics|all] [--skip-install] [--skip-build]
+  node scripts/servers.cjs dev [analytics] [--skip-install] [-- <extra args>]
 
 Examples:
   node scripts/servers.cjs install all
   node scripts/servers.cjs build analytics
-  node scripts/servers.cjs build news --skip-install
-  node scripts/servers.cjs dev news
+  node scripts/servers.cjs dev analytics
 `);
 }
 

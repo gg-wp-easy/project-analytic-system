@@ -51,25 +51,20 @@ export function OptimizerSettingsFields({ settings, onChange }: OptimizerSetting
       </label>
 
       <label className="block text-xs text-slate-600 dark:text-slate-400">
-        {t("Вес портфеля с оптимизацией на коэффициент Шарпа, %", "Sharpe blend weight, %")}
-        <input
-          type="number"
-          step="0.1"
+        {t("Цель построения портфеля", "Portfolio objective")}
+        <select
           className="ui-input mt-1"
-          value={settings.sharpeBlendWeight}
-          onChange={(e) => onChange({ ...settings, sharpeBlendWeight: e.target.value })}
-        />
-      </label>
-
-      <label className="block text-xs text-slate-600 dark:text-slate-400">
-        {t("Вес портфеля с оптимизацией на минимизацию риска, %", "Min risk blend weight, %")}
-        <input
-          type="number"
-          step="0.1"
-          className="ui-input mt-1"
-          value={settings.minRiskBlendWeight}
-          onChange={(e) => onChange({ ...settings, minRiskBlendWeight: e.target.value })}
-        />
+          value={settings.optimizationObjective}
+          onChange={(e) =>
+            onChange({
+              ...settings,
+              optimizationObjective: e.target.value === "min_risk" ? "min_risk" : "max_sharpe",
+            })
+          }
+        >
+          <option value="max_sharpe">{t("Максимальный коэффициент Шарпа", "Maximum Sharpe ratio")}</option>
+          <option value="min_risk">{t("Минимизация риска", "Risk minimization")}</option>
+        </select>
       </label>
 
       <label className="block text-xs text-slate-600 dark:text-slate-400">

@@ -132,6 +132,7 @@ function extractPortfolioStrategies(parsed: Record<string, unknown>): PortfolioS
   const labelByKey: Record<string, string> = {
     max_sharpe: "Max Sharpe",
     min_volatility: "Min Volatility",
+    selected_portfolio: "Selected",
   };
 
   const strategies: PortfolioStrategy[] = [];
@@ -184,10 +185,12 @@ function extractPortfolioStrategies(parsed: Record<string, unknown>): PortfolioS
 
 function extractPortfolioPositions(parsed: Record<string, unknown>): PortfolioPosition[] {
   const strategies = extractPortfolioStrategies(parsed);
-  const maxSharpe = strategies.find((s) => s.key === "max_sharpe");
-  if (maxSharpe?.positions.length) {
-    return maxSharpe.positions;
+  const selected = strategies.find((s) => s.key === "selected_portfolio");
+  if (selected?.positions.length) {
+    return selected.positions;
   }
+  const maxSharpe = strategies.find((s) => s.key === "max_sharpe");
+  if (maxSharpe?.positions.length) return maxSharpe.positions;
   return strategies[0]?.positions ?? [];
 }
 
@@ -210,8 +213,11 @@ function extractMetrics(parsed: Record<string, unknown>): MetricItem[] {
   const finalLosses = (parsed.final_losses as Record<string, unknown> | undefined) ??
     ((summary.final_losses as Record<string, unknown> | undefined) ?? {});
   const portfolios = (parsed.portfolios as Record<string, unknown> | undefined) ?? {};
-  const maxSharpe = (portfolios.max_sharpe as Record<string, unknown> | undefined) ?? {};
-  const maxSharpeMetrics = (maxSharpe.metrics as Record<string, unknown> | undefined) ?? {};
+  const selectedPortfolio =
+    (portfolios.selected_portfolio as Record<string, unknown> | undefined) ??
+    (portfolios.max_sharpe as Record<string, unknown> | undefined) ??
+    {};
+  const maxSharpeMetrics = (selectedPortfolio.metrics as Record<string, unknown> | undefined) ?? {};
 
   const rows: MetricItem[] = [];
 
@@ -260,7 +266,10 @@ function extractPortfolioAssetsCount(parsed: Record<string, unknown>): number {
   const summary = (parsed.summary as Record<string, unknown> | undefined) ?? {};
   const stats = (parsed.stats as Record<string, unknown> | undefined) ?? {};
   const portfolios = (parsed.portfolios as Record<string, unknown> | undefined) ?? {};
-  const maxSharpe = (portfolios.max_sharpe as Record<string, unknown> | undefined) ?? {};
+  const maxSharpe =
+    (portfolios.selected_portfolio as Record<string, unknown> | undefined) ??
+    (portfolios.max_sharpe as Record<string, unknown> | undefined) ??
+    {};
   const minVolatility = (portfolios.min_volatility as Record<string, unknown> | undefined) ?? {};
 
   return numberOr(
@@ -352,6 +361,11 @@ export function NeuralNetworkAnalysis() {
             exchange: share.exchange,
             currency: share.currency,
             lot: share.lot,
+            liquidity_flag: share.liquidityFlag,
+            api_trade_available_flag: share.apiTradeAvailableFlag,
+            buy_available_flag: share.buyAvailableFlag,
+            sell_available_flag: share.sellAvailableFlag,
+            otc_flag: share.otcFlag,
             market_cap_bn: f.marketCapBn,
             pe_ratio: f.peRatio,
             pb_ratio: f.pbRatio,
@@ -716,5 +730,3 @@ export function NeuralNetworkAnalysis() {
     </>
   );
 }
-
-

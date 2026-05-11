@@ -71,15 +71,6 @@ const BACKEND_SERVICES = [
     required: true,
     resolveRunConfig: resolveAnalyticsRunConfig,
   },
-  {
-    key: "newsAssistant",
-    displayName: "server-news-analytic",
-    host: DEFAULT_HOST,
-    port: 8787,
-    healthPath: "/health",
-    required: false,
-    resolveRunConfig: resolveNewsAssistantRunConfig,
-  },
 ];
 
 registerAppIpcHandlers();
@@ -281,31 +272,6 @@ function resolveAnalyticsExecutablePath() {
   return null;
 }
 
-function resolveNewsAssistantExecutablePath() {
-  const exeName = process.platform === "win32"
-    ? "news-assistant.exe"
-    : "news-assistant";
-
-  if (app.isPackaged) {
-    const packagedExePath = path.join(process.resourcesPath, "news-server", exeName);
-    return fs.existsSync(packagedExePath) ? packagedExePath : null;
-  }
-
-  const projectRoot = getProjectRoot();
-  const candidates = [
-    path.join(projectRoot, "server-news-analytic", "dist", "news-assistant", exeName),
-    path.join(projectRoot, "server-news-analytic", "dist", exeName),
-  ];
-
-  for (const candidate of candidates) {
-    if (fs.existsSync(candidate)) {
-      return candidate;
-    }
-  }
-
-  return null;
-}
-
 function resolveAnalyticsRunConfig() {
   const exePath = resolveAnalyticsExecutablePath();
   if (exePath) {
@@ -336,53 +302,6 @@ function resolveAnalyticsRunConfig() {
     command: resolveProjectPython(serverDir),
     args: ["main.py"],
     cwd: serverDir,
-  };
-}
-
-function resolveNewsAssistantRunConfig() {
-  const exePath = resolveNewsAssistantExecutablePath();
-  if (exePath) {
-    const dirs = createServiceUserDirs("news-assistant");
-    return {
-      command: exePath,
-      args: [],
-      cwd: path.dirname(exePath),
-      env: {
-        ...process.env,
-        NEWS_ANALYTIC_LOG_DIR: dirs.logDir,
-        NEWS_ANALYTIC_DATA_DIR: dirs.dataDir,
-        NEWS_ANALYTIC_CACHE_DIR: dirs.cacheDir,
-        MPLCONFIGDIR: dirs.matplotlibCacheDir,
-      },
-    };
-  }
-
-  if (app.isPackaged) {
-    return null;
-  }
-
-  const serverDir = path.join(getProjectRoot(), "server-news-analytic");
-  const entryPoint = path.join(serverDir, "pipeline", "run_assistant_api.py");
-  if (!fs.existsSync(entryPoint)) {
-    return null;
-  }
-
-  ensureDirectory(path.join(serverDir, "logs"));
-  ensureDirectory(path.join(serverDir, "news_data"));
-  ensureDirectory(path.join(serverDir, ".cache"));
-  ensureDirectory(path.join(serverDir, ".cache", "matplotlib"));
-
-  return {
-    command: resolveProjectPython(serverDir),
-    args: [path.join("pipeline", "run_assistant_api.py")],
-    cwd: serverDir,
-    env: {
-      ...process.env,
-      NEWS_ANALYTIC_LOG_DIR: path.join(serverDir, "logs"),
-      NEWS_ANALYTIC_DATA_DIR: path.join(serverDir, "news_data"),
-      NEWS_ANALYTIC_CACHE_DIR: path.join(serverDir, ".cache"),
-      MPLCONFIGDIR: path.join(serverDir, ".cache", "matplotlib"),
-    },
   };
 }
 

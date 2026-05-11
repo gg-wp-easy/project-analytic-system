@@ -22,6 +22,14 @@ export default defineConfig({
   },
   server: {
     port: 5173,
+    watch: {
+      ignored: [
+        '**/server-analytic-system/**',
+        '**/.venv/**',
+        '**/.build/**',
+        '**/__pycache__/**',
+      ],
+    },
     proxy: {
       "/api": {
         target: "http://127.0.0.1:8000",
