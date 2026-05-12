@@ -31,7 +31,12 @@ type UnderlyingLocationState = {
 export function UnderlyingOptionsPage() {
   const { locale, t } = useAppSettings();
   const isEn = locale === "en";
-  const { cache, hasData, isLoading, isLoadingClosePrices, loadOptions, loadClosePricesForUnderlying } = useOptionsData();
+  const {
+    cache,
+    hasData,
+    isLoading,
+    loadOptions,
+  } = useOptionsData();
   const location = useLocation();
   const { underlyingKey: underlyingKeyParam = "" } = useParams();
   const underlyingKey = decodeRoutePart(underlyingKeyParam).trim();
@@ -92,7 +97,6 @@ export function UnderlyingOptionsPage() {
 
   const displayLabel = summary?.label || locationState?.summaryLabel || underlyingKey || "-";
   const displayCategory = summary?.category || locationState?.category || "other";
-  const pricingMeta = cache.optionClosePricesMetaByUnderlyingKey[summary?.key ?? underlyingKey];
   const selectedExpirationLabel =
     expirationFilter === "all"
       ? t({ ru: "Все даты", en: "All dates" })
@@ -108,28 +112,6 @@ export function UnderlyingOptionsPage() {
           : isEn
             ? "Failed to load the asset option chain."
             : "Не удалось загрузить опционную цепочку актива.",
-      );
-    }
-  };
-
-  const handleLoadPricing = async () => {
-    if (!summary) {
-      return;
-    }
-
-    try {
-      await loadClosePricesForUnderlying({
-        underlyingKey: summary.key,
-        options: summary.options,
-        force: Boolean(pricingMeta?.lastUpdated),
-      });
-    } catch (error) {
-      setErrorDialogMessage(
-        error instanceof Error
-          ? error.message
-          : isEn
-            ? "Failed to load option close prices."
-            : "Не удалось загрузить close prices опционов.",
       );
     }
   };
@@ -307,17 +289,6 @@ export function UnderlyingOptionsPage() {
             options={summary.options}
             activeExpirationKey={expirationFilter === "all" ? "" : expirationFilter}
             expirationChoices={expirationChoices}
-            closePricesById={cache.optionClosePricesByInstrumentId}
-            isPricingLoading={isLoadingClosePrices}
-            pricingErrorMessage={null}
-            pricingUpdatedAt={pricingMeta?.lastUpdated ?? null}
-            onLoadPricing={handleLoadPricing}
-            pricingActionLabel={
-              pricingMeta?.lastUpdated
-                ? t({ ru: "Обновить цены", en: "Update prices" })
-                : t({ ru: "Загрузить цены", en: "Load prices" })
-            }
-            isPricingActionDisabled={!summary}
           />
 
           <SectionCard

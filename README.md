@@ -41,6 +41,13 @@ To replace a local server checkout from scratch:
 - `npm run electron:build:linux` - build Linux artifacts
 - `npm run electron:build:mac` - build macOS artifacts
 
+### GitHub Releases and Auto-Update
+
+- Push a tag like `v1.0.1`, or run `Build and Release` manually with `publish_release=true` and `release_tag=v1.0.1`.
+- The workflow uploads a zip as a GitHub Actions artifact and publishes updater files to the GitHub Release: installer `.exe`, `.blockmap`, and `latest.yml`.
+- Packaged installed Windows builds use `electron-updater` to check GitHub Releases from `gg-wp-easy/project-site-analytic-system`.
+- If `server-analytic-system` is private, add repository secret `SERVER_ANALYTIC_REPOSITORY_TOKEN` with read access to that backend repository.
+
 ## Main Orchestrators
 
 - [scripts/prepare.cjs](C:/Users/nikit/InvestProject/project-site-analytic-system/scripts/prepare.cjs)

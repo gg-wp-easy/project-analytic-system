@@ -226,6 +226,8 @@ async function runBuild(options) {
       `--config.directories.output=${outputDir}`,
       `--config.extraMetadata.version=${buildVersion.value}`,
       `--config.buildVersion=${buildVersion.value}`,
+      "--publish",
+      "never",
     ];
 
     logStep(`Packaging Electron app for ${targetPlatform.label}`);

@@ -29,6 +29,7 @@ jobs:
     env:
       CSC_IDENTITY_AUTO_DISCOVERY: "false"
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      SERVER_ANALYTIC_REPOSITORY_TOKEN: ${{ secrets.SERVER_ANALYTIC_REPOSITORY_TOKEN }}
 
     steps:
       - name: Checkout repository
@@ -48,7 +49,7 @@ jobs:
       - name: Install Node dependencies
         run: npm ci
 
-      - name: Sync backend repositories
+      - name: Sync backend repository
         run: npm run servers:prepare
 
       - name: Build Electron app

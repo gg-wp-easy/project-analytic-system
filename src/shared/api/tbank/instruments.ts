@@ -22,6 +22,8 @@ const ASSET_FUNDAMENTALS_ENDPOINT =
   "https://invest-public-api.tbank.ru/rest/tinkoff.public.invest.api.contract.v1.InstrumentsService/GetAssetFundamentals";
 const CLOSE_PRICES_ENDPOINT =
   "https://invest-public-api.tbank.ru/rest/tinkoff.public.invest.api.contract.v1.MarketDataService/GetClosePrices";
+const LAST_PRICES_ENDPOINT =
+  "https://invest-public-api.tbank.ru/rest/tinkoff.public.invest.api.contract.v1.MarketDataService/GetLastPrices";
 const CANDLES_ENDPOINT =
   "https://invest-public-api.tbank.ru/rest/tinkoff.public.invest.api.contract.v1.MarketDataService/GetCandles";
 const MAX_ASSETS_PER_REQUEST = 30;
@@ -204,6 +206,14 @@ export type TBankClosePrice = {
   instrumentUid: string;
   ticker: string;
   classCode: string;
+  price: number;
+  time: string;
+};
+
+export type TBankLastPrice = {
+  figi: string;
+  instrumentUid: string;
+  instrumentId: string;
   price: number;
   time: string;
 };
@@ -404,6 +414,17 @@ function normalizeClosePriceItem(item: AnyRecord, nowIso: string): TBankClosePri
     ticker: pickString(item, ["ticker"]),
     classCode: pickString(item, ["class_code", "classCode"]),
     price: quotationToNumber(item.price),
+    time: pickTimestampIso(item, ["time", "timestamp", "date"]) || nowIso,
+  };
+}
+
+function normalizeLastPriceItem(item: AnyRecord, nowIso: string): TBankLastPrice {
+  const priceSource = item.price ?? item.lastPrice ?? item.last_price;
+  return {
+    figi: pickString(item, ["figi", "instrumentFigi", "instrument_figi"]),
+    instrumentUid: pickString(item, ["instrument_uid", "instrumentUid", "uid"]),
+    instrumentId: pickString(item, ["instrumentId", "instrument_id"]),
+    price: quotationToNumber(priceSource),
     time: pickTimestampIso(item, ["time", "timestamp", "date"]) || nowIso,
   };
 }
@@ -1499,6 +1520,42 @@ export function createTBankInstrumentsApi(token?: string) {
     return fetchClosePricesByInstrumentIds(shares.map((share) => share.figi));
   }
 
+  async function fetchLastPricesByInstrumentIds(instrumentIds: string[]): Promise<TBankLastPrice[]> {
+    const authToken = ensureToken();
+    const uniqueInstrumentIds = [...new Set(instrumentIds.map((value) => value.trim()).filter(Boolean))];
+    if (uniqueInstrumentIds.length === 0) {
+      return [];
+    }
+
+    const result: TBankLastPrice[] = [];
+    const chunks = chunkArray(uniqueInstrumentIds, MAX_ASSETS_PER_REQUEST);
+
+    for (const chunk of chunks) {
+      const payload = await requestJson<AnyRecord>(LAST_PRICES_ENDPOINT, authToken, {
+        instrumentId: chunk,
+        lastPriceType: "LAST_PRICE_EXCHANGE",
+        instrumentStatus: "INSTRUMENT_STATUS_ALL",
+      });
+
+      const rawItems =
+        (Array.isArray(payload.last_prices) && payload.last_prices) ||
+        (Array.isArray(payload.lastPrices) && payload.lastPrices) ||
+        (Array.isArray(payload.items) && payload.items) ||
+        (Array.isArray(payload.data) && payload.data) ||
+        [];
+
+      const nowIso = new Date().toISOString();
+      for (const raw of rawItems) {
+        const normalized = normalizeLastPriceItem((raw ?? {}) as AnyRecord, nowIso);
+        if (Number.isFinite(normalized.price) && normalized.price > 0) {
+          result.push(normalized);
+        }
+      }
+    }
+
+    return result;
+  }
+
   async function fetchBondCoupons(params: {
     instrumentId: string;
     from: string;
@@ -1559,6 +1616,7 @@ export function createTBankInstrumentsApi(token?: string) {
     fetchAssetFundamentals,
     fetchClosePrices,
     fetchClosePricesByInstrumentIds,
+    fetchLastPricesByInstrumentIds,
     fetchBondCoupons,
     fetchCandles,
     endpoints: {
@@ -1574,6 +1632,7 @@ export function createTBankInstrumentsApi(token?: string) {
       bondCoupons: BOND_COUPONS_ENDPOINT,
       assetFundamentals: ASSET_FUNDAMENTALS_ENDPOINT,
       closePrices: CLOSE_PRICES_ENDPOINT,
+      lastPrices: LAST_PRICES_ENDPOINT,
       candles: CANDLES_ENDPOINT,
     },
   };

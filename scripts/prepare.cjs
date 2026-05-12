@@ -16,6 +16,8 @@ const REPOSITORIES = {
     aliases: ["analytics", "server", "server-analytic-system"],
     dirName: "server-analytic-system",
     url: "https://github.com/gg-wp-easy/server-analytic-system.git",
+    urlEnvVar: "SERVER_ANALYTIC_REPOSITORY_URL",
+    tokenEnvVar: "SERVER_ANALYTIC_REPOSITORY_TOKEN",
   },
 };
 
@@ -72,7 +74,10 @@ Usage:
 Behavior:
   - clones the server repository if it is missing
   - runs git fetch/pull if the repository already exists
+  - replaces an uninitialized checkout/gitlink directory with a fresh clone
   - with --reclone removes the local copy first and clones from scratch
+  - SERVER_ANALYTIC_REPOSITORY_URL can override the backend repository URL
+  - SERVER_ANALYTIC_REPOSITORY_TOKEN can authenticate the default GitHub URL
 
 Examples:
   node scripts/prepare.cjs
@@ -109,17 +114,19 @@ async function syncRepository(repository, flags) {
   }
 
   if (!fs.existsSync(path.join(targetDir, ".git"))) {
-    throw new Error(
-      `${repository.dirName} exists but is not a git repository. Re-run with --reclone to replace it.`,
-    );
+    console.warn(`${repository.dirName} exists but is not an initialized git repository. Replacing it with a fresh clone.`);
+    fs.rmSync(targetDir, { recursive: true, force: true });
+    await cloneRepository(repository);
+    return;
   }
 
   await updateRepository(repository);
 }
 
 async function cloneRepository(repository) {
-  console.log(`Cloning ${repository.url}`);
-  await runCommand("git", ["clone", repository.url, repository.dirName], {
+  const url = resolveRepositoryUrl(repository);
+  console.log(`Cloning ${redactUrl(url)}`);
+  await runCommand("git", ["clone", url, repository.dirName], {
     cwd: repoRoot,
   });
 }
@@ -133,6 +140,35 @@ async function updateRepository(repository) {
   await runCommand("git", ["-C", targetDir, "pull", "--ff-only"], {
     cwd: repoRoot,
   });
+}
+
+function resolveRepositoryUrl(repository) {
+  const override = process.env[repository.urlEnvVar];
+  if (override && override.trim()) {
+    return override.trim();
+  }
+
+  const token = process.env[repository.tokenEnvVar];
+  if (!token || !token.trim()) {
+    return repository.url;
+  }
+
+  const parsed = new URL(repository.url);
+  parsed.username = "x-access-token";
+  parsed.password = token.trim();
+  return parsed.toString();
+}
+
+function redactUrl(url) {
+  try {
+    const parsed = new URL(url);
+    if (parsed.password) {
+      parsed.password = "***";
+    }
+    return parsed.toString();
+  } catch {
+    return url.replace(/:\/\/([^:@]+):([^@]+)@/, "://$1:***@");
+  }
 }
 
 main().catch((error) => {

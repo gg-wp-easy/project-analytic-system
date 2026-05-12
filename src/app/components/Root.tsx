@@ -13,6 +13,7 @@ import {
   Menu,
   Moon,
   Network,
+  RefreshCw,
   Sun,
   TrendingUp,
   X,
@@ -44,6 +45,7 @@ type DesktopApi = {
   isDesktop?: boolean;
   openLogsDirectory?: () => Promise<string>;
   getLogsDirectory?: () => Promise<string>;
+  checkForUpdates?: () => Promise<{ status?: string; version?: string; message?: string }>;
   log?: DesktopLogApi;
 };
 
@@ -67,9 +69,12 @@ export function Root() {
   const location = useLocation();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [isOpeningLogs, setIsOpeningLogs] = useState(false);
+  const [isCheckingUpdates, setIsCheckingUpdates] = useState(false);
+  const [updateFeedback, setUpdateFeedback] = useState<string | null>(null);
   const { locale, setLocale, theme, toggleTheme, t } = useAppSettings();
   const desktopApi = getDesktopApi();
   const canOpenLogsDirectory = Boolean(desktopApi?.openLogsDirectory);
+  const canCheckForUpdates = Boolean(desktopApi?.checkForUpdates);
 
   const handleOpenLogsDirectory = async () => {
     const api = getDesktopApi();
@@ -86,6 +91,39 @@ export function Root() {
       api.log?.error?.("Failed to open logs directory", error);
     } finally {
       setIsOpeningLogs(false);
+    }
+  };
+
+  const handleCheckForUpdates = async () => {
+    const api = getDesktopApi();
+    if (!api?.checkForUpdates) {
+      return;
+    }
+
+    setIsCheckingUpdates(true);
+    setUpdateFeedback(null);
+
+    try {
+      const result = await api.checkForUpdates();
+      const nextMessage =
+        result?.status === "available" && result?.version
+          ? t(
+              { ru: `Найдено обновление ${result.version}, идёт загрузка`, en: `Update ${result.version} found, download started` },
+            )
+          : result?.status === "not-available"
+            ? t({ ru: "Установлена последняя версия", en: "You already have the latest version" })
+            : result?.status === "disabled"
+              ? t({ ru: "Проверка обновлений недоступна для этой сборки", en: "Update checks are unavailable for this build" })
+              : result?.message || t({ ru: "Проверка обновлений завершена", en: "Update check completed" });
+
+      setUpdateFeedback(nextMessage);
+      api.log?.info?.("Manual update check result", result);
+    } catch (error) {
+      console.error("Failed to check for updates.", error);
+      api.log?.error?.("Failed to check for updates", error);
+      setUpdateFeedback(t({ ru: "Не удалось проверить обновления", en: "Failed to check for updates" }));
+    } finally {
+      setIsCheckingUpdates(false);
     }
   };
 
@@ -178,6 +216,18 @@ export function Root() {
                 >
                   <FolderOpen className="h-4 w-4" />
                   <span>{isOpeningLogs ? t({ ru: "Открытие...", en: "Opening..." }) : t({ ru: "Логи", en: "Logs" })}</span>
+                </button>
+              ) : null}
+              {canCheckForUpdates ? (
+                <button
+                  type="button"
+                  onClick={handleCheckForUpdates}
+                  disabled={isCheckingUpdates}
+                  title={t({ ru: "Проверить обновления", en: "Check for updates" })}
+                  className="inline-flex items-center gap-2 rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 disabled:cursor-wait disabled:opacity-60 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
+                >
+                  <RefreshCw className={`h-4 w-4 ${isCheckingUpdates ? "animate-spin" : ""}`} />
+                  <span>{isCheckingUpdates ? t({ ru: "Проверка...", en: "Checking..." }) : t({ ru: "Обновление", en: "Update" })}</span>
                 </button>
               ) : null}
             </div>
@@ -282,6 +332,18 @@ export function Root() {
                   <span>{isOpeningLogs ? t({ ru: "Открытие...", en: "Opening..." }) : t({ ru: "Логи", en: "Logs" })}</span>
                 </button>
               ) : null}
+              {canCheckForUpdates ? (
+                <button
+                  type="button"
+                  onClick={handleCheckForUpdates}
+                  disabled={isCheckingUpdates}
+                  title={t({ ru: "Проверить обновления", en: "Check for updates" })}
+                  className="inline-flex items-center gap-2 rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-700 disabled:cursor-wait disabled:opacity-60 dark:border-slate-700 dark:text-slate-200"
+                >
+                  <RefreshCw className={`h-4 w-4 ${isCheckingUpdates ? "animate-spin" : ""}`} />
+                  <span>{isCheckingUpdates ? t({ ru: "Проверка...", en: "Checking..." }) : t({ ru: "Обновление", en: "Update" })}</span>
+                </button>
+              ) : null}
             </div>
 
             <nav className="space-y-4 px-4 pb-5">
@@ -333,6 +395,11 @@ export function Root() {
       </header>
 
       <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
+        {updateFeedback ? (
+          <div className="mb-4 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-600 shadow-sm dark:border-slate-800 dark:bg-slate-900/80 dark:text-slate-300">
+            {updateFeedback}
+          </div>
+        ) : null}
         <Outlet />
       </main>
     </div>

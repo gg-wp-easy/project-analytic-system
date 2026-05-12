@@ -5,14 +5,25 @@ export type StrategyOutlook = "all" | "bullish" | "bearish" | "neutral";
 export type StrategyTemplateId =
   | "custom"
   | "long-call"
+  | "short-call"
   | "long-put"
+  | "short-put"
+  | "synthetic-long"
+  | "synthetic-short"
   | "bull-call-spread"
   | "bear-put-spread"
   | "bear-call-spread"
   | "bull-put-spread"
   | "long-straddle"
+  | "short-straddle"
   | "long-strangle"
-  | "iron-condor";
+  | "short-strangle"
+  | "long-call-butterfly"
+  | "long-put-butterfly"
+  | "iron-condor"
+  | "iron-butterfly"
+  | "call-ratio-backspread"
+  | "put-ratio-backspread";
 
 export type StrategyTemplate = {
   id: StrategyTemplateId;
@@ -26,6 +37,33 @@ export type StrategyTemplate = {
   };
   outlook: Exclude<StrategyOutlook, "all">;
   legs: number;
+};
+
+export type StrategyHelp = {
+  thesis: {
+    ru: string;
+    en: string;
+  };
+  bestFor: {
+    ru: string;
+    en: string;
+  };
+  maxProfit: {
+    ru: string;
+    en: string;
+  };
+  maxLoss: {
+    ru: string;
+    en: string;
+  };
+  breakEven: {
+    ru: string;
+    en: string;
+  };
+  note: {
+    ru: string;
+    en: string;
+  };
 };
 
 export type StrategyLegAction = "buy" | "sell";
@@ -79,6 +117,7 @@ type StrategyChain = {
 type CandidateLeg = {
   option: TBankOption;
   action: StrategyLegAction;
+  quantity?: number;
 };
 
 type BuildContext = {
@@ -113,6 +152,26 @@ export const OPTIONS_STRATEGY_TEMPLATES: StrategyTemplate[] = [
     legs: 1,
   },
   {
+    id: "short-call",
+    name: { ru: "Short Call", en: "Short Call" },
+    description: {
+      ru: "Продажа call около центрального страйка для медвежьего или нейтрального сценария.",
+      en: "Sell a call near the center strike for a bearish or neutral view.",
+    },
+    outlook: "bearish",
+    legs: 1,
+  },
+  {
+    id: "synthetic-long",
+    name: { ru: "Synthetic Long", en: "Synthetic Long" },
+    description: {
+      ru: "Покупка call и продажа put на одном страйке для синтетической длинной позиции.",
+      en: "Buy a call and sell a put at the same strike to create synthetic long exposure.",
+    },
+    outlook: "bullish",
+    legs: 2,
+  },
+  {
     id: "bull-call-spread",
     name: { ru: "Bull Call Spread", en: "Bull Call Spread" },
     description: {
@@ -121,6 +180,16 @@ export const OPTIONS_STRATEGY_TEMPLATES: StrategyTemplate[] = [
     },
     outlook: "bullish",
     legs: 2,
+  },
+  {
+    id: "call-ratio-backspread",
+    name: { ru: "Call Ratio Backspread", en: "Call Ratio Backspread" },
+    description: {
+      ru: "Продажа одного call ниже и покупка двух call выше для сильного роста.",
+      en: "Sell one lower call and buy two higher calls for a strong upside move.",
+    },
+    outlook: "bullish",
+    legs: 3,
   },
   {
     id: "bull-put-spread",
@@ -143,6 +212,26 @@ export const OPTIONS_STRATEGY_TEMPLATES: StrategyTemplate[] = [
     legs: 1,
   },
   {
+    id: "short-put",
+    name: { ru: "Short Put", en: "Short Put" },
+    description: {
+      ru: "Продажа put около центрального страйка для бычьего или нейтрального сценария.",
+      en: "Sell a put near the center strike for a bullish or neutral view.",
+    },
+    outlook: "bullish",
+    legs: 1,
+  },
+  {
+    id: "synthetic-short",
+    name: { ru: "Synthetic Short", en: "Synthetic Short" },
+    description: {
+      ru: "Продажа call и покупка put на одном страйке для синтетической короткой позиции.",
+      en: "Sell a call and buy a put at the same strike to create synthetic short exposure.",
+    },
+    outlook: "bearish",
+    legs: 2,
+  },
+  {
     id: "bear-put-spread",
     name: { ru: "Bear Put Spread", en: "Bear Put Spread" },
     description: {
@@ -151,6 +240,16 @@ export const OPTIONS_STRATEGY_TEMPLATES: StrategyTemplate[] = [
     },
     outlook: "bearish",
     legs: 2,
+  },
+  {
+    id: "put-ratio-backspread",
+    name: { ru: "Put Ratio Backspread", en: "Put Ratio Backspread" },
+    description: {
+      ru: "Продажа одного put выше и покупка двух put ниже для сильного падения.",
+      en: "Sell one higher put and buy two lower puts for a strong downside move.",
+    },
+    outlook: "bearish",
+    legs: 3,
   },
   {
     id: "bear-call-spread",
@@ -173,6 +272,16 @@ export const OPTIONS_STRATEGY_TEMPLATES: StrategyTemplate[] = [
     legs: 2,
   },
   {
+    id: "short-straddle",
+    name: { ru: "Short Straddle", en: "Short Straddle" },
+    description: {
+      ru: "Продажа call и put на одном страйке в ожидании спокойного рынка.",
+      en: "Sell a call and a put at the same strike when expecting a quiet market.",
+    },
+    outlook: "neutral",
+    legs: 2,
+  },
+  {
     id: "long-strangle",
     name: { ru: "Long Strangle", en: "Long Strangle" },
     description: {
@@ -181,6 +290,36 @@ export const OPTIONS_STRATEGY_TEMPLATES: StrategyTemplate[] = [
     },
     outlook: "neutral",
     legs: 2,
+  },
+  {
+    id: "short-strangle",
+    name: { ru: "Short Strangle", en: "Short Strangle" },
+    description: {
+      ru: "Продажа OTM put и OTM call в ожидании движения внутри диапазона.",
+      en: "Sell an OTM put and OTM call when expecting the underlying to stay in range.",
+    },
+    outlook: "neutral",
+    legs: 2,
+  },
+  {
+    id: "long-call-butterfly",
+    name: { ru: "Long Call Butterfly", en: "Long Call Butterfly" },
+    description: {
+      ru: "Покупка call-крыльев и продажа двух центральных call для ограниченного диапазона.",
+      en: "Buy call wings and sell two center calls for a defined range outcome.",
+    },
+    outlook: "neutral",
+    legs: 4,
+  },
+  {
+    id: "long-put-butterfly",
+    name: { ru: "Long Put Butterfly", en: "Long Put Butterfly" },
+    description: {
+      ru: "Покупка put-крыльев и продажа двух центральных put для ограниченного диапазона.",
+      en: "Buy put wings and sell two center puts for a defined range outcome.",
+    },
+    outlook: "neutral",
+    legs: 4,
   },
   {
     id: "iron-condor",
@@ -192,7 +331,280 @@ export const OPTIONS_STRATEGY_TEMPLATES: StrategyTemplate[] = [
     outlook: "neutral",
     legs: 4,
   },
+  {
+    id: "iron-butterfly",
+    name: { ru: "Iron Butterfly", en: "Iron Butterfly" },
+    description: {
+      ru: "Продажа центрального straddle с покупкой дальних защитных крыльев.",
+      en: "Sell the center straddle and buy farther protective wings.",
+    },
+    outlook: "neutral",
+    legs: 4,
+  },
 ];
+
+export const OPTIONS_STRATEGY_HELP: Record<Exclude<StrategyTemplateId, "custom">, StrategyHelp> = {
+  "long-call": {
+    thesis: {
+      ru: "Ставка на рост базового актива через покупку права купить по фиксированному страйку.",
+      en: "A bullish bet through the right to buy the underlying at a fixed strike.",
+    },
+    bestFor: {
+      ru: "Ожидается рост и хочется ограничить риск уплаченной премией.",
+      en: "Useful when upside is expected and risk should be limited to the paid premium.",
+    },
+    maxProfit: { ru: "Теоретически не ограничена.", en: "Theoretically unlimited." },
+    maxLoss: { ru: "Уплаченная премия.", en: "The paid premium." },
+    breakEven: { ru: "Страйк call плюс премия.", en: "Call strike plus premium." },
+    note: {
+      ru: "Страдает от временного распада, если движение не начинается быстро.",
+      en: "Hurt by time decay if the move does not start quickly.",
+    },
+  },
+  "short-call": {
+    thesis: {
+      ru: "Ставка на то, что актив не вырастет выше страйка проданного call.",
+      en: "A bet that the underlying will not rise above the sold call strike.",
+    },
+    bestFor: {
+      ru: "Нейтральный или умеренно медвежий сценарий с получением премии.",
+      en: "Neutral to moderately bearish views where premium income is desired.",
+    },
+    maxProfit: { ru: "Полученная премия.", en: "The received premium." },
+    maxLoss: { ru: "Теоретически не ограничен при сильном росте.", en: "Theoretically unlimited on a strong upside move." },
+    breakEven: { ru: "Страйк call плюс полученная премия.", en: "Call strike plus received premium." },
+    note: {
+      ru: "Голая продажа call требует контроля риска и маржи.",
+      en: "A naked short call requires strict risk and margin control.",
+    },
+  },
+  "long-put": {
+    thesis: {
+      ru: "Ставка на падение базового актива через покупку права продать по фиксированному страйку.",
+      en: "A bearish bet through the right to sell the underlying at a fixed strike.",
+    },
+    bestFor: {
+      ru: "Ожидается снижение, а риск нужно ограничить премией.",
+      en: "Useful when downside is expected and risk should be capped at the premium.",
+    },
+    maxProfit: { ru: "Ограничена падением актива к нулю.", en: "Limited by the underlying falling toward zero." },
+    maxLoss: { ru: "Уплаченная премия.", en: "The paid premium." },
+    breakEven: { ru: "Страйк put минус премия.", en: "Put strike minus premium." },
+    note: {
+      ru: "Может использоваться как направленная ставка или страховка позиции.",
+      en: "Can be used as a directional trade or as portfolio protection.",
+    },
+  },
+  "short-put": {
+    thesis: {
+      ru: "Ставка на то, что актив удержится выше страйка проданного put.",
+      en: "A bet that the underlying will stay above the sold put strike.",
+    },
+    bestFor: {
+      ru: "Умеренно бычий или нейтральный сценарий с получением премии.",
+      en: "Moderately bullish to neutral views with premium income.",
+    },
+    maxProfit: { ru: "Полученная премия.", en: "The received premium." },
+    maxLoss: { ru: "Большой, если актив падает к нулю.", en: "Large if the underlying falls toward zero." },
+    breakEven: { ru: "Страйк put минус полученная премия.", en: "Put strike minus received premium." },
+    note: {
+      ru: "По риску похожа на готовность купить актив ниже текущей цены.",
+      en: "Risk resembles being willing to buy the underlying below current price.",
+    },
+  },
+  "synthetic-long": {
+    thesis: {
+      ru: "Позиция с профилем, близким к покупке базового актива: long call и short put.",
+      en: "A position similar to owning the underlying: long call and short put.",
+    },
+    bestFor: {
+      ru: "Сильный бычий взгляд, когда нужен почти линейный профиль через опционы.",
+      en: "Strong bullish views where near-linear option exposure is desired.",
+    },
+    maxProfit: { ru: "Теоретически не ограничена.", en: "Theoretically unlimited." },
+    maxLoss: { ru: "Большой, если актив падает к нулю.", en: "Large if the underlying falls toward zero." },
+    breakEven: { ru: "Около общего страйка с поправкой на чистую премию.", en: "Near the shared strike adjusted by net premium." },
+    note: {
+      ru: "Маржинальная стратегия: short put несёт существенный риск.",
+      en: "A margin strategy: the short put carries substantial risk.",
+    },
+  },
+  "synthetic-short": {
+    thesis: {
+      ru: "Позиция с профилем, близким к шорту базового актива: short call и long put.",
+      en: "A position similar to shorting the underlying: short call and long put.",
+    },
+    bestFor: {
+      ru: "Сильный медвежий взгляд через опционы.",
+      en: "Strong bearish views expressed through options.",
+    },
+    maxProfit: { ru: "Ограничена падением актива к нулю.", en: "Limited by the underlying falling toward zero." },
+    maxLoss: { ru: "Теоретически не ограничен при сильном росте.", en: "Theoretically unlimited on a strong upside move." },
+    breakEven: { ru: "Около общего страйка с поправкой на чистую премию.", en: "Near the shared strike adjusted by net premium." },
+    note: {
+      ru: "Short call делает стратегию рискованной при резком росте.",
+      en: "The short call makes the strategy risky during a sharp rally.",
+    },
+  },
+  "bull-call-spread": {
+    thesis: {
+      ru: "Умеренная ставка на рост с покупкой call и частичным финансированием через продажу call выше.",
+      en: "A moderate bullish trade that buys a call and partly finances it by selling a higher call.",
+    },
+    bestFor: { ru: "Ожидается рост до ограниченной цели.", en: "Useful when upside is expected up to a limited target." },
+    maxProfit: { ru: "Разница страйков минус чистый дебет.", en: "Strike width minus net debit." },
+    maxLoss: { ru: "Чистый дебет.", en: "Net debit." },
+    breakEven: { ru: "Нижний страйк плюс чистый дебет.", en: "Lower strike plus net debit." },
+    note: { ru: "Дешевле long call, но прибыль сверху ограничена.", en: "Cheaper than a long call, but upside is capped." },
+  },
+  "bear-put-spread": {
+    thesis: {
+      ru: "Умеренная ставка на падение с покупкой put и продажей put ниже.",
+      en: "A moderate bearish trade that buys a put and sells a lower put.",
+    },
+    bestFor: { ru: "Ожидается снижение до ограниченной цели.", en: "Useful when downside is expected up to a limited target." },
+    maxProfit: { ru: "Разница страйков минус чистый дебет.", en: "Strike width minus net debit." },
+    maxLoss: { ru: "Чистый дебет.", en: "Net debit." },
+    breakEven: { ru: "Верхний страйк минус чистый дебет.", en: "Upper strike minus net debit." },
+    note: { ru: "Дешевле long put, но прибыль снизу ограничена.", en: "Cheaper than a long put, but downside profit is capped." },
+  },
+  "bear-call-spread": {
+    thesis: {
+      ru: "Кредитная ставка на то, что актив не поднимется выше зоны проданного call.",
+      en: "A credit trade betting the underlying stays below the sold call area.",
+    },
+    bestFor: { ru: "Нейтральный или умеренно медвежий рынок.", en: "Neutral to moderately bearish markets." },
+    maxProfit: { ru: "Полученный чистый кредит.", en: "Net credit received." },
+    maxLoss: { ru: "Разница страйков минус кредит.", en: "Strike width minus credit." },
+    breakEven: { ru: "Страйк проданного call плюс кредит.", en: "Short call strike plus credit." },
+    note: { ru: "Риск ограничен купленным call выше.", en: "Risk is capped by the higher long call." },
+  },
+  "bull-put-spread": {
+    thesis: {
+      ru: "Кредитная ставка на то, что актив удержится выше зоны проданного put.",
+      en: "A credit trade betting the underlying stays above the sold put area.",
+    },
+    bestFor: { ru: "Нейтральный или умеренно бычий рынок.", en: "Neutral to moderately bullish markets." },
+    maxProfit: { ru: "Полученный чистый кредит.", en: "Net credit received." },
+    maxLoss: { ru: "Разница страйков минус кредит.", en: "Strike width minus credit." },
+    breakEven: { ru: "Страйк проданного put минус кредит.", en: "Short put strike minus credit." },
+    note: { ru: "Риск ограничен купленным put ниже.", en: "Risk is capped by the lower long put." },
+  },
+  "long-straddle": {
+    thesis: {
+      ru: "Покупка call и put на одном страйке: важна сила движения, а не направление.",
+      en: "Buy a call and put at the same strike: magnitude matters more than direction.",
+    },
+    bestFor: { ru: "Ожидается резкий рост волатильности или сильный гэп.", en: "Useful before expected volatility expansion or a large gap." },
+    maxProfit: { ru: "Сверху не ограничена, снизу ограничена падением актива к нулю.", en: "Unlimited upside; downside limited by the underlying going to zero." },
+    maxLoss: { ru: "Сумма уплаченных премий.", en: "Total premium paid." },
+    breakEven: { ru: "Страйк плюс/минус суммарная премия.", en: "Strike plus/minus total premium." },
+    note: { ru: "Требует движения больше стоимости двух опционов.", en: "Requires a move larger than the cost of both options." },
+  },
+  "short-straddle": {
+    thesis: {
+      ru: "Продажа call и put на одном страйке: ставка на спокойствие около центра.",
+      en: "Sell a call and put at the same strike: a bet on calm around the center.",
+    },
+    bestFor: { ru: "Ожидается боковик и снижение подразумеваемой волатильности.", en: "Useful when rangebound price action and falling implied volatility are expected." },
+    maxProfit: { ru: "Суммарная полученная премия.", en: "Total premium received." },
+    maxLoss: { ru: "Сверху не ограничен, снизу большой при падении к нулю.", en: "Unlimited upside risk; large downside risk toward zero." },
+    breakEven: { ru: "Страйк плюс/минус суммарная премия.", en: "Strike plus/minus total premium." },
+    note: { ru: "Одна из самых чувствительных стратегий к резкому движению.", en: "Highly sensitive to sharp price moves." },
+  },
+  "long-strangle": {
+    thesis: {
+      ru: "Покупка OTM put и OTM call: дешевле straddle, но нужно большее движение.",
+      en: "Buy an OTM put and OTM call: cheaper than a straddle, but needs a larger move.",
+    },
+    bestFor: { ru: "Ожидается сильный выход из диапазона.", en: "Useful when a strong breakout from a range is expected." },
+    maxProfit: { ru: "Сверху не ограничена, снизу ограничена падением актива к нулю.", en: "Unlimited upside; downside limited by the underlying going to zero." },
+    maxLoss: { ru: "Сумма уплаченных премий.", en: "Total premium paid." },
+    breakEven: { ru: "Нижний put-страйк минус премия и верхний call-страйк плюс премия.", en: "Lower put strike minus premium and upper call strike plus premium." },
+    note: { ru: "Дешевле straddle, но зона убытка шире.", en: "Cheaper than a straddle, but the loss zone is wider." },
+  },
+  "short-strangle": {
+    thesis: {
+      ru: "Продажа OTM put и OTM call: ставка на удержание внутри диапазона.",
+      en: "Sell an OTM put and OTM call: a bet on staying inside a range.",
+    },
+    bestFor: { ru: "Ожидается боковик без резкого роста волатильности.", en: "Useful when sideways action is expected without a volatility spike." },
+    maxProfit: { ru: "Суммарная полученная премия.", en: "Total premium received." },
+    maxLoss: { ru: "Сверху не ограничен, снизу большой при падении к нулю.", en: "Unlimited upside risk; large downside risk toward zero." },
+    breakEven: { ru: "Нижний страйк минус кредит и верхний страйк плюс кредит.", en: "Lower strike minus credit and upper strike plus credit." },
+    note: { ru: "Шире short straddle, но риск хвостовых движений остаётся.", en: "Wider than a short straddle, but tail risk remains." },
+  },
+  "long-call-butterfly": {
+    thesis: {
+      ru: "Дебетовая конструкция, которая выигрывает, если цена приходит к центральному call-страйку.",
+      en: "A debit structure that benefits if price lands near the center call strike.",
+    },
+    bestFor: { ru: "Ожидается спокойный рынок около конкретного уровня.", en: "Useful when the underlying is expected to settle near a target level." },
+    maxProfit: { ru: "Ширина крыла минус чистый дебет.", en: "Wing width minus net debit." },
+    maxLoss: { ru: "Чистый дебет.", en: "Net debit." },
+    breakEven: { ru: "Нижний страйк плюс дебет и верхний страйк минус дебет.", en: "Lower strike plus debit and upper strike minus debit." },
+    note: { ru: "Требует достаточно близких и ликвидных страйков.", en: "Requires close and liquid strikes." },
+  },
+  "long-put-butterfly": {
+    thesis: {
+      ru: "Put-версия butterfly с ограниченным риском и целью около центрального страйка.",
+      en: "The put version of a butterfly with defined risk and a target near the center strike.",
+    },
+    bestFor: { ru: "Ожидается закрепление около выбранного уровня.", en: "Useful when price is expected to pin near the selected level." },
+    maxProfit: { ru: "Ширина крыла минус чистый дебет.", en: "Wing width minus net debit." },
+    maxLoss: { ru: "Чистый дебет.", en: "Net debit." },
+    breakEven: { ru: "Нижний страйк плюс дебет и верхний страйк минус дебет.", en: "Lower strike plus debit and upper strike minus debit." },
+    note: { ru: "Профиль похож на call butterfly, но собирается через put.", en: "Similar profile to a call butterfly, assembled with puts." },
+  },
+  "iron-condor": {
+    thesis: {
+      ru: "Продажа внутреннего put/call диапазона с покупкой внешних защитных крыльев.",
+      en: "Sell the inner put/call range and buy outer protective wings.",
+    },
+    bestFor: { ru: "Ожидается движение внутри широкого диапазона.", en: "Useful when the underlying is expected to stay inside a broad range." },
+    maxProfit: { ru: "Полученный чистый кредит.", en: "Net credit received." },
+    maxLoss: { ru: "Ширина крыла минус кредит.", en: "Wing width minus credit." },
+    breakEven: { ru: "Нижний короткий страйк минус кредит и верхний короткий страйк плюс кредит.", en: "Lower short strike minus credit and upper short strike plus credit." },
+    note: { ru: "Риск ограничен, но комиссия и спреды важны из-за четырёх ног.", en: "Risk is defined, but fees and spreads matter because there are four legs." },
+  },
+  "iron-butterfly": {
+    thesis: {
+      ru: "Кредитная butterfly: продажа центрального straddle и покупка дальних крыльев.",
+      en: "A credit butterfly: sell the center straddle and buy farther wings.",
+    },
+    bestFor: { ru: "Ожидается закрепление около центрального страйка.", en: "Useful when price is expected to stay near the center strike." },
+    maxProfit: { ru: "Полученный чистый кредит.", en: "Net credit received." },
+    maxLoss: { ru: "Ширина крыла минус кредит.", en: "Wing width minus credit." },
+    breakEven: { ru: "Центральный страйк плюс/минус чистый кредит.", en: "Center strike plus/minus net credit." },
+    note: { ru: "Более узкая цель, чем iron condor, зато обычно выше кредит.", en: "Narrower target than an iron condor, but usually higher credit." },
+  },
+  "call-ratio-backspread": {
+    thesis: {
+      ru: "Продажа одного call ниже и покупка двух call выше: ставка на сильный рост.",
+      en: "Sell one lower call and buy two higher calls: a bet on a strong upside move.",
+    },
+    bestFor: { ru: "Ожидается резкий рост, но не умеренный плавный подъём.", en: "Useful when a sharp rally is expected, not just a mild grind higher." },
+    maxProfit: { ru: "Теоретически не ограничена.", en: "Theoretically unlimited." },
+    maxLoss: { ru: "Обычно ограничен зоной около верхнего купленного страйка.", en: "Usually limited around the higher long strike area." },
+    breakEven: { ru: "Зависит от расстояния страйков и чистой премии.", en: "Depends on strike width and net premium." },
+    note: { ru: "Между страйками может быть неприятная зона убытка.", en: "There can be an uncomfortable loss zone between strikes." },
+  },
+  "put-ratio-backspread": {
+    thesis: {
+      ru: "Продажа одного put выше и покупка двух put ниже: ставка на сильное падение.",
+      en: "Sell one higher put and buy two lower puts: a bet on a strong downside move.",
+    },
+    bestFor: { ru: "Ожидается резкое снижение или всплеск волатильности вниз.", en: "Useful when a sharp selloff or downside volatility expansion is expected." },
+    maxProfit: { ru: "Большая, ограничена падением актива к нулю.", en: "Large, limited by the underlying falling toward zero." },
+    maxLoss: { ru: "Обычно ограничен зоной около нижнего купленного страйка.", en: "Usually limited around the lower long strike area." },
+    breakEven: { ru: "Зависит от расстояния страйков и чистой премии.", en: "Depends on strike width and net premium." },
+    note: { ru: "Небольшое снижение может быть хуже сильного движения.", en: "A small decline can be worse than a large move." },
+  },
+};
+
+export function getStrategyHelp(id: StrategyTemplateId): StrategyHelp | null {
+  return id === "custom" ? null : OPTIONS_STRATEGY_HELP[id];
+}
 
 function compareOptions(left: TBankOption, right: TBankOption): number {
   const tradableDiff = Number(right.apiTradeAvailableFlag) - Number(left.apiTradeAvailableFlag);
@@ -347,9 +759,50 @@ function buildLongCall(context: BuildContext): CandidateLeg[] | null {
   return entry ? [{ option: entry.option, action: "buy" }] : null;
 }
 
+function buildShortCall(context: BuildContext): CandidateLeg[] | null {
+  const entry = findNearestEntry(context.chain.calls, context.chain.referenceStrike);
+  return entry ? [{ option: entry.option, action: "sell" }] : null;
+}
+
 function buildLongPut(context: BuildContext): CandidateLeg[] | null {
   const entry = findNearestEntry(context.chain.puts, context.chain.referenceStrike);
   return entry ? [{ option: entry.option, action: "buy" }] : null;
+}
+
+function buildShortPut(context: BuildContext): CandidateLeg[] | null {
+  const entry = findNearestEntry(context.chain.puts, context.chain.referenceStrike);
+  return entry ? [{ option: entry.option, action: "sell" }] : null;
+}
+
+function buildSameStrikeCallPut(context: BuildContext): { call: StrikeEntry; put: StrikeEntry } | null {
+  const sharedStrike = findClosestStrike(context.chain.sharedStrikes, context.chain.referenceStrike);
+  if (!Number.isFinite(sharedStrike ?? Number.NaN)) {
+    return null;
+  }
+
+  const call = context.chain.calls.find((entry) => entry.strike === sharedStrike);
+  const put = context.chain.puts.find((entry) => entry.strike === sharedStrike);
+  return call && put ? { call, put } : null;
+}
+
+function buildSyntheticLong(context: BuildContext): CandidateLeg[] | null {
+  const pair = buildSameStrikeCallPut(context);
+  return pair
+    ? [
+        { option: pair.call.option, action: "buy" },
+        { option: pair.put.option, action: "sell" },
+      ]
+    : null;
+}
+
+function buildSyntheticShort(context: BuildContext): CandidateLeg[] | null {
+  const pair = buildSameStrikeCallPut(context);
+  return pair
+    ? [
+        { option: pair.call.option, action: "sell" },
+        { option: pair.put.option, action: "buy" },
+      ]
+    : null;
 }
 
 function buildBullCallSpread(context: BuildContext): CandidateLeg[] | null {
@@ -429,21 +882,23 @@ function buildBullPutSpread(context: BuildContext): CandidateLeg[] | null {
 }
 
 function buildLongStraddle(context: BuildContext): CandidateLeg[] | null {
-  const sharedStrike = findClosestStrike(context.chain.sharedStrikes, context.chain.referenceStrike);
-  if (!Number.isFinite(sharedStrike ?? Number.NaN)) {
-    return null;
-  }
+  const pair = buildSameStrikeCallPut(context);
+  return pair
+    ? [
+        { option: pair.call.option, action: "buy" },
+        { option: pair.put.option, action: "buy" },
+      ]
+    : null;
+}
 
-  const call = context.chain.calls.find((entry) => entry.strike === sharedStrike);
-  const put = context.chain.puts.find((entry) => entry.strike === sharedStrike);
-  if (!call || !put) {
-    return null;
-  }
-
-  return [
-    { option: call.option, action: "buy" },
-    { option: put.option, action: "buy" },
-  ];
+function buildShortStraddle(context: BuildContext): CandidateLeg[] | null {
+  const pair = buildSameStrikeCallPut(context);
+  return pair
+    ? [
+        { option: pair.call.option, action: "sell" },
+        { option: pair.put.option, action: "sell" },
+      ]
+    : null;
 }
 
 function buildLongStrangle(context: BuildContext): CandidateLeg[] | null {
@@ -461,6 +916,62 @@ function buildLongStrangle(context: BuildContext): CandidateLeg[] | null {
   return [
     { option: put.option, action: "buy" },
     { option: call.option, action: "buy" },
+  ];
+}
+
+function buildShortStrangle(context: BuildContext): CandidateLeg[] | null {
+  const put =
+    findEntryAtOrBelow(context.chain.puts, context.chain.referenceStrike, true) ??
+    findEntryAtOrBelow(context.chain.puts, context.chain.referenceStrike);
+  const call =
+    findEntryAtOrAbove(context.chain.calls, context.chain.referenceStrike, true) ??
+    findEntryAtOrAbove(context.chain.calls, context.chain.referenceStrike);
+
+  if (!put || !call) {
+    return null;
+  }
+
+  return [
+    { option: put.option, action: "sell" },
+    { option: call.option, action: "sell" },
+  ];
+}
+
+function buildLongCallButterfly(context: BuildContext): CandidateLeg[] | null {
+  const middle = findNearestEntry(context.chain.calls, context.chain.referenceStrike);
+  if (!middle) {
+    return null;
+  }
+
+  const lower = findSiblingEntry(context.chain.calls, middle.strike, "lower");
+  const higher = findSiblingEntry(context.chain.calls, middle.strike, "higher");
+  if (!lower || !higher) {
+    return null;
+  }
+
+  return [
+    { option: lower.option, action: "buy" },
+    { option: middle.option, action: "sell", quantity: 2 },
+    { option: higher.option, action: "buy" },
+  ];
+}
+
+function buildLongPutButterfly(context: BuildContext): CandidateLeg[] | null {
+  const middle = findNearestEntry(context.chain.puts, context.chain.referenceStrike);
+  if (!middle) {
+    return null;
+  }
+
+  const lower = findSiblingEntry(context.chain.puts, middle.strike, "lower");
+  const higher = findSiblingEntry(context.chain.puts, middle.strike, "higher");
+  if (!lower || !higher) {
+    return null;
+  }
+
+  return [
+    { option: lower.option, action: "buy" },
+    { option: middle.option, action: "sell", quantity: 2 },
+    { option: higher.option, action: "buy" },
   ];
 }
 
@@ -491,16 +1002,85 @@ function buildIronCondor(context: BuildContext): CandidateLeg[] | null {
   ];
 }
 
+function buildIronButterfly(context: BuildContext): CandidateLeg[] | null {
+  const pair = buildSameStrikeCallPut(context);
+  if (!pair) {
+    return null;
+  }
+
+  const longPut = findSiblingEntry(context.chain.puts, pair.put.strike, "lower");
+  const longCall = findSiblingEntry(context.chain.calls, pair.call.strike, "higher");
+  if (!longPut || !longCall) {
+    return null;
+  }
+
+  return [
+    { option: longPut.option, action: "buy" },
+    { option: pair.put.option, action: "sell" },
+    { option: pair.call.option, action: "sell" },
+    { option: longCall.option, action: "buy" },
+  ];
+}
+
+function buildCallRatioBackspread(context: BuildContext): CandidateLeg[] | null {
+  const shortCall =
+    findEntryAtOrBelow(context.chain.calls, context.chain.referenceStrike) ??
+    findNearestEntry(context.chain.calls, context.chain.referenceStrike);
+  if (!shortCall) {
+    return null;
+  }
+
+  const longCall = findSiblingEntry(context.chain.calls, shortCall.strike, "higher");
+  if (!longCall) {
+    return null;
+  }
+
+  return [
+    { option: shortCall.option, action: "sell" },
+    { option: longCall.option, action: "buy", quantity: 2 },
+  ];
+}
+
+function buildPutRatioBackspread(context: BuildContext): CandidateLeg[] | null {
+  const shortPut =
+    findEntryAtOrAbove(context.chain.puts, context.chain.referenceStrike) ??
+    findNearestEntry(context.chain.puts, context.chain.referenceStrike);
+  if (!shortPut) {
+    return null;
+  }
+
+  const longPut = findSiblingEntry(context.chain.puts, shortPut.strike, "lower");
+  if (!longPut) {
+    return null;
+  }
+
+  return [
+    { option: shortPut.option, action: "sell" },
+    { option: longPut.option, action: "buy", quantity: 2 },
+  ];
+}
+
 const STRATEGY_BUILDERS: Record<Exclude<StrategyTemplateId, "custom">, (context: BuildContext) => CandidateLeg[] | null> = {
   "long-call": buildLongCall,
+  "short-call": buildShortCall,
   "long-put": buildLongPut,
+  "short-put": buildShortPut,
+  "synthetic-long": buildSyntheticLong,
+  "synthetic-short": buildSyntheticShort,
   "bull-call-spread": buildBullCallSpread,
   "bear-put-spread": buildBearPutSpread,
   "bear-call-spread": buildBearCallSpread,
   "bull-put-spread": buildBullPutSpread,
   "long-straddle": buildLongStraddle,
+  "short-straddle": buildShortStraddle,
   "long-strangle": buildLongStrangle,
+  "short-strangle": buildShortStrangle,
+  "long-call-butterfly": buildLongCallButterfly,
+  "long-put-butterfly": buildLongPutButterfly,
   "iron-condor": buildIronCondor,
+  "iron-butterfly": buildIronButterfly,
+  "call-ratio-backspread": buildCallRatioBackspread,
+  "put-ratio-backspread": buildPutRatioBackspread,
 };
 
 function resolveOptionPremium(option: TBankOption, closePricesById: Record<string, number>): number | null {
@@ -546,6 +1126,10 @@ function evaluateLegPnl(leg: StrategyLeg, price: number): number {
 
 function evaluateStrategyPnl(legs: StrategyLeg[], price: number): number {
   return legs.reduce((sum, leg) => sum + evaluateLegPnl(leg, price), 0);
+}
+
+export function evaluateStrategyAtPrice(legs: StrategyLeg[], price: number): number {
+  return evaluateStrategyPnl(legs, price);
 }
 
 function buildPayoffSeries(legs: StrategyLeg[], referenceStrike: number): StrategyPayoffPoint[] {
@@ -739,15 +1323,16 @@ export function buildStrategyFromTemplate(params: {
   const contracts = Number.isFinite(params.contracts) && (params.contracts ?? 0) > 0
     ? Math.max(1, Math.floor(params.contracts!))
     : 1;
+  const templateLegCount = candidateLegs.reduce((sum, leg) => sum + (leg.quantity ?? 1), 0);
 
   return buildResultFromLegs({
-    template: { ...template, legs: candidateLegs.length },
+    template: { ...template, legs: templateLegCount },
     expirationKey: params.expirationKey,
     referenceStrike: chain.referenceStrike,
     legs: candidateLegs.map((leg) => ({
       option: leg.option,
       action: leg.action,
-      quantity: contracts,
+      quantity: contracts * (leg.quantity ?? 1),
     })),
     closePricesById: params.closePricesById,
   });

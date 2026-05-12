@@ -10,7 +10,10 @@ const LOG_FILE_NAME = "app.log";
 const LOG_IPC_CHANNEL = "app:log";
 const OPEN_LOGS_DIRECTORY_CHANNEL = "app:open-logs-directory";
 const GET_LOGS_DIRECTORY_CHANNEL = "app:get-logs-directory";
+const CHECK_FOR_UPDATES_CHANNEL = "app:check-for-updates";
 const LOG_LEVELS = new Set(["debug", "info", "warn", "error"]);
+const AUTO_UPDATE_INITIAL_DELAY_MS = 12_000;
+const AUTO_UPDATE_INTERVAL_MS = 4 * 60 * 60 * 1000;
 
 let log;
 try {
@@ -60,6 +63,8 @@ const managedServices = new Map();
 let autoUpdateHandlersAttached = false;
 let autoUpdateCheckScheduled = false;
 let autoUpdatePromptVisible = false;
+let autoUpdateCheckInFlight = null;
+let autoUpdateIntervalId = null;
 
 const BACKEND_SERVICES = [
   {
@@ -153,6 +158,10 @@ function registerAppIpcHandlers() {
     }
 
     return logsDir;
+  });
+
+  ipcMain.handle(CHECK_FOR_UPDATES_CHANNEL, async () => {
+    return performAutoUpdateCheck({ manual: true });
   });
 }
 
@@ -572,6 +581,57 @@ function attachAutoUpdateHandlers() {
   });
 }
 
+async function performAutoUpdateCheck({ manual = false } = {}) {
+  if (!shouldEnableAutoUpdate()) {
+    return {
+      status: "disabled",
+      message: "Auto-update is unavailable for this build.",
+    };
+  }
+
+  attachAutoUpdateHandlers();
+
+  if (autoUpdateCheckInFlight) {
+    return autoUpdateCheckInFlight;
+  }
+
+  autoUpdateCheckInFlight = autoUpdater
+    .checkForUpdates()
+    .then((result) => {
+      const hasDownload = Boolean(result?.downloadPromise);
+      if (hasDownload) {
+        const version = result?.updateInfo?.version || "";
+        return {
+          status: "available",
+          version,
+          message: version
+            ? `Update ${version} found. Download has started.`
+            : "An update was found. Download has started.",
+        };
+      }
+
+      return {
+        status: "not-available",
+        message: manual
+          ? "You already have the latest version installed."
+          : "No updates are available.",
+      };
+    })
+    .catch((error) => {
+      const message = error instanceof Error ? error.message : String(error);
+      log.error("Unable to check for updates:", error);
+      return {
+        status: "error",
+        message,
+      };
+    })
+    .finally(() => {
+      autoUpdateCheckInFlight = null;
+    });
+
+  return autoUpdateCheckInFlight;
+}
+
 async function promptForUpdateInstall(version) {
   if (autoUpdatePromptVisible) {
     return;
@@ -611,10 +671,16 @@ function scheduleAutoUpdateCheck() {
   attachAutoUpdateHandlers();
 
   setTimeout(() => {
-    autoUpdater.checkForUpdates().catch((error) => {
-      log.error("Unable to check for updates:", error);
+    performAutoUpdateCheck().catch((error) => {
+      log.error("Unable to run the initial update check:", error);
     });
-  }, 12000);
+  }, AUTO_UPDATE_INITIAL_DELAY_MS);
+
+  autoUpdateIntervalId = setInterval(() => {
+    performAutoUpdateCheck().catch((error) => {
+      log.error("Unable to run the scheduled update check:", error);
+    });
+  }, AUTO_UPDATE_INTERVAL_MS);
 }
 
 app.whenReady().then(async () => {
@@ -646,6 +712,10 @@ app.whenReady().then(async () => {
 });
 
 app.on("before-quit", async () => {
+  if (autoUpdateIntervalId) {
+    clearInterval(autoUpdateIntervalId);
+    autoUpdateIntervalId = null;
+  }
   await stopAllManagedServices();
 });
 
