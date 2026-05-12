@@ -128,6 +128,10 @@ async function cloneRepository(repository) {
   console.log(`Cloning ${redactUrl(url)}`);
   await runCommand("git", ["clone", url, repository.dirName], {
     cwd: repoRoot,
+    env: {
+      ...process.env,
+      GIT_TERMINAL_PROMPT: "0",
+    },
   });
 }
 
@@ -136,9 +140,17 @@ async function updateRepository(repository) {
 
   await runCommand("git", ["-C", targetDir, "fetch", "--all", "--prune"], {
     cwd: repoRoot,
+    env: {
+      ...process.env,
+      GIT_TERMINAL_PROMPT: "0",
+    },
   });
   await runCommand("git", ["-C", targetDir, "pull", "--ff-only"], {
     cwd: repoRoot,
+    env: {
+      ...process.env,
+      GIT_TERMINAL_PROMPT: "0",
+    },
   });
 }
 
@@ -148,7 +160,10 @@ function resolveRepositoryUrl(repository) {
     return override.trim();
   }
 
-  const token = process.env[repository.tokenEnvVar];
+  const token =
+    process.env[repository.tokenEnvVar]
+    || process.env.GH_TOKEN
+    || process.env.GITHUB_TOKEN;
   if (!token || !token.trim()) {
     return repository.url;
   }

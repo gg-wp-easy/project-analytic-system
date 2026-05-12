@@ -49,8 +49,14 @@ jobs:
       - name: Install Node dependencies
         run: npm ci
 
-      - name: Sync backend repository
-        run: npm run servers:prepare
+      - name: Checkout backend repository
+        uses: actions/checkout@v4
+        with:
+          repository: gg-wp-easy/server-analytic-system
+          path: server-analytic-system
+          token: ${{ secrets.SERVER_ANALYTIC_REPOSITORY_TOKEN || github.token }}
+          persist-credentials: false
+          fetch-depth: 1
 
       - name: Build Electron app
         run: npm run electron:build:win -- --version-mode=package --output-dir=release\windows
