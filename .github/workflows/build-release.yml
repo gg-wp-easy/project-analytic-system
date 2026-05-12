@@ -23,9 +23,21 @@ permissions:
   contents: write
 
 jobs:
+  fork-pr-note:
+    name: Fork PR backend access note
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository
+    steps:
+      - name: Explain skipped private backend build
+        run: |
+          echo "This pull_request comes from a fork."
+          echo "GitHub Actions does not expose repository secrets to fork PR workflows."
+          echo "The private backend repository cannot be checked out in this run, so the Windows release build is skipped."
+
   build-windows:
     name: Build Windows updater artifacts
     runs-on: windows-latest
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
     env:
       CSC_IDENTITY_AUTO_DISCOVERY: "false"
       GH_TOKEN: ${{ github.token }}
@@ -49,22 +61,6 @@ jobs:
       - name: Install Node dependencies
         run: npm ci
 
-      - name: Resolve backend auth availability
-        id: backend_auth
-        shell: bash
-        run: |
-          if [ -n "${SERVER_ANALYTIC_REPOSITORY_TOKEN}" ]; then
-            echo "has_backup_token=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "has_backup_token=false" >> "$GITHUB_OUTPUT"
-          fi
-
-          if [ "${{ github.event_name }}" = "pull_request" ] && [ "${{ github.event.pull_request.head.repo.full_name }}" != "${{ github.repository }}" ]; then
-            echo "is_fork_pr=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "is_fork_pr=false" >> "$GITHUB_OUTPUT"
-          fi
-
       - name: Checkout backend repository with default token
         id: checkout_backend_default
         uses: actions/checkout@v4
@@ -86,8 +82,9 @@ jobs:
 
       - name: Checkout backend repository with backup token
         id: checkout_backend_backup
-        if: steps.checkout_backend_default.outcome == 'failure' && steps.backend_auth.outputs.has_backup_token == 'true'
+        if: steps.checkout_backend_default.outcome == 'failure'
         uses: actions/checkout@v4
+        continue-on-error: true
         with:
           repository: gg-wp-easy/server-analytic-system
           path: server-analytic-system
@@ -96,18 +93,19 @@ jobs:
           fetch-depth: 1
 
       - name: Fail if backend checkout is unavailable
-        if: steps.checkout_backend_default.outcome == 'failure' && steps.backend_auth.outputs.has_backup_token != 'true'
+        if: steps.checkout_backend_default.outcome == 'failure' && steps.checkout_backend_backup.outcome == 'failure'
         shell: bash
         run: |
-          if [ "${{ steps.backend_auth.outputs.is_fork_pr }}" = "true" ]; then
+          if [ "${{ github.event_name }}" = "pull_request" ] && [ "${{ github.event.pull_request.head.repo.full_name }}" != "${{ github.repository }}" ]; then
             echo "Backend repository checkout failed because this is a pull_request from a fork."
             echo "GitHub does not expose repository secrets to fork PR workflows, so SERVER_ANALYTIC_REPOSITORY_TOKEN is unavailable in this run."
             echo "Use a push branch in the main repository, workflow_dispatch, or a different CI strategy for fork PRs."
             exit 1
           fi
 
-          echo "Backend repository checkout failed with GITHUB_TOKEN and SERVER_ANALYTIC_REPOSITORY_TOKEN is unavailable in this run."
-          echo "Check that SERVER_ANALYTIC_REPOSITORY_TOKEN is configured in Settings -> Secrets and variables -> Actions and has read access to gg-wp-easy/server-analytic-system."
+          echo "Backend repository checkout failed with both GITHUB_TOKEN and SERVER_ANALYTIC_REPOSITORY_TOKEN."
+          echo "Check that SERVER_ANALYTIC_REPOSITORY_TOKEN is configured in this repository under Settings -> Secrets and variables -> Actions."
+          echo "Also verify that the token has read access to gg-wp-easy/server-analytic-system and that this workflow run type is allowed to receive secrets."
           exit 1
 
       - name: Build Electron app
