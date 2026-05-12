@@ -28,7 +28,7 @@ jobs:
     runs-on: windows-latest
     env:
       CSC_IDENTITY_AUTO_DISCOVERY: "false"
-      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      GH_TOKEN: ${{ github.token }}
       SERVER_ANALYTIC_REPOSITORY_TOKEN: ${{ secrets.SERVER_ANALYTIC_REPOSITORY_TOKEN }}
 
     steps:
@@ -49,14 +49,43 @@ jobs:
       - name: Install Node dependencies
         run: npm ci
 
-      - name: Checkout backend repository
+      - name: Checkout backend repository with default token
+        id: checkout_backend_default
+        uses: actions/checkout@v4
+        continue-on-error: true
+        with:
+          repository: gg-wp-easy/server-analytic-system
+          path: server-analytic-system
+          token: ${{ github.token }}
+          persist-credentials: false
+          fetch-depth: 1
+
+      - name: Remove failed backend checkout
+        if: steps.checkout_backend_default.outcome == 'failure'
+        shell: pwsh
+        run: |
+          if (Test-Path "server-analytic-system") {
+            Remove-Item -Path "server-analytic-system" -Recurse -Force
+          }
+
+      - name: Checkout backend repository with backup token
+        id: checkout_backend_backup
+        if: steps.checkout_backend_default.outcome == 'failure' && secrets.SERVER_ANALYTIC_REPOSITORY_TOKEN != ''
         uses: actions/checkout@v4
         with:
           repository: gg-wp-easy/server-analytic-system
           path: server-analytic-system
-          token: ${{ secrets.SERVER_ANALYTIC_REPOSITORY_TOKEN || github.token }}
+          token: ${{ secrets.SERVER_ANALYTIC_REPOSITORY_TOKEN }}
           persist-credentials: false
           fetch-depth: 1
+
+      - name: Fail if backend checkout is unavailable
+        if: steps.checkout_backend_default.outcome == 'failure' && secrets.SERVER_ANALYTIC_REPOSITORY_TOKEN == ''
+        shell: bash
+        run: |
+          echo "Backend repository checkout failed with GITHUB_TOKEN and SERVER_ANALYTIC_REPOSITORY_TOKEN is not configured."
+          echo "Add SERVER_ANALYTIC_REPOSITORY_TOKEN with read access to gg-wp-easy/server-analytic-system."
+          exit 1
 
       - name: Build Electron app
         run: npm run electron:build:win -- --version-mode=package --output-dir=release\windows
