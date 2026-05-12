@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link, Outlet, useLocation } from "react-router-dom";
 import type { LucideIcon } from "lucide-react";
 import {
@@ -6,7 +6,6 @@ import {
   Brain,
   ChevronDown,
   Database,
-  FolderOpen,
   GitBranch,
   Landmark,
   Layers,
@@ -27,6 +26,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "./ui/dropdown-menu";
+import { AppErrorDialog } from "../../shared/ui/app-error-dialog";
 
 type NavItem = {
   name: string;
@@ -43,10 +43,16 @@ type DesktopLogApi = {
 
 type DesktopApi = {
   isDesktop?: boolean;
-  openLogsDirectory?: () => Promise<string>;
-  getLogsDirectory?: () => Promise<string>;
-  checkForUpdates?: () => Promise<{ status?: string; version?: string; message?: string }>;
+  installUpdate?: () => Promise<{ status?: string; message?: string }>;
+  onUpdateStatus?: (listener: (payload: UpdateStatusPayload) => void) => () => void;
   log?: DesktopLogApi;
+};
+
+type UpdateStatusPayload = {
+  status?: string;
+  version?: string;
+  progress?: number;
+  message?: string;
 };
 
 function getDesktopApi(): DesktopApi | undefined {
@@ -68,64 +74,81 @@ function isActivePath(currentPath: string, targetPath: string): boolean {
 export function Root() {
   const location = useLocation();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const [isOpeningLogs, setIsOpeningLogs] = useState(false);
-  const [isCheckingUpdates, setIsCheckingUpdates] = useState(false);
-  const [updateFeedback, setUpdateFeedback] = useState<string | null>(null);
+  const [isInstallingUpdate, setIsInstallingUpdate] = useState(false);
+  const [updateState, setUpdateState] = useState<UpdateStatusPayload | null>(null);
+  const [updateErrorMessage, setUpdateErrorMessage] = useState<string | null>(null);
   const { locale, setLocale, theme, toggleTheme, t } = useAppSettings();
   const desktopApi = getDesktopApi();
-  const canOpenLogsDirectory = Boolean(desktopApi?.openLogsDirectory);
-  const canCheckForUpdates = Boolean(desktopApi?.checkForUpdates);
+  const canInstallUpdates = Boolean(desktopApi?.installUpdate);
 
-  const handleOpenLogsDirectory = async () => {
+  useEffect(() => {
     const api = getDesktopApi();
-    if (!api?.openLogsDirectory) {
+    if (!api?.onUpdateStatus) {
+      return undefined;
+    }
+
+    return api.onUpdateStatus((payload) => {
+      if (payload.status === "not-available") {
+        setUpdateState(null);
+        return;
+      }
+
+      if (payload.status === "error") {
+        setUpdateState(null);
+        setUpdateErrorMessage(payload.message || t({ ru: "Не удалось проверить обновления.", en: "Failed to check for updates." }));
+        return;
+      }
+
+      if (payload.status === "available" || payload.status === "downloading" || payload.status === "downloaded") {
+        setUpdateState(payload);
+      }
+    });
+  }, [t]);
+
+  const handleInstallUpdate = async () => {
+    const api = getDesktopApi();
+    if (!api?.installUpdate) {
       return;
     }
 
-    setIsOpeningLogs(true);
-    try {
-      const logsDir = await api.openLogsDirectory();
-      api.log?.info?.("Opened logs directory", logsDir);
-    } catch (error) {
-      console.error("Failed to open logs directory.", error);
-      api.log?.error?.("Failed to open logs directory", error);
-    } finally {
-      setIsOpeningLogs(false);
-    }
-  };
-
-  const handleCheckForUpdates = async () => {
-    const api = getDesktopApi();
-    if (!api?.checkForUpdates) {
+    if (updateState?.status !== "downloaded") {
+      setUpdateErrorMessage(t({
+        ru: "Обновление пока недоступно для установки. Попробуйте немного позже.",
+        en: "The update is not ready to install yet. Please try again shortly.",
+      }));
       return;
     }
 
-    setIsCheckingUpdates(true);
-    setUpdateFeedback(null);
-
+    setIsInstallingUpdate(true);
     try {
-      const result = await api.checkForUpdates();
-      const nextMessage =
-        result?.status === "available" && result?.version
-          ? t(
-              { ru: `Найдено обновление ${result.version}, идёт загрузка`, en: `Update ${result.version} found, download started` },
-            )
-          : result?.status === "not-available"
-            ? t({ ru: "Установлена последняя версия", en: "You already have the latest version" })
-            : result?.status === "disabled"
-              ? t({ ru: "Проверка обновлений недоступна для этой сборки", en: "Update checks are unavailable for this build" })
-              : result?.message || t({ ru: "Проверка обновлений завершена", en: "Update check completed" });
-
-      setUpdateFeedback(nextMessage);
-      api.log?.info?.("Manual update check result", result);
+      const result = await api.installUpdate();
+      if (result?.status === "disabled" || result?.status === "error") {
+        setUpdateErrorMessage(result.message || t({ ru: "Обновление недоступно.", en: "Update is unavailable." }));
+      }
     } catch (error) {
-      console.error("Failed to check for updates.", error);
-      api.log?.error?.("Failed to check for updates", error);
-      setUpdateFeedback(t({ ru: "Не удалось проверить обновления", en: "Failed to check for updates" }));
+      console.error("Failed to install update.", error);
+      api.log?.error?.("Failed to install update", error);
+      setUpdateErrorMessage(t({ ru: "Не удалось установить обновление.", en: "Failed to install update." }));
     } finally {
-      setIsCheckingUpdates(false);
+      setIsInstallingUpdate(false);
     }
   };
+
+  const shouldShowUpdateButton = canInstallUpdates && (
+    updateState?.status === "available" ||
+    updateState?.status === "downloading" ||
+    updateState?.status === "downloaded"
+  );
+
+  const updateButtonLabel =
+    updateState?.status === "downloaded"
+      ? t({ ru: "Установить", en: "Install" })
+      : updateState?.status === "downloading"
+        ? t({
+            ru: `Загрузка${typeof updateState.progress === "number" ? ` ${updateState.progress}%` : ""}`,
+            en: `Downloading${typeof updateState.progress === "number" ? ` ${updateState.progress}%` : ""}`,
+          })
+        : t({ ru: "Обновление", en: "Update" });
 
   const primaryNavigation: NavItem[] = [
     { name: t("nav.overview"), path: "/", icon: TrendingUp },
@@ -206,28 +229,16 @@ export function Root() {
                   {t("switch.langEn")}
                 </button>
               </div>
-              {canOpenLogsDirectory ? (
+              {shouldShowUpdateButton ? (
                 <button
                   type="button"
-                  onClick={handleOpenLogsDirectory}
-                  disabled={isOpeningLogs}
-                  title={t({ ru: "Открыть папку логов", en: "Open logs folder" })}
+                  onClick={handleInstallUpdate}
+                  disabled={isInstallingUpdate || updateState?.status === "downloading"}
+                  title={t({ ru: "Установить обновление", en: "Install update" })}
                   className="inline-flex items-center gap-2 rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 disabled:cursor-wait disabled:opacity-60 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
                 >
-                  <FolderOpen className="h-4 w-4" />
-                  <span>{isOpeningLogs ? t({ ru: "Открытие...", en: "Opening..." }) : t({ ru: "Логи", en: "Logs" })}</span>
-                </button>
-              ) : null}
-              {canCheckForUpdates ? (
-                <button
-                  type="button"
-                  onClick={handleCheckForUpdates}
-                  disabled={isCheckingUpdates}
-                  title={t({ ru: "Проверить обновления", en: "Check for updates" })}
-                  className="inline-flex items-center gap-2 rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 disabled:cursor-wait disabled:opacity-60 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
-                >
-                  <RefreshCw className={`h-4 w-4 ${isCheckingUpdates ? "animate-spin" : ""}`} />
-                  <span>{isCheckingUpdates ? t({ ru: "Проверка...", en: "Checking..." }) : t({ ru: "Обновление", en: "Update" })}</span>
+                  <RefreshCw className={`h-4 w-4 ${updateState?.status === "downloading" || isInstallingUpdate ? "animate-spin" : ""}`} />
+                  <span>{isInstallingUpdate ? t({ ru: "Установка...", en: "Installing..." }) : updateButtonLabel}</span>
                 </button>
               ) : null}
             </div>
@@ -320,28 +331,16 @@ export function Root() {
                 <option value="ru">{t("switch.langRu")}</option>
                 <option value="en">{t("switch.langEn")}</option>
               </select>
-              {canOpenLogsDirectory ? (
+              {shouldShowUpdateButton ? (
                 <button
                   type="button"
-                  onClick={handleOpenLogsDirectory}
-                  disabled={isOpeningLogs}
-                  title={t({ ru: "Открыть папку логов", en: "Open logs folder" })}
+                  onClick={handleInstallUpdate}
+                  disabled={isInstallingUpdate || updateState?.status === "downloading"}
+                  title={t({ ru: "Установить обновление", en: "Install update" })}
                   className="inline-flex items-center gap-2 rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-700 disabled:cursor-wait disabled:opacity-60 dark:border-slate-700 dark:text-slate-200"
                 >
-                  <FolderOpen className="h-4 w-4" />
-                  <span>{isOpeningLogs ? t({ ru: "Открытие...", en: "Opening..." }) : t({ ru: "Логи", en: "Logs" })}</span>
-                </button>
-              ) : null}
-              {canCheckForUpdates ? (
-                <button
-                  type="button"
-                  onClick={handleCheckForUpdates}
-                  disabled={isCheckingUpdates}
-                  title={t({ ru: "Проверить обновления", en: "Check for updates" })}
-                  className="inline-flex items-center gap-2 rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-700 disabled:cursor-wait disabled:opacity-60 dark:border-slate-700 dark:text-slate-200"
-                >
-                  <RefreshCw className={`h-4 w-4 ${isCheckingUpdates ? "animate-spin" : ""}`} />
-                  <span>{isCheckingUpdates ? t({ ru: "Проверка...", en: "Checking..." }) : t({ ru: "Обновление", en: "Update" })}</span>
+                  <RefreshCw className={`h-4 w-4 ${updateState?.status === "downloading" || isInstallingUpdate ? "animate-spin" : ""}`} />
+                  <span>{isInstallingUpdate ? t({ ru: "Установка...", en: "Installing..." }) : updateButtonLabel}</span>
                 </button>
               ) : null}
             </div>
@@ -395,13 +394,18 @@ export function Root() {
       </header>
 
       <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
-        {updateFeedback ? (
-          <div className="mb-4 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-600 shadow-sm dark:border-slate-800 dark:bg-slate-900/80 dark:text-slate-300">
-            {updateFeedback}
-          </div>
-        ) : null}
         <Outlet />
       </main>
+      <AppErrorDialog
+        message={updateErrorMessage}
+        onClose={() => setUpdateErrorMessage(null)}
+        title={t({ ru: "Обновление недоступно", en: "Update Unavailable" })}
+        description={t({
+          ru: "Приложение не смогло подготовить обновление для установки.",
+          en: "The application could not prepare the update for installation.",
+        })}
+        closeLabel={t({ ru: "Закрыть", en: "Close" })}
+      />
     </div>
   );
 }

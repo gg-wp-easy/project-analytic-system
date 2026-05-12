@@ -330,7 +330,7 @@ async function resolveMoexIndex(): Promise<TBankIndicative> {
     return byName;
   }
 
-  throw new Error("Failed to find the MOEX index (IMOEX) in T-Bank indicatives.");
+  throw new Error("Failed to find the MOEX index (IMOEX) in market data service indicatives.");
 }
 
 export async function loadCapmAnalysis(stockFigi: string): Promise<CapmAnalysisResult> {

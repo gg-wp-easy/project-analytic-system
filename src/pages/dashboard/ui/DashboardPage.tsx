@@ -37,8 +37,8 @@ export function Dashboard() {
     {
       title: t("Анализ облигаций", "Bond Analysis"),
       description: t(
-        "Загрузка облигаций из T-Bank API на клиенте, локальный расчёт метрик и портфеля, полный список с пагинацией.",
-        "Client-side bond loading from the T-Bank API, local portfolio calculations, and the full universe with pagination.",
+        "Загрузка облигаций, локальный расчёт метрик и портфеля, полный список с пагинацией.",
+        "Bond loading, local portfolio calculations, and the full universe with pagination.",
       ),
       path: "/bonds",
       icon: Landmark,

@@ -105,8 +105,6 @@ export type BondAnalysisPreferences = {
 
 export type BondsAnalysisPersistedState = {
   sourceRows?: BondSourceRow[];
-  sourceLabel?: string | null;
-  sourceSummary?: BondSourceSummary | null;
   analysisPreferences?: BondAnalysisPreferences;
   positions?: BondPortfolioPosition[];
   allBonds?: BondAnalysisBond[];

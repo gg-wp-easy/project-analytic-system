@@ -630,7 +630,7 @@ function buildHeroAside(
         </div>
         <div className="text-2xl font-semibold text-white">{isEn ? "Loading..." : "Загрузка..."}</div>
         <div className="text-sm text-white/72">
-          {isEn ? "Fetching fresh market candles from T-Bank API" : "Загружаем свежие свечи из T-Bank API"}
+          {isEn ? "Fetching fresh market candles" : "Загружаем свежие рыночные свечи"}
         </div>
       </div>
     );

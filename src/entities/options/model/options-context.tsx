@@ -391,7 +391,7 @@ export function OptionsProvider({ children }: { children: ReactNode }) {
         );
 
         if (!underlyingLastPrice) {
-          throw new Error("T-Bank did not return a valid underlying last price for this option chain.");
+          throw new Error("market data service did not return a valid underlying last price for this option chain.");
         }
 
         setCache((prev) => {

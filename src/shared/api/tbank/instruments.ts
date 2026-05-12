@@ -29,7 +29,6 @@ const CANDLES_ENDPOINT =
 const MAX_ASSETS_PER_REQUEST = 30;
 
 const TOKEN_STORAGE_KEY = "tbank_api_token";
-const TOKEN_FROM_CODE = "t.V4QVXUA5khrTJcMQNsCCDC3IfD94uJA5Yj_FpR8UfaMs3KxSY0tlIlSDe3ix6G7CcKYMbfQTNlLSWR2l1aHQjQ";
 const LEGACY_OPTIONS_CACHE_STORAGE_KEY = "tbank_options_cache_v1";
 const OPTIONS_CACHE_STORAGE_KEY = "tbank_options_cache_v2";
 const OPTIONS_CACHE_TTL_MS = 5 * 60 * 1000;
@@ -556,7 +555,7 @@ function getErrorStatusCode(error: unknown): number | null {
     return null;
   }
 
-  const match = error.message.match(/T-Bank API (\d{3})\b/);
+  const match = error.message.match(/market data service (\d{3})\b/);
   if (!match) {
     return null;
   }
@@ -804,9 +803,9 @@ async function requestJson<T>(
     const message =
       error instanceof Error
         ? error.name === "AbortError"
-          ? `T-Bank API request timed out for ${endpoint}.`
-          : `T-Bank API request failed for ${endpoint}. ${error.message}`
-        : `T-Bank API request failed for ${endpoint}. ${String(error)}`;
+          ? `market data service request timed out for ${endpoint}.`
+          : `market data service request failed for ${endpoint}. ${error.message}`
+        : `market data service request failed for ${endpoint}. ${String(error)}`;
     throw new Error(message);
   }
 
@@ -821,12 +820,12 @@ async function requestJson<T>(
     } catch {
       details = "";
     }
-    throw new Error(`T-Bank API ${response.status} ${response.statusText}${details ? `: ${details}` : ""}`);
+    throw new Error(`market data service ${response.status} ${response.statusText}${details ? `: ${details}` : ""}`);
   }
 
   const text = await response.text();
   if (!text.trim()) {
-    throw new Error(`T-Bank API returned an empty response for ${endpoint}.`);
+    throw new Error(`market data service returned an empty response for ${endpoint}.`);
   }
 
   try {
@@ -835,7 +834,7 @@ async function requestJson<T>(
     const message =
       error instanceof Error ? error.message : "Unknown JSON parse error";
     throw new Error(
-      `T-Bank API returned malformed JSON for ${endpoint}. ${message}`,
+      `market data service returned malformed JSON for ${endpoint}. ${message}`,
     );
   }
 }
@@ -1003,10 +1002,10 @@ function saveOptionsCacheToStorage(items: TBankOption[]): void {
 
 export function createTBankInstrumentsApi(token?: string) {
   function ensureToken(): string {
-    const resolved = token?.trim() || resolveRuntimeToken() || TOKEN_FROM_CODE.trim();
+    const resolved = token?.trim() || resolveRuntimeToken();
     if (!resolved) {
       throw new Error(
-        `T-Bank token is not set. Pass token to createTBankInstrumentsApi(token), set TOKEN_FROM_CODE, or set localStorage['${TOKEN_STORAGE_KEY}']`,
+        "Market data access token is not configured.",
       );
     }
     return resolved;
@@ -1210,7 +1209,7 @@ export function createTBankInstrumentsApi(token?: string) {
 
         throw new Error(
           discoveryErrors.slice(0, OPTIONS_DISCOVERY_ERROR_PREVIEW_LIMIT).join(" | ") ||
-            "T-Bank did not return any option discovery targets.",
+            "market data service did not return any option discovery targets.",
         );
       })();
 
@@ -1272,7 +1271,7 @@ export function createTBankInstrumentsApi(token?: string) {
       }
 
       if (items.length === 0 && staleCache?.items.length) {
-        throw new Error("T-Bank chunked refresh returned an empty option list.");
+        throw new Error("market data service chunked refresh returned an empty option list.");
       }
 
       optionsCacheMemory = {
@@ -1334,7 +1333,7 @@ export function createTBankInstrumentsApi(token?: string) {
     const authToken = ensureToken();
     const normalizedQuery = params.query.trim();
     if (!normalizedQuery) {
-      throw new Error("Base instrument query is required for T-Bank options.");
+      throw new Error("Base instrument query is required for market data service options.");
     }
 
     let underlying: TBankInstrumentReference | null = null;
@@ -1395,11 +1394,11 @@ export function createTBankInstrumentsApi(token?: string) {
 
     if (!underlying && !normalizedQuery.includes("_")) {
       throw new Error(
-        `T-Bank did not resolve a base instrument for "${normalizedQuery}". Try UID, FIGI, or ticker_classCode like SBER_TQBR.`,
+        `market data service did not resolve a base instrument for "${normalizedQuery}". Try UID, FIGI, or ticker_classCode like SBER_TQBR.`,
       );
     }
 
-    throw lastError ?? new Error("Failed to load options from T-Bank.");
+    throw lastError ?? new Error("Failed to load options from market data service.");
   }
 
   async function fetchOptionBy(params: {
@@ -1416,12 +1415,12 @@ export function createTBankInstrumentsApi(token?: string) {
 
     const rawInstrument = payload.instrument ?? payload.option;
     if (!rawInstrument || typeof rawInstrument !== "object") {
-      throw new Error("T-Bank API did not return option details.");
+      throw new Error("market data service did not return option details.");
     }
 
     const normalized = normalizeOptionItem(rawInstrument as AnyRecord, new Date().toISOString());
     if (!normalized) {
-      throw new Error("T-Bank API returned an invalid option payload.");
+      throw new Error("market data service returned an invalid option payload.");
     }
 
     return normalized;

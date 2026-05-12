@@ -58,8 +58,8 @@ export function OptionsPage() {
         error instanceof Error
           ? error.message
           : isEn
-            ? "Failed to load T-Bank options."
-            : "Не удалось загрузить список опционов T-Bank.",
+            ? "Failed to load the option list."
+            : "Не удалось загрузить список опционов.",
       );
     }
   };
@@ -68,10 +68,10 @@ export function OptionsPage() {
     <div className="space-y-6">
       <PageHero
         icon={Activity}
-        title={t({ ru: "Опционы T-Bank", en: "T-Bank Options" })}
+        title={t({ ru: "Опционы", en: "Options" })}
         description={t({
-          ru: "Страница читает список опционов из localStorage, а загрузка и обновление из T-Bank API происходят только по кнопке.",
-          en: "This page reads the option list from localStorage, and loading or updating from T-Bank API happens only on button click.",
+          ru: "Страница использует сохранённый список опционов, а загрузка и обновление происходят только по кнопке.",
+          en: "This page uses the saved option list, and loading or updating happens only on button click.",
         })}
         accent="amber"
         aside={
@@ -80,7 +80,7 @@ export function OptionsPage() {
               {t({ ru: "Источник данных", en: "Data source" })}
             </div>
             <div className="text-lg font-semibold">
-              {hasData ? t({ ru: "localStorage + T-Bank", en: "localStorage + T-Bank" }) : "localStorage"}
+              {hasData ? t({ ru: "Сохранённые данные", en: "Saved data" }) : t({ ru: "Нет данных", en: "No data" })}
             </div>
             <div className="text-sm text-white/80">
               {t({ ru: "Обновлено", en: "Updated" })}: {formatTimestamp(cache.lastUpdated, locale)}
@@ -186,7 +186,7 @@ export function OptionsPage() {
           <div className="flex flex-col items-center justify-center gap-3 text-center" role="status" aria-live="polite">
             <RefreshCw className="h-8 w-8 animate-spin text-slate-700 dark:text-slate-200" />
             <div className="text-base font-semibold text-slate-900 dark:text-slate-100">
-              {t({ ru: "Загружаем список опционов из T-Bank API...", en: "Loading the option list from T-Bank API..." })}
+              {t({ ru: "Загружаем список опционов...", en: "Loading the option list..." })}
             </div>
           </div>
         </SectionCard>
@@ -202,8 +202,8 @@ export function OptionsPage() {
         {!hasData ? (
           <div className="ui-surface-muted text-center text-sm leading-7 text-slate-600 dark:text-slate-300">
             {t({
-              ru: "Список опционов пока пуст. Нажмите кнопку «Загрузить данные», чтобы получить его из T-Bank и сохранить в localStorage.",
-              en: "The option list is empty. Click “Load data” to fetch it from T-Bank and save it to localStorage.",
+              ru: "Список опционов пока пуст. Нажмите кнопку «Загрузить данные», чтобы получить и сохранить данные.",
+              en: "The option list is empty. Click “Load data” to fetch and save the data.",
             })}
           </div>
         ) : filteredSummaries.length === 0 ? (
@@ -220,7 +220,7 @@ export function OptionsPage() {
                   <th>{t({ ru: "Всего", en: "Total" })}</th>
                   <th>{t({ ru: "Коллы", en: "Calls" })}</th>
                   <th>{t({ ru: "Путы", en: "Puts" })}</th>
-                  <th>{t({ ru: "API-доступно", en: "API tradable" })}</th>
+                  <th>{t({ ru: "Доступно", en: "Tradable" })}</th>
                 </tr>
               </thead>
               <tbody>
@@ -265,8 +265,8 @@ export function OptionsPage() {
         onClose={() => setErrorDialogMessage(null)}
         title={t({ ru: "Ошибка загрузки опционов", en: "Option Loading Error" })}
         description={t({
-          ru: "Приложение не смогло получить или обновить список опционов из T-Bank API.",
-          en: "The application could not fetch or update the option list from the T-Bank API.",
+          ru: "Приложение не смогло получить или обновить список опционов.",
+          en: "The application could not fetch or update the option list.",
         })}
         closeLabel={t({ ru: "Закрыть", en: "Close" })}
       />

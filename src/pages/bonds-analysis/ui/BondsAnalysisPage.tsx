@@ -2,15 +2,13 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { FileSpreadsheet, FileText, ImageDown, Landmark, RefreshCw, Settings, Trash2 } from "lucide-react";
 import { useAppSettings } from "../../../app/context/AppSettingsContext";
 import { analyzeBondSource } from "../../../features/bonds-analysis/model/clientAnalysis";
-import { loadBondSourceFromClient } from "../../../features/bonds-analysis/model/tbankClient";
+import { loadBondSourceFromClient } from "../../../features/bonds-analysis/model/marketDataClient";
 import type {
   BondAnalysisBond,
   BondAnalysisPreferences,
   BondAnalysisSummary,
   BondPortfolioPosition,
-  BondPreviewRow,
   BondsAnalysisPersistedState,
-  BondSourceSummary,
   BondSourceRow,
 } from "../../../features/bonds-analysis/model/types";
 import type { ExportColumn, ExportMetric } from "../../../shared/lib/export/download";
@@ -49,23 +47,6 @@ function normalizeRiskPreference(value: unknown): BondAnalysisPreferences["targe
   return value === "0" || value === "1" || value === "2" || value === "3" ? value : DEFAULT_ANALYSIS_PREFERENCES.targetRiskLevel;
 }
 
-function createPreviewRows(rows: BondSourceRow[]): BondPreviewRow[] {
-  return rows.map((row, index) => ({
-    id: `${row.ticker}-${index}`,
-    ticker: row.ticker,
-    name: row.name || row.ticker,
-    sector: row.sector,
-    currency: row.currency.toUpperCase(),
-    maturityDate: row.maturity_date,
-    nominal: row.nominal,
-    riskLevel: row.risk_level,
-    couponRate: row.coupon_rate,
-    floatingCoupon: Boolean(row.floating_coupon_flag),
-    isValid: true,
-    validationIssues: [],
-  }));
-}
-
 function getVisiblePages(currentPage: number, totalPages: number): Array<number | null> {
   if (totalPages <= 7) {
     return Array.from({ length: totalPages }, (_, index) => index + 1);
@@ -88,8 +69,6 @@ export function BondsAnalysisPage() {
   const { t } = useAppSettings();
 
   const [sourceRows, setSourceRows] = useState<BondSourceRow[]>([]);
-  const [sourceLabel, setSourceLabel] = useState<string | null>(null);
-  const [sourceSummary, setSourceSummary] = useState<BondSourceSummary | null>(null);
   const [analysisPreferences, setAnalysisPreferences] = useState<BondAnalysisPreferences>(DEFAULT_ANALYSIS_PREFERENCES);
   const [positions, setPositions] = useState<BondPortfolioPosition[]>([]);
   const [allBonds, setAllBonds] = useState<BondAnalysisBond[]>([]);
@@ -111,8 +90,6 @@ export function BondsAnalysisPage() {
 
       const parsed = JSON.parse(raw) as BondsAnalysisPersistedState;
       if (Array.isArray(parsed.sourceRows)) setSourceRows(parsed.sourceRows);
-      if (typeof parsed.sourceLabel === "string" || parsed.sourceLabel === null) setSourceLabel(parsed.sourceLabel ?? null);
-      if (parsed.sourceSummary && typeof parsed.sourceSummary === "object") setSourceSummary(parsed.sourceSummary);
       if (parsed.analysisPreferences && typeof parsed.analysisPreferences === "object") {
         setAnalysisPreferences({
           targetYield: String(parsed.analysisPreferences.targetYield ?? DEFAULT_ANALYSIS_PREFERENCES.targetYield),
@@ -133,8 +110,6 @@ export function BondsAnalysisPage() {
   useEffect(() => {
     const payload: BondsAnalysisPersistedState = {
       sourceRows,
-      sourceLabel,
-      sourceSummary,
       analysisPreferences,
       positions,
       allBonds,
@@ -142,35 +117,12 @@ export function BondsAnalysisPage() {
       error,
     };
     window.localStorage.setItem(BONDS_STATE_KEY, JSON.stringify(payload));
-  }, [allBonds, analysisPreferences, error, positions, sourceLabel, sourceRows, sourceSummary, summary]);
+  }, [allBonds, analysisPreferences, error, positions, sourceRows, summary]);
 
   const isBusy = isLoadingSource || isRecalculating;
   const canRunAnalysis =
     isPositiveNumberString(analysisPreferences.targetYield) &&
     isPositiveNumberString(analysisPreferences.targetDuration);
-
-  const previewRows = useMemo(() => createPreviewRows(sourceRows), [sourceRows]);
-  const previewTopRows = useMemo(() => previewRows.slice(0, 8), [previewRows]);
-  const previewStats = useMemo(
-    () => ({
-      total: previewRows.length,
-      withCoupon: previewRows.filter((row) => (row.couponRate ?? 0) > 0).length,
-      currencies: new Set(previewRows.map((row) => row.currency)).size,
-      sectors: new Set(previewRows.map((row) => row.sector)).size,
-    }),
-    [previewRows],
-  );
-
-  const sourceStatusMessage = useMemo(() => {
-    if (!sourceSummary) {
-      return null;
-    }
-
-    return t(
-      `T-Bank API вернуло ${sourceSummary.rawBondsCount} инструментов. После фильтра доступно ${sourceSummary.eligibleBondsCount}. Загружено ${sourceSummary.loadedBondsCount}. ${summary ? `В анализ вошло ${summary.analyzedBondsCount}.` : ""}`,
-      `The T-Bank API returned ${sourceSummary.rawBondsCount} instruments. ${sourceSummary.eligibleBondsCount} remained after filtering. ${sourceSummary.loadedBondsCount} were loaded. ${summary ? `${summary.analyzedBondsCount} made it into the analysis.` : ""}`,
-    );
-  }, [sourceSummary, summary, t]);
 
   const totalPages = Math.max(1, Math.ceil(allBonds.length / PAGE_SIZE));
   const pageStartIndex = (currentPage - 1) * PAGE_SIZE;
@@ -251,8 +203,6 @@ export function BondsAnalysisPage() {
 
   const handleClear = () => {
     setSourceRows([]);
-    setSourceLabel(null);
-    setSourceSummary(null);
     clearResults();
   };
 
@@ -274,8 +224,6 @@ export function BondsAnalysisPage() {
     try {
       const loaded = await loadBondSourceFromClient();
       setSourceRows(loaded.data);
-      setSourceLabel(t("T-Bank API на клиенте", "T-Bank API on client"));
-      setSourceSummary(loaded.summary);
       applyAnalysis(loaded.data, analysisPreferences);
     } catch (err) {
       clearResults();
@@ -361,20 +309,10 @@ export function BondsAnalysisPage() {
             icon={Landmark}
             title={t("Анализ облигаций", "Bond Analysis")}
             description={t(
-              "Задайте целевую доходность, дюрацию и частоту выплат, затем загрузите полный список облигаций из T-Bank API и пересчитайте портфель на клиенте.",
-              "Set the target yield, duration, and payment frequency, then load the full bond universe from the T-Bank API and recalculate the portfolio on the client.",
+              "Загрузите список облигаций, задайте параметры и пересоберите портфель под нужную доходность, дюрацию и риск.",
+              "Load the bond list, set the parameters, and rebuild the portfolio for the target yield, duration, and risk.",
             )}
             accent="amber"
-            aside={(
-              <div className="space-y-2">
-                <div className="text-xs uppercase tracking-[0.18em] text-white/70">{t("Источник", "Source")}</div>
-                <div className="text-sm font-medium text-white">{sourceLabel || t("Не загружено", "Not loaded")}</div>
-                <div className="text-sm text-white/80">{t("Загружено", "Loaded")}: {sourceSummary?.loadedBondsCount ?? previewStats.total}</div>
-                {summary ? (
-                  <div className="text-sm text-white/80">{t("В анализе", "In analysis")}: {summary.analyzedBondsCount}</div>
-                ) : null}
-              </div>
-            )}
           />
         )}
         sidebar={(
@@ -462,7 +400,7 @@ export function BondsAnalysisPage() {
                 className="ui-primary-button w-full bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-700 hover:to-orange-700"
               >
                 <RefreshCw className={`h-4 w-4 ${isLoadingSource ? "animate-spin" : ""}`} />
-                {isLoadingSource ? t("Загружаем...", "Loading...") : t("Загрузить облигации из API", "Load bonds from API")}
+                {isLoadingSource ? t("Загружаем...", "Loading...") : t("Загрузить облигации", "Load bonds")}
               </button>
 
               <button
@@ -482,16 +420,10 @@ export function BondsAnalysisPage() {
 
               <div className="ui-surface-muted text-sm leading-6 text-slate-600 dark:text-slate-300">
                 {t(
-                  "После изменения параметров используйте «Пересчитать по параметрам», чтобы пересобрать портфель без повторной загрузки API.",
-                  "After changing the parameters, use \"Recalculate with parameters\" to rebuild the portfolio without calling the API again.",
+                  "После изменения параметров используйте «Пересчитать по параметрам», чтобы пересобрать портфель без повторной загрузки данных.",
+                  "After changing the parameters, use \"Recalculate with parameters\" to rebuild the portfolio without loading data again.",
                 )}
               </div>
-
-              {sourceStatusMessage ? (
-                <div className="ui-surface-muted text-sm leading-6 text-slate-600 dark:text-slate-300">
-                  {sourceStatusMessage}
-                </div>
-              ) : null}
             </div>
           </AnalysisSidebarCard>
         )}
@@ -500,128 +432,36 @@ export function BondsAnalysisPage() {
           <AnalysisRunningIndicator
             title={t("Выполняем анализ облигаций", "Running bond analysis")}
             subtitle={t(
-              "Загружаем список облигаций из T-Bank API и применяем пользовательские параметры к клиентскому портфелю.",
-              "Loading the bond universe from the T-Bank API and applying user-defined parameters to the client-side portfolio.",
+              "Загружаем список облигаций и применяем пользовательские параметры к клиентскому портфелю.",
+              "Loading the bond universe and applying user-defined parameters to the client-side portfolio.",
             )}
             accentClassName="text-amber-600"
           />
         ) : null}
 
-        {!previewRows.length && !summary ? (
+        {!allBonds.length && !summary ? (
           <SectionCard
-            title={t("Данные не загружены", "No data loaded")}
+            title={t("Список облигаций не загружен", "Bond list is not loaded")}
             description={t(
-              "Сначала задайте параметры анализа, затем загрузите облигации из T-Bank API.",
-              "Set the analysis parameters first, then load the bonds from the T-Bank API.",
+              "Сначала задайте параметры анализа, затем загрузите облигации.",
+              "Set the analysis parameters first, then load the bonds.",
             )}
           >
             <div className="ui-surface-muted text-sm text-slate-600 dark:text-slate-300">
               {t(
-                "Страница пытается загрузить весь доступный набор облигаций, а затем строит клиентский портфель под вашу целевую доходность, дюрацию и частоту выплат.",
-                "The page tries to load the full available bond universe and then builds a client-side portfolio for your target yield, duration, and payment frequency.",
+                "После загрузки здесь появится таблица облигаций с пагинацией, а ниже — портфель, построенный по текущим параметрам.",
+                "After loading, this area will show a paginated bond table followed by the portfolio built from the current parameters.",
               )}
             </div>
           </SectionCard>
         ) : null}
 
-        {previewRows.length ? (
-          <SectionCard
-            title={t("Загруженный набор", "Loaded universe")}
-            description={t("Первые строки текущего списка облигаций.", "The first rows of the current bond universe.")}
-          >
-            <div className="space-y-5">
-              {sourceStatusMessage ? (
-                <div className="ui-surface-muted text-sm leading-6 text-slate-600 dark:text-slate-300">
-                  {sourceStatusMessage}
-                </div>
-              ) : null}
-
-              <MetricGrid>
-                <MetricCard label={t("Облигаций", "Bonds")} value={previewStats.total} />
-                <MetricCard label={t("С купоном", "With coupon")} value={previewStats.withCoupon} />
-                <MetricCard label={t("Валют", "Currencies")} value={previewStats.currencies} />
-                <MetricCard label={t("Секторов", "Sectors")} value={previewStats.sectors} />
-              </MetricGrid>
-
-              <div className="ui-table-shell overflow-x-auto">
-                <table className="ui-data-table">
-                  <thead>
-                    <tr>
-                      <th>{t("Тикер", "Ticker")}</th>
-                      <th>{t("Облигация", "Bond")}</th>
-                      <th>{t("Валюта", "Currency")}</th>
-                      <th>{t("Погашение", "Maturity")}</th>
-                      <th>{t("Купон, %", "Coupon, %")}</th>
-                      <th>{t("Риск", "Risk")}</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {previewTopRows.map((row) => (
-                      <tr key={row.id}>
-                        <td className="font-medium text-slate-900 dark:text-slate-100">{row.ticker}</td>
-                        <td className="ui-cell-name">{row.name}</td>
-                        <td>{row.currency}</td>
-                        <td>{row.maturityDate}</td>
-                        <td>{row.couponRate?.toFixed(2) ?? "-"}</td>
-                        <td>{row.riskLevel ?? "-"}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          </SectionCard>
-        ) : null}
-
-        {summary ? (
-          <MetricGrid>
-            <MetricCard label={t("Проанализировано облигаций", "Analyzed bonds")} value={summary.analyzedBondsCount} />
-            <MetricCard label={t("Выбрано в портфель", "Selected bonds")} value={summary.selectedBondsCount} />
-            <MetricCard label={t("Доходность портфеля", "Portfolio yield")} value={formatPercentOrNumber(summary.portfolioYield)} />
-            <MetricCard label={t("Дюрация портфеля", "Portfolio duration")} value={summary.portfolioDuration.toFixed(2)} helper={t("лет", "years")} />
-          </MetricGrid>
-        ) : null}
-
-        {positions.length ? (
-          <SectionCard
-            title={t("Оптимальный портфель облигаций", "Optimal bond portfolio")}
-            description={t(
-              `Портфель собран под доходность ${analysisPreferences.targetYield}%, дюрацию ${analysisPreferences.targetDuration} и риск до ${analysisPreferences.targetRiskLevel}.`,
-              `The portfolio is built for a ${analysisPreferences.targetYield}% target yield, ${analysisPreferences.targetDuration} duration, and risk up to ${analysisPreferences.targetRiskLevel}.`,
-            )}
-            action={(
-              <div className="flex items-center gap-2">
-                <button onClick={exportPortfolioToXlsx} className="ui-secondary-button px-3 py-2 text-xs">
-                  <FileSpreadsheet className="h-4 w-4" />
-                  XLSX
-                </button>
-                <button onClick={exportPortfolioToPdf} className="ui-secondary-button px-3 py-2 text-xs">
-                  <FileText className="h-4 w-4" />
-                  PDF
-                </button>
-                <button onClick={savePortfolioChartPng} className="ui-secondary-button px-3 py-2 text-xs">
-                  <ImageDown className="h-4 w-4" />
-                  PNG
-                </button>
-              </div>
-            )}
-          >
-            <PortfolioHoldingsPanel
-              rows={positions}
-              palette={palette}
-              chartRef={portfolioChartRef}
-              companyLabel={t("Облигация", "Bond")}
-              weightLabel={t("Вес, %", "Weight, %")}
-            />
-          </SectionCard>
-        ) : null}
-
         {allBonds.length ? (
           <SectionCard
-            title={t("Все облигации", "All bonds")}
+            title={t("Список облигаций", "Bond list")}
             description={t(
-              `Показаны все ${allBonds.length} облигаций из клиентского анализа.`,
-              `Showing all ${allBonds.length} bonds from the client-side analysis.`,
+              `Показаны все ${allBonds.length} облигаций, доступные после текущего фильтра анализа.`,
+              `Showing all ${allBonds.length} bonds available after the current analysis filter.`,
             )}
             action={(
               <button
@@ -635,12 +475,6 @@ export function BondsAnalysisPage() {
             )}
           >
             <div className="space-y-4">
-              {sourceStatusMessage ? (
-                <div className="ui-surface-muted text-sm leading-6 text-slate-600 dark:text-slate-300">
-                  {sourceStatusMessage}
-                </div>
-              ) : null}
-
               <div className="flex flex-col gap-2 text-sm text-slate-500 dark:text-slate-400 sm:flex-row sm:items-center sm:justify-between">
                 <div>
                   {t("Показано", "Showing")} {allBonds.length ? pageStartIndex + 1 : 0}-{pageEndIndex} {t("из", "of")} {allBonds.length}
@@ -726,6 +560,50 @@ export function BondsAnalysisPage() {
             </div>
           </SectionCard>
         ) : null}
+
+        {summary ? (
+          <MetricGrid>
+            <MetricCard label={t("Проанализировано облигаций", "Analyzed bonds")} value={summary.analyzedBondsCount} />
+            <MetricCard label={t("Выбрано в портфель", "Selected bonds")} value={summary.selectedBondsCount} />
+            <MetricCard label={t("Доходность портфеля", "Portfolio yield")} value={formatPercentOrNumber(summary.portfolioYield)} />
+            <MetricCard label={t("Дюрация портфеля", "Portfolio duration")} value={summary.portfolioDuration.toFixed(2)} helper={t("лет", "years")} />
+          </MetricGrid>
+        ) : null}
+
+        {positions.length ? (
+          <SectionCard
+            title={t("Оптимальный портфель облигаций", "Optimal bond portfolio")}
+            description={t(
+              `Портфель собран под доходность ${analysisPreferences.targetYield}%, дюрацию ${analysisPreferences.targetDuration} и риск до ${analysisPreferences.targetRiskLevel}.`,
+              `The portfolio is built for a ${analysisPreferences.targetYield}% target yield, ${analysisPreferences.targetDuration} duration, and risk up to ${analysisPreferences.targetRiskLevel}.`,
+            )}
+            action={(
+              <div className="flex items-center gap-2">
+                <button onClick={exportPortfolioToXlsx} className="ui-secondary-button px-3 py-2 text-xs">
+                  <FileSpreadsheet className="h-4 w-4" />
+                  XLSX
+                </button>
+                <button onClick={exportPortfolioToPdf} className="ui-secondary-button px-3 py-2 text-xs">
+                  <FileText className="h-4 w-4" />
+                  PDF
+                </button>
+                <button onClick={savePortfolioChartPng} className="ui-secondary-button px-3 py-2 text-xs">
+                  <ImageDown className="h-4 w-4" />
+                  PNG
+                </button>
+              </div>
+            )}
+          >
+            <PortfolioHoldingsPanel
+              rows={positions}
+              palette={palette}
+              chartRef={portfolioChartRef}
+              companyLabel={t("Облигация", "Bond")}
+              weightLabel={t("Вес, %", "Weight, %")}
+            />
+          </SectionCard>
+        ) : null}
+
       </AnalysisPageFrame>
 
       <AppErrorDialog

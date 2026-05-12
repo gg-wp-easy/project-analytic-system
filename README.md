@@ -44,7 +44,7 @@ To replace a local server checkout from scratch:
 ### GitHub Releases and Auto-Update
 
 - Push a tag like `v1.0.1`, or run `Build and Release` manually with `publish_release=true` and `release_tag=v1.0.1`.
-- The workflow uploads a zip as a GitHub Actions artifact and publishes updater files to the GitHub Release: installer `.exe`, `.blockmap`, and `latest.yml`.
+- The workflow publishes Windows and Linux build files directly to the GitHub Release without using GitHub Actions artifacts.
 - Packaged installed Windows builds use `electron-updater` to check GitHub Releases from `gg-wp-easy/project-site-analytic-system`.
 - If `server-analytic-system` is private, add repository secret `SERVER_ANALYTIC_REPOSITORY_TOKEN` with read access to that backend repository.
 

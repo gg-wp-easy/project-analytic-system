@@ -5,7 +5,6 @@ const BONDS_ENDPOINT =
 const BOND_COUPONS_ENDPOINT =
   "https://invest-public-api.tbank.ru/rest/tinkoff.public.invest.api.contract.v1.InstrumentsService/GetBondCoupons";
 const TOKEN_STORAGE_KEY = "tbank_api_token";
-const TOKEN_FROM_CODE = "t.V4QVXUA5khrTJcMQNsCCDC3IfD94uJA5Yj_FpR8UfaMs3KxSY0tlIlSDe3ix6G7CcKYMbfQTNlLSWR2l1aHQjQ";
 const DEFAULT_BONDS_LIMIT: number | null = null;
 const SUPPORTED_CURRENCIES = new Set(["rub", "cny", "usd", "eur"]);
 
@@ -189,8 +188,7 @@ async function requestJson<T>(endpoint: string, token: string, body: Record<stri
   });
 
   if (!response.ok) {
-    const text = await response.text().catch(() => "");
-    throw new Error(`T-Bank API ${response.status}${text ? `: ${text}` : ""}`);
+    throw new Error(`Не удалось загрузить облигации. Код ответа: ${response.status}.`);
   }
 
   return (await response.json()) as T;
@@ -208,10 +206,10 @@ function resolveRuntimeToken(): string | undefined {
 }
 
 function ensureToken(token?: string): string {
-  const resolved = token?.trim() || TOKEN_FROM_CODE.trim() || resolveRuntimeToken();
+  const resolved = token?.trim() || resolveRuntimeToken();
   if (!resolved) {
     throw new Error(
-      `T-Bank token is not set. Pass token, set TOKEN_FROM_CODE, or set localStorage['${TOKEN_STORAGE_KEY}'].`,
+      "Market data access token is not configured.",
     );
   }
   return resolved;
@@ -333,7 +331,7 @@ async function buildSourceRow(token: string, rawBond: AnyRecord): Promise<BondSo
     perpetual_flag: pickBool(rawBond, ["perpetualFlag", "perpetual_flag"]),
     liquidity_flag: pickBool(rawBond, ["liquidityFlag", "liquidity_flag"]),
     issue_size: Math.trunc(toNumber(rawBond.issueSize ?? rawBond.issue_size, 0)),
-    source: "tbank",
+    source: "market",
   };
 }
 
@@ -348,7 +346,7 @@ export async function loadBondSourceFromClient(
 
   const instruments = Array.isArray(payload.instruments) ? payload.instruments : [];
   if (!instruments.length) {
-    throw new Error("T-Bank API returned an empty bond list.");
+    throw new Error("Список облигаций пуст.");
   }
 
   const filtered = instruments
@@ -413,13 +411,13 @@ export async function loadBondSourceFromClient(
     });
 
   if (!rows.length) {
-    throw new Error("T-Bank API did not return a usable bond universe.");
+    throw new Error("Не удалось подготовить список облигаций для анализа.");
   }
 
   return {
     data: rows,
     summary: {
-      provider: "tbank",
+      provider: "market",
       requestedLimit: limit ?? filtered.length,
       rawBondsCount: instruments.length,
       eligibleBondsCount: filtered.length,

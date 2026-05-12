@@ -8,9 +8,9 @@ const { autoUpdater } = require("electron-updater");
 
 const LOG_FILE_NAME = "app.log";
 const LOG_IPC_CHANNEL = "app:log";
-const OPEN_LOGS_DIRECTORY_CHANNEL = "app:open-logs-directory";
-const GET_LOGS_DIRECTORY_CHANNEL = "app:get-logs-directory";
 const CHECK_FOR_UPDATES_CHANNEL = "app:check-for-updates";
+const INSTALL_UPDATE_CHANNEL = "app:install-update";
+const UPDATE_STATUS_CHANNEL = "app:update-status";
 const LOG_LEVELS = new Set(["debug", "info", "warn", "error"]);
 const AUTO_UPDATE_INITIAL_DELAY_MS = 12_000;
 const AUTO_UPDATE_INTERVAL_MS = 4 * 60 * 60 * 1000;
@@ -62,7 +62,6 @@ let mainWindow = null;
 const managedServices = new Map();
 let autoUpdateHandlersAttached = false;
 let autoUpdateCheckScheduled = false;
-let autoUpdatePromptVisible = false;
 let autoUpdateCheckInFlight = null;
 let autoUpdateIntervalId = null;
 
@@ -145,23 +144,23 @@ function registerAppIpcHandlers() {
     log[level]("[renderer]", ...data);
   });
 
-  ipcMain.handle(GET_LOGS_DIRECTORY_CHANNEL, () => getAppLogsDirectory());
-
-  ipcMain.handle(OPEN_LOGS_DIRECTORY_CHANNEL, async () => {
-    const logsDir = getAppLogsDirectory();
-    log.info(`Opening logs directory: ${logsDir}`);
-
-    const errorMessage = await shell.openPath(logsDir);
-    if (errorMessage) {
-      log.warn(`Unable to open logs directory ${logsDir}: ${errorMessage}`);
-      throw new Error(errorMessage);
-    }
-
-    return logsDir;
-  });
-
   ipcMain.handle(CHECK_FOR_UPDATES_CHANNEL, async () => {
     return performAutoUpdateCheck({ manual: true });
+  });
+
+  ipcMain.handle(INSTALL_UPDATE_CHANNEL, async () => {
+    if (!shouldEnableAutoUpdate()) {
+      return {
+        status: "disabled",
+        message: "Auto-update is unavailable for this build.",
+      };
+    }
+
+    autoUpdater.quitAndInstall(false, true);
+    return {
+      status: "installing",
+      message: "Installing update.",
+    };
   });
 }
 
@@ -560,25 +559,55 @@ function attachAutoUpdateHandlers() {
 
   autoUpdater.on("update-available", (info) => {
     log.info(`Update available: ${info.version}`);
+    sendUpdateStatus({
+      status: "available",
+      version: info.version,
+      message: "Update is available.",
+    });
   });
 
   autoUpdater.on("update-not-available", () => {
     log.info("No application updates are currently available.");
+    sendUpdateStatus({
+      status: "not-available",
+      message: "No updates are available.",
+    });
   });
 
   autoUpdater.on("download-progress", (progress) => {
     log.info(`Update download progress: ${Math.round(progress.percent)}%`);
+    sendUpdateStatus({
+      status: "downloading",
+      progress: Math.round(progress.percent),
+      message: "Update download is in progress.",
+    });
   });
 
-  autoUpdater.on("update-downloaded", async (info) => {
+  autoUpdater.on("update-downloaded", (info) => {
     log.info(`Update downloaded: ${info.version}`);
-    await promptForUpdateInstall(info.version);
+    sendUpdateStatus({
+      status: "downloaded",
+      version: info.version,
+      message: "Update is ready to install.",
+    });
   });
 
   autoUpdater.on("error", (error) => {
     const message = error instanceof Error ? error.stack || error.message : String(error);
     log.error(`Auto-update failed: ${message}`);
+    sendUpdateStatus({
+      status: "error",
+      message,
+    });
   });
+}
+
+function sendUpdateStatus(payload) {
+  if (!mainWindow || mainWindow.isDestroyed()) {
+    return;
+  }
+
+  mainWindow.webContents.send(UPDATE_STATUS_CHANNEL, payload);
 }
 
 async function performAutoUpdateCheck({ manual = false } = {}) {
@@ -620,6 +649,10 @@ async function performAutoUpdateCheck({ manual = false } = {}) {
     .catch((error) => {
       const message = error instanceof Error ? error.message : String(error);
       log.error("Unable to check for updates:", error);
+      sendUpdateStatus({
+        status: "error",
+        message,
+      });
       return {
         status: "error",
         message,
@@ -630,36 +663,6 @@ async function performAutoUpdateCheck({ manual = false } = {}) {
     });
 
   return autoUpdateCheckInFlight;
-}
-
-async function promptForUpdateInstall(version) {
-  if (autoUpdatePromptVisible) {
-    return;
-  }
-
-  autoUpdatePromptVisible = true;
-
-  try {
-    const dialogTarget = mainWindow && !mainWindow.isDestroyed() ? mainWindow : undefined;
-    const result = await dialog.showMessageBox(dialogTarget, {
-      type: "info",
-      buttons: ["Перезапустить сейчас", "Позже"],
-      defaultId: 0,
-      cancelId: 1,
-      noLink: true,
-      title: "Доступно обновление",
-      message: `Загружено обновление версии ${version}.`,
-      detail: "Приложение уже скачало новый релиз. Можно перезапустить его сейчас или установить обновление при следующем закрытии.",
-    });
-
-    if (result.response === 0) {
-      autoUpdater.quitAndInstall(false, true);
-    }
-  } catch (error) {
-    log.error("Failed to show the update installation dialog:", error);
-  } finally {
-    autoUpdatePromptVisible = false;
-  }
 }
 
 function scheduleAutoUpdateCheck() {

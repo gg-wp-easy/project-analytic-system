@@ -1,9 +1,9 @@
 const { contextBridge, ipcRenderer } = require("electron");
 
 const LOG_IPC_CHANNEL = "app:log";
-const OPEN_LOGS_DIRECTORY_CHANNEL = "app:open-logs-directory";
-const GET_LOGS_DIRECTORY_CHANNEL = "app:get-logs-directory";
 const CHECK_FOR_UPDATES_CHANNEL = "app:check-for-updates";
+const INSTALL_UPDATE_CHANNEL = "app:install-update";
+const UPDATE_STATUS_CHANNEL = "app:update-status";
 
 function normalizeForIpc(value) {
   if (value instanceof Error) {
@@ -45,9 +45,13 @@ window.addEventListener("unhandledrejection", (event) => {
 
 contextBridge.exposeInMainWorld("electron", {
   isDesktop: true,
-  getLogsDirectory: () => ipcRenderer.invoke(GET_LOGS_DIRECTORY_CHANNEL),
-  openLogsDirectory: () => ipcRenderer.invoke(OPEN_LOGS_DIRECTORY_CHANNEL),
   checkForUpdates: () => ipcRenderer.invoke(CHECK_FOR_UPDATES_CHANNEL),
+  installUpdate: () => ipcRenderer.invoke(INSTALL_UPDATE_CHANNEL),
+  onUpdateStatus: (listener) => {
+    const handler = (_event, payload) => listener(payload);
+    ipcRenderer.on(UPDATE_STATUS_CHANNEL, handler);
+    return () => ipcRenderer.removeListener(UPDATE_STATUS_CHANNEL, handler);
+  },
   log: {
     debug: (...data) => sendLog("debug", ...data),
     info: (...data) => sendLog("info", ...data),

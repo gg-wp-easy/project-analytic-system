@@ -122,8 +122,8 @@ export function UnderlyingOptionsPage() {
         icon={Activity}
         title={displayLabel}
         description={t({
-          ru: "Страница читает опционную цепочку из сохранённого localStorage, а загрузка и обновление из T-Bank выполняются только по кнопкам.",
-          en: "This page reads the option chain from localStorage, and loading or updating from T-Bank only happens on button click.",
+          ru: "Страница использует сохранённую опционную цепочку, а загрузка и обновление выполняются только по кнопке.",
+          en: "This page uses the saved option chain, and loading or updating only happens on button click.",
         })}
         accent="amber"
         aside={
@@ -165,8 +165,8 @@ export function UnderlyingOptionsPage() {
         <SectionCard>
           <div className="ui-surface-muted text-center text-sm leading-7 text-slate-600 dark:text-slate-300">
             {t({
-              ru: "Опционы ещё не загружены. Нажмите кнопку «Загрузить данные», чтобы получить их из T-Bank и сохранить в localStorage.",
-              en: "Options have not been loaded yet. Click “Load data” to fetch them from T-Bank and save them to localStorage.",
+              ru: "Опционы ещё не загружены. Нажмите кнопку «Загрузить данные», чтобы получить и сохранить их.",
+              en: "Options have not been loaded yet. Click “Load data” to fetch and save them.",
             })}
           </div>
         </SectionCard>

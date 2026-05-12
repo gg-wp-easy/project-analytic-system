@@ -93,7 +93,7 @@ export function FundamentalsPage() {
             <RefreshCw className="w-8 h-8 animate-spin text-slate-700 dark:text-slate-200" />
             <div className="text-base font-semibold text-slate-900 dark:text-slate-100">{t("fund.loading")}</div>
             <div className="text-sm text-slate-500 dark:text-slate-400">
-              Fetching shares and asset fundamentals from T-Bank API
+              Loading shares and asset fundamentals
             </div>
           </div>
         </SectionCard>

@@ -227,7 +227,7 @@ export function FundamentalsProvider({ children }: { children: ReactNode }) {
     } catch (err) {
       const message = err instanceof Error ? err.message : "Failed to load fundamentals";
       setError(message);
-      console.error("Failed to load fundamentals from T-Bank API", err);
+      console.error("Failed to load fundamentals from market data service", err);
     } finally {
       setIsLoading(false);
     }
@@ -286,7 +286,7 @@ export function FundamentalsProvider({ children }: { children: ReactNode }) {
       } catch (err) {
         const message = err instanceof Error ? err.message : "Failed to load close prices";
         setError(message);
-        console.error("Failed to load close prices from T-Bank API", err);
+        console.error("Failed to load close prices from market data service", err);
       }
     },
     [cache.closePricesByFigi, cache.closePricesMetaByFigi],
