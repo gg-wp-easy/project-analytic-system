@@ -49,6 +49,22 @@ jobs:
       - name: Install Node dependencies
         run: npm ci
 
+      - name: Resolve backend auth availability
+        id: backend_auth
+        shell: bash
+        run: |
+          if [ -n "${SERVER_ANALYTIC_REPOSITORY_TOKEN}" ]; then
+            echo "has_backup_token=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_backup_token=false" >> "$GITHUB_OUTPUT"
+          fi
+
+          if [ "${{ github.event_name }}" = "pull_request" ] && [ "${{ github.event.pull_request.head.repo.full_name }}" != "${{ github.repository }}" ]; then
+            echo "is_fork_pr=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "is_fork_pr=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Checkout backend repository with default token
         id: checkout_backend_default
         uses: actions/checkout@v4
@@ -70,7 +86,7 @@ jobs:
 
       - name: Checkout backend repository with backup token
         id: checkout_backend_backup
-        if: steps.checkout_backend_default.outcome == 'failure' && env.SERVER_ANALYTIC_REPOSITORY_TOKEN != ''
+        if: steps.checkout_backend_default.outcome == 'failure' && steps.backend_auth.outputs.has_backup_token == 'true'
         uses: actions/checkout@v4
         with:
           repository: gg-wp-easy/server-analytic-system
@@ -80,11 +96,18 @@ jobs:
           fetch-depth: 1
 
       - name: Fail if backend checkout is unavailable
-        if: steps.checkout_backend_default.outcome == 'failure' && env.SERVER_ANALYTIC_REPOSITORY_TOKEN == ''
+        if: steps.checkout_backend_default.outcome == 'failure' && steps.backend_auth.outputs.has_backup_token != 'true'
         shell: bash
         run: |
-          echo "Backend repository checkout failed with GITHUB_TOKEN and SERVER_ANALYTIC_REPOSITORY_TOKEN is not configured."
-          echo "Add SERVER_ANALYTIC_REPOSITORY_TOKEN with read access to gg-wp-easy/server-analytic-system."
+          if [ "${{ steps.backend_auth.outputs.is_fork_pr }}" = "true" ]; then
+            echo "Backend repository checkout failed because this is a pull_request from a fork."
+            echo "GitHub does not expose repository secrets to fork PR workflows, so SERVER_ANALYTIC_REPOSITORY_TOKEN is unavailable in this run."
+            echo "Use a push branch in the main repository, workflow_dispatch, or a different CI strategy for fork PRs."
+            exit 1
+          fi
+
+          echo "Backend repository checkout failed with GITHUB_TOKEN and SERVER_ANALYTIC_REPOSITORY_TOKEN is unavailable in this run."
+          echo "Check that SERVER_ANALYTIC_REPOSITORY_TOKEN is configured in Settings -> Secrets and variables -> Actions and has read access to gg-wp-easy/server-analytic-system."
           exit 1
 
       - name: Build Electron app
