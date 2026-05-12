@@ -92,6 +92,19 @@ jobs:
           persist-credentials: false
           fetch-depth: 1
 
+      - name: Diagnose backend checkout auth
+        if: steps.checkout_backend_default.outcome == 'failure'
+        shell: bash
+        run: |
+          if [ -n "${SERVER_ANALYTIC_REPOSITORY_TOKEN}" ]; then
+            echo "SERVER_ANALYTIC_REPOSITORY_TOKEN is available in this workflow run."
+          else
+            echo "SERVER_ANALYTIC_REPOSITORY_TOKEN is NOT available in this workflow run."
+          fi
+
+          echo "Default checkout outcome: ${{ steps.checkout_backend_default.outcome }}"
+          echo "Backup checkout outcome: ${{ steps.checkout_backend_backup.outcome }}"
+
       - name: Fail if backend checkout is unavailable
         if: steps.checkout_backend_default.outcome == 'failure' && steps.checkout_backend_backup.outcome == 'failure'
         shell: bash
@@ -103,9 +116,16 @@ jobs:
             exit 1
           fi
 
-          echo "Backend repository checkout failed with both GITHUB_TOKEN and SERVER_ANALYTIC_REPOSITORY_TOKEN."
-          echo "Check that SERVER_ANALYTIC_REPOSITORY_TOKEN is configured in this repository under Settings -> Secrets and variables -> Actions."
-          echo "Also verify that the token has read access to gg-wp-easy/server-analytic-system and that this workflow run type is allowed to receive secrets."
+          if [ -n "${SERVER_ANALYTIC_REPOSITORY_TOKEN}" ]; then
+            echo "Backend repository checkout failed with both GITHUB_TOKEN and SERVER_ANALYTIC_REPOSITORY_TOKEN."
+            echo "The backup token is present in this run, so the most likely causes are:"
+            echo "1. the token does not have read access to gg-wp-easy/server-analytic-system"
+            echo "2. a fine-grained token was created for the wrong repository set"
+            echo "3. the token requires org SSO authorization and is not authorized"
+          else
+            echo "Backend repository checkout failed and SERVER_ANALYTIC_REPOSITORY_TOKEN is not available in this run."
+            echo "Check that SERVER_ANALYTIC_REPOSITORY_TOKEN is configured in this repository under Settings -> Secrets and variables -> Actions."
+          fi
           exit 1
 
       - name: Build Electron app
