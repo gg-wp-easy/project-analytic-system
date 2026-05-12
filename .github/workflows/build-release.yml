@@ -62,72 +62,24 @@ jobs:
       - name: Install Node dependencies
         run: npm ci
 
-      - name: Checkout backend repository with default token
-        id: checkout_backend_default
-        uses: actions/checkout@v4
-        continue-on-error: true
-        with:
-          repository: gg-wp-easy/server-analytic-system
-          path: server-analytic-system
-          token: ${{ github.token }}
-          persist-credentials: false
-          fetch-depth: 1
-
-      - name: Remove failed backend checkout
-        if: steps.checkout_backend_default.outcome == 'failure'
-        shell: pwsh
-        run: |
-          if (Test-Path "server-analytic-system") {
-            Remove-Item -Path "server-analytic-system" -Recurse -Force
-          }
-
-      - name: Checkout backend repository with backup token
-        id: checkout_backend_backup
-        if: steps.checkout_backend_default.outcome == 'failure'
-        uses: actions/checkout@v4
-        continue-on-error: true
-        with:
-          repository: gg-wp-easy/server-analytic-system
-          path: server-analytic-system
-          token: ${{ secrets.SERVER_ANALYTIC_REPOSITORY_TOKEN }}
-          persist-credentials: false
-          fetch-depth: 1
-
-      - name: Diagnose backend checkout auth
-        if: steps.checkout_backend_default.outcome == 'failure'
+      - name: Validate backend repository token
         shell: bash
         run: |
-          if [ -n "${SERVER_ANALYTIC_REPOSITORY_TOKEN}" ]; then
-            echo "SERVER_ANALYTIC_REPOSITORY_TOKEN is available in this workflow run."
-          else
+          if [ -z "${SERVER_ANALYTIC_REPOSITORY_TOKEN}" ]; then
             echo "SERVER_ANALYTIC_REPOSITORY_TOKEN is NOT available in this workflow run."
-          fi
-
-          echo "Default checkout outcome: ${{ steps.checkout_backend_default.outcome }}"
-          echo "Backup checkout outcome: ${{ steps.checkout_backend_backup.outcome }}"
-
-      - name: Fail if backend checkout is unavailable
-        if: steps.checkout_backend_default.outcome == 'failure' && steps.checkout_backend_backup.outcome == 'failure'
-        shell: bash
-        run: |
-          if [ "${{ github.event_name }}" = "pull_request" ] && [ "${{ github.event.pull_request.head.repo.full_name }}" != "${{ github.repository }}" ]; then
-            echo "Backend repository checkout failed because this is a pull_request from a fork."
-            echo "GitHub does not expose repository secrets to fork PR workflows, so SERVER_ANALYTIC_REPOSITORY_TOKEN is unavailable in this run."
-            echo "Use a push branch in the main repository, workflow_dispatch, or a different CI strategy for fork PRs."
+            echo "Check that SERVER_ANALYTIC_REPOSITORY_TOKEN is configured in this repository under Settings -> Secrets and variables -> Actions."
+            echo "For private gg-wp-easy/server-analytic-system access, the token must have Contents: Read-only on that repository."
             exit 1
           fi
 
-          if [ -n "${SERVER_ANALYTIC_REPOSITORY_TOKEN}" ]; then
-            echo "Backend repository checkout failed with both GITHUB_TOKEN and SERVER_ANALYTIC_REPOSITORY_TOKEN."
-            echo "The backup token is present in this run, so the most likely causes are:"
-            echo "1. the token does not have read access to gg-wp-easy/server-analytic-system"
-            echo "2. a fine-grained token was created for the wrong repository set"
-            echo "3. the token requires org SSO authorization and is not authorized"
-          else
-            echo "Backend repository checkout failed and SERVER_ANALYTIC_REPOSITORY_TOKEN is not available in this run."
-            echo "Check that SERVER_ANALYTIC_REPOSITORY_TOKEN is configured in this repository under Settings -> Secrets and variables -> Actions."
-          fi
-          exit 1
+      - name: Checkout backend repository
+        uses: actions/checkout@v4
+        with:
+          repository: gg-wp-easy/server-analytic-system
+          path: server-analytic-system
+          token: ${{ env.SERVER_ANALYTIC_REPOSITORY_TOKEN }}
+          persist-credentials: false
+          fetch-depth: 1
 
       - name: Build Electron app
         run: npm run electron:build:win -- --version-mode=package --output-dir=release\windows
@@ -202,66 +154,23 @@ jobs:
       - name: Install Node dependencies
         run: npm ci
 
-      - name: Checkout backend repository with default token
-        id: checkout_backend_default
-        uses: actions/checkout@v4
-        continue-on-error: true
-        with:
-          repository: gg-wp-easy/server-analytic-system
-          path: server-analytic-system
-          token: ${{ github.token }}
-          persist-credentials: false
-          fetch-depth: 1
-
-      - name: Remove failed backend checkout
-        if: steps.checkout_backend_default.outcome == 'failure'
-        run: rm -rf server-analytic-system
-
-      - name: Checkout backend repository with backup token
-        id: checkout_backend_backup
-        if: steps.checkout_backend_default.outcome == 'failure'
-        uses: actions/checkout@v4
-        continue-on-error: true
-        with:
-          repository: gg-wp-easy/server-analytic-system
-          path: server-analytic-system
-          token: ${{ secrets.SERVER_ANALYTIC_REPOSITORY_TOKEN }}
-          persist-credentials: false
-          fetch-depth: 1
-
-      - name: Diagnose backend checkout auth
-        if: steps.checkout_backend_default.outcome == 'failure'
+      - name: Validate backend repository token
         run: |
-          if [ -n "${SERVER_ANALYTIC_REPOSITORY_TOKEN}" ]; then
-            echo "SERVER_ANALYTIC_REPOSITORY_TOKEN is available in this workflow run."
-          else
+          if [ -z "${SERVER_ANALYTIC_REPOSITORY_TOKEN}" ]; then
             echo "SERVER_ANALYTIC_REPOSITORY_TOKEN is NOT available in this workflow run."
-          fi
-
-          echo "Default checkout outcome: ${{ steps.checkout_backend_default.outcome }}"
-          echo "Backup checkout outcome: ${{ steps.checkout_backend_backup.outcome }}"
-
-      - name: Fail if backend checkout is unavailable
-        if: steps.checkout_backend_default.outcome == 'failure' && steps.checkout_backend_backup.outcome == 'failure'
-        run: |
-          if [ "${{ github.event_name }}" = "pull_request" ] && [ "${{ github.event.pull_request.head.repo.full_name }}" != "${{ github.repository }}" ]; then
-            echo "Backend repository checkout failed because this is a pull_request from a fork."
-            echo "GitHub does not expose repository secrets to fork PR workflows, so SERVER_ANALYTIC_REPOSITORY_TOKEN is unavailable in this run."
-            echo "Use a push branch in the main repository, workflow_dispatch, or a different CI strategy for fork PRs."
+            echo "Check that SERVER_ANALYTIC_REPOSITORY_TOKEN is configured in this repository under Settings -> Secrets and variables -> Actions."
+            echo "For private gg-wp-easy/server-analytic-system access, the token must have Contents: Read-only on that repository."
             exit 1
           fi
 
-          if [ -n "${SERVER_ANALYTIC_REPOSITORY_TOKEN}" ]; then
-            echo "Backend repository checkout failed with both GITHUB_TOKEN and SERVER_ANALYTIC_REPOSITORY_TOKEN."
-            echo "The backup token is present in this run, so the most likely causes are:"
-            echo "1. the token does not have read access to gg-wp-easy/server-analytic-system"
-            echo "2. a fine-grained token was created for the wrong repository set"
-            echo "3. the token requires org SSO authorization and is not authorized"
-          else
-            echo "Backend repository checkout failed and SERVER_ANALYTIC_REPOSITORY_TOKEN is not available in this run."
-            echo "Check that SERVER_ANALYTIC_REPOSITORY_TOKEN is configured in this repository under Settings -> Secrets and variables -> Actions."
-          fi
-          exit 1
+      - name: Checkout backend repository
+        uses: actions/checkout@v4
+        with:
+          repository: gg-wp-easy/server-analytic-system
+          path: server-analytic-system
+          token: ${{ env.SERVER_ANALYTIC_REPOSITORY_TOKEN }}
+          persist-credentials: false
+          fetch-depth: 1
 
       - name: Build Electron app
         run: npm run electron:build:linux -- --version-mode=package --output-dir=release/linux --arch=x64
