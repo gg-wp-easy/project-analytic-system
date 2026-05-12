@@ -32,7 +32,7 @@ jobs:
         run: |
           echo "This pull_request comes from a fork."
           echo "GitHub Actions does not expose repository secrets to fork PR workflows."
-          echo "The private backend repository cannot be checked out in this run, so the Windows release build is skipped."
+          echo "The private backend repository cannot be checked out in this run, so release builds are skipped."
 
   build-windows:
     name: Build Windows updater artifacts
@@ -152,34 +152,139 @@ jobs:
           "zip_name=$zipName" >> $env:GITHUB_OUTPUT
           "zip_path=$zipName" >> $env:GITHUB_OUTPUT
 
-      - name: Upload downloadable archive artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: ${{ steps.package.outputs.zip_name }}
-          path: ${{ steps.package.outputs.zip_path }}
-          if-no-files-found: error
+      - name: Validate manual release tag
+        if: github.event_name == 'workflow_dispatch' && inputs.publish_release && inputs.release_tag == ''
+        run: |
+          echo "release_tag is required when publish_release is enabled."
+          exit 1
 
-      - name: Upload updater artifact set
-        uses: actions/upload-artifact@v4
+      - name: Publish release
+        if: startsWith(github.ref, 'refs/tags/') || (github.event_name == 'workflow_dispatch' && inputs.publish_release)
+        uses: softprops/action-gh-release@v2
         with:
-          name: nk-invest-analytics-windows-updater-files
-          path: |
+          tag_name: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || inputs.release_tag }}
+          files: |
+            ${{ steps.package.outputs.zip_path }}
             release/windows/*.exe
             release/windows/*.blockmap
             release/windows/latest*.yml
-          if-no-files-found: error
+          fail_on_unmatched_files: true
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-  release:
-    name: Publish GitHub Release
+  build-linux:
+    name: Build Linux release artifacts
     runs-on: ubuntu-latest
     needs: build-windows
-    if: startsWith(github.ref, 'refs/tags/') || (github.event_name == 'workflow_dispatch' && inputs.publish_release)
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    env:
+      CSC_IDENTITY_AUTO_DISCOVERY: "false"
+      GH_TOKEN: ${{ github.token }}
+      SERVER_ANALYTIC_REPOSITORY_TOKEN: ${{ secrets.SERVER_ANALYTIC_REPOSITORY_TOKEN }}
+      SERVER_ANALYTIC_PYTHON: python
 
     steps:
-      - name: Download build artifacts
-        uses: actions/download-artifact@v4
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
         with:
-          path: release-assets
+          node-version: 24
+          cache: npm
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install Node dependencies
+        run: npm ci
+
+      - name: Checkout backend repository with default token
+        id: checkout_backend_default
+        uses: actions/checkout@v4
+        continue-on-error: true
+        with:
+          repository: gg-wp-easy/server-analytic-system
+          path: server-analytic-system
+          token: ${{ github.token }}
+          persist-credentials: false
+          fetch-depth: 1
+
+      - name: Remove failed backend checkout
+        if: steps.checkout_backend_default.outcome == 'failure'
+        run: rm -rf server-analytic-system
+
+      - name: Checkout backend repository with backup token
+        id: checkout_backend_backup
+        if: steps.checkout_backend_default.outcome == 'failure'
+        uses: actions/checkout@v4
+        continue-on-error: true
+        with:
+          repository: gg-wp-easy/server-analytic-system
+          path: server-analytic-system
+          token: ${{ secrets.SERVER_ANALYTIC_REPOSITORY_TOKEN }}
+          persist-credentials: false
+          fetch-depth: 1
+
+      - name: Diagnose backend checkout auth
+        if: steps.checkout_backend_default.outcome == 'failure'
+        run: |
+          if [ -n "${SERVER_ANALYTIC_REPOSITORY_TOKEN}" ]; then
+            echo "SERVER_ANALYTIC_REPOSITORY_TOKEN is available in this workflow run."
+          else
+            echo "SERVER_ANALYTIC_REPOSITORY_TOKEN is NOT available in this workflow run."
+          fi
+
+          echo "Default checkout outcome: ${{ steps.checkout_backend_default.outcome }}"
+          echo "Backup checkout outcome: ${{ steps.checkout_backend_backup.outcome }}"
+
+      - name: Fail if backend checkout is unavailable
+        if: steps.checkout_backend_default.outcome == 'failure' && steps.checkout_backend_backup.outcome == 'failure'
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ] && [ "${{ github.event.pull_request.head.repo.full_name }}" != "${{ github.repository }}" ]; then
+            echo "Backend repository checkout failed because this is a pull_request from a fork."
+            echo "GitHub does not expose repository secrets to fork PR workflows, so SERVER_ANALYTIC_REPOSITORY_TOKEN is unavailable in this run."
+            echo "Use a push branch in the main repository, workflow_dispatch, or a different CI strategy for fork PRs."
+            exit 1
+          fi
+
+          if [ -n "${SERVER_ANALYTIC_REPOSITORY_TOKEN}" ]; then
+            echo "Backend repository checkout failed with both GITHUB_TOKEN and SERVER_ANALYTIC_REPOSITORY_TOKEN."
+            echo "The backup token is present in this run, so the most likely causes are:"
+            echo "1. the token does not have read access to gg-wp-easy/server-analytic-system"
+            echo "2. a fine-grained token was created for the wrong repository set"
+            echo "3. the token requires org SSO authorization and is not authorized"
+          else
+            echo "Backend repository checkout failed and SERVER_ANALYTIC_REPOSITORY_TOKEN is not available in this run."
+            echo "Check that SERVER_ANALYTIC_REPOSITORY_TOKEN is configured in this repository under Settings -> Secrets and variables -> Actions."
+          fi
+          exit 1
+
+      - name: Build Electron app
+        run: npm run electron:build:linux -- --version-mode=package --output-dir=release/linux --arch=x64
+
+      - name: Create downloadable archive
+        id: package
+        run: |
+          raw_name="${GITHUB_REF_NAME}"
+          if [ "${{ github.ref_type }}" != "tag" ]; then
+            raw_name="run-${GITHUB_RUN_NUMBER}"
+          fi
+
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ -n "${{ inputs.release_tag }}" ]; then
+            raw_name="${{ inputs.release_tag }}"
+          fi
+
+          safe_name="$(printf '%s' "$raw_name" | tr -c 'A-Za-z0-9_.-' '-')"
+          archive_name="NK-Invest-Analytics-Linux-${safe_name}.tar.gz"
+
+          tar -czf "$archive_name" -C release/linux .
+
+          echo "archive_name=$archive_name" >> "$GITHUB_OUTPUT"
+          echo "archive_path=$archive_name" >> "$GITHUB_OUTPUT"
 
       - name: Validate manual release tag
         if: github.event_name == 'workflow_dispatch' && inputs.publish_release && inputs.release_tag == ''
@@ -188,14 +293,16 @@ jobs:
           exit 1
 
       - name: Publish release
+        if: startsWith(github.ref, 'refs/tags/') || (github.event_name == 'workflow_dispatch' && inputs.publish_release)
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || inputs.release_tag }}
           files: |
-            release-assets/**/*.zip
-            release-assets/**/*.exe
-            release-assets/**/*.blockmap
-            release-assets/**/latest*.yml
+            ${{ steps.package.outputs.archive_path }}
+            release/linux/*.AppImage
+            release/linux/*.deb
+            release/linux/*.blockmap
+            release/linux/latest*.yml
           fail_on_unmatched_files: true
           generate_release_notes: true
         env:

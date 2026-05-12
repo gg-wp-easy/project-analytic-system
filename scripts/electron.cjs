@@ -64,6 +64,7 @@ function parseArgs(argv) {
     outputDir: null,
     appVersion: null,
     versionMode: "timestamp",
+    arch: null,
   };
 
   for (const arg of argv.slice(1)) {
@@ -93,6 +94,8 @@ function parseArgs(argv) {
       options.appVersion = arg.slice("--app-version=".length);
     } else if (arg.startsWith("--version-mode=")) {
       options.versionMode = arg.slice("--version-mode=".length);
+    } else if (arg.startsWith("--arch=")) {
+      options.arch = arg.slice("--arch=".length);
     } else {
       throw new Error(`Unknown argument: ${arg}`);
     }
@@ -100,6 +103,10 @@ function parseArgs(argv) {
 
   if (!["package", "timestamp"].includes(options.versionMode)) {
     throw new Error(`Unsupported version mode: ${options.versionMode}`);
+  }
+
+  if (options.arch && !["x64", "ia32", "arm64", "armv7l"].includes(options.arch)) {
+    throw new Error(`Unsupported architecture: ${options.arch}`);
   }
 
   return { mode, options };
@@ -112,7 +119,7 @@ Usage:
   node scripts/electron.cjs dev [--skip-server-install] [--vite-port=5173]
   node scripts/electron.cjs build [--platform=current|win|linux|mac] [--profile=standard|msi|store]
                                 [--skip-icons] [--skip-server-build] [--skip-builder] [--skip-protect-asar]
-                                [--version-mode=timestamp|package] [--app-version=x.y.z]
+                                [--version-mode=timestamp|package] [--app-version=x.y.z] [--arch=x64|ia32|arm64|armv7l]
 
 Examples:
   node scripts/electron.cjs dev
@@ -223,6 +230,7 @@ async function runBuild(options) {
     const builderArgs = [
       electronBuilderCli,
       ...resolveBuilderArgs(targetPlatform.key, options.profile),
+      ...resolveBuilderArchArgs(options.arch),
       `--config.directories.output=${outputDir}`,
       `--config.extraMetadata.version=${buildVersion.value}`,
       `--config.buildVersion=${buildVersion.value}`,
@@ -302,6 +310,11 @@ function resolveBuilderArgs(platform, profile) {
   }
 
   return ["--mac"];
+}
+
+
+function resolveBuilderArchArgs(arch) {
+  return arch ? [`--${arch}`] : [];
 }
 
 
