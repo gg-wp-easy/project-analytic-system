@@ -70,7 +70,7 @@ jobs:
 
       - name: Checkout backend repository with backup token
         id: checkout_backend_backup
-        if: steps.checkout_backend_default.outcome == 'failure' && secrets.SERVER_ANALYTIC_REPOSITORY_TOKEN != ''
+        if: steps.checkout_backend_default.outcome == 'failure' && env.SERVER_ANALYTIC_REPOSITORY_TOKEN != ''
         uses: actions/checkout@v4
         with:
           repository: gg-wp-easy/server-analytic-system
@@ -80,7 +80,7 @@ jobs:
           fetch-depth: 1
 
       - name: Fail if backend checkout is unavailable
-        if: steps.checkout_backend_default.outcome == 'failure' && secrets.SERVER_ANALYTIC_REPOSITORY_TOKEN == ''
+        if: steps.checkout_backend_default.outcome == 'failure' && env.SERVER_ANALYTIC_REPOSITORY_TOKEN == ''
         shell: bash
         run: |
           echo "Backend repository checkout failed with GITHUB_TOKEN and SERVER_ANALYTIC_REPOSITORY_TOKEN is not configured."
