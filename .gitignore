@@ -4,7 +4,10 @@ dist/
 release/
 dist-electron/
 server-analytic-system/
-build/
+build/*
+!build/linux/
+!build/linux/after-install.sh
+!build/linux/after-remove.sh
 .env
 *.zip
 *.log
