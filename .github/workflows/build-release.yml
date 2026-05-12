@@ -42,6 +42,7 @@ jobs:
       CSC_IDENTITY_AUTO_DISCOVERY: "false"
       GH_TOKEN: ${{ github.token }}
       SERVER_ANALYTIC_REPOSITORY_TOKEN: ${{ secrets.SERVER_ANALYTIC_REPOSITORY_TOKEN }}
+      SERVER_ANALYTIC_PYTHON: python
 
     steps:
       - name: Checkout repository

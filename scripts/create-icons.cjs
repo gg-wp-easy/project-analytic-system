@@ -9,11 +9,14 @@ const PROJECT_ROOT = process.cwd();
 const SOURCE_ICON = path.join(PROJECT_ROOT, "icon-source.png");
 const BUILD_DIR = path.join(PROJECT_ROOT, "build");
 const ICONS_DIR = path.join(BUILD_DIR, "icons");
+const GENERATED_SOURCE_ICON = path.join(BUILD_DIR, "icon-source-rounded.png");
 const ELECTRON_DIR = path.join(PROJECT_ROOT, "electron");
 const RUNTIME_ICON = path.join(ELECTRON_DIR, "icon.png");
 const WINDOWS_RUNTIME_ICON = path.join(ELECTRON_DIR, "icon.ico");
 const MAC_RUNTIME_ICON = path.join(ELECTRON_DIR, "icon.icns");
 const SPLASH_IMAGE = path.join(BUILD_DIR, "splash.bmp");
+const MASTER_ICON_SIZE = 1024;
+const MASTER_ICON_RADIUS = 220;
 
 const LEGACY_ICON_FILES = [
   path.join(BUILD_DIR, "icon.png"),
@@ -28,6 +31,7 @@ const LEGACY_ICON_FILES = [
 async function main() {
   ensureSourceIcon();
   prepareOutputDirs();
+  await createRoundedSourceIcon();
   runElectronIconBuilder();
   validateGeneratedIcons();
   syncRuntimeIcon();
@@ -49,6 +53,15 @@ function prepareOutputDirs() {
   for (const file of LEGACY_ICON_FILES) {
     fs.rmSync(file, { force: true });
   }
+
+  fs.rmSync(GENERATED_SOURCE_ICON, { force: true });
+}
+
+async function createRoundedSourceIcon() {
+  const image = await Jimp.read(SOURCE_ICON);
+  image.cover(MASTER_ICON_SIZE, MASTER_ICON_SIZE);
+  applyRoundedMask(image, MASTER_ICON_RADIUS);
+  await image.writeAsync(GENERATED_SOURCE_ICON);
 }
 
 function runElectronIconBuilder() {
@@ -59,7 +72,7 @@ function runElectronIconBuilder() {
     process.execPath,
     [
       cliPath,
-      `--input=${SOURCE_ICON}`,
+      `--input=${GENERATED_SOURCE_ICON}`,
       `--output=${BUILD_DIR}`,
       "--flatten",
     ],
@@ -68,6 +81,36 @@ function runElectronIconBuilder() {
       stdio: "inherit",
     },
   );
+}
+
+function applyRoundedMask(image, radius) {
+  const { width, height } = image.bitmap;
+  const safeRadius = Math.max(0, Math.min(radius, Math.floor(Math.min(width, height) / 2)));
+
+  image.scan(0, 0, width, height, function scanPixel(x, y, idx) {
+    if (isInsideRoundedRect(x, y, width, height, safeRadius)) {
+      return;
+    }
+
+    this.bitmap.data[idx + 3] = 0;
+  });
+}
+
+function isInsideRoundedRect(x, y, width, height, radius) {
+  if (radius <= 0) {
+    return true;
+  }
+
+  if ((x >= radius && x < width - radius) || (y >= radius && y < height - radius)) {
+    return true;
+  }
+
+  const cornerX = x < radius ? radius - 1 : width - radius;
+  const cornerY = y < radius ? radius - 1 : height - radius;
+  const dx = x - cornerX;
+  const dy = y - cornerY;
+
+  return dx * dx + dy * dy <= radius * radius;
 }
 
 function validateGeneratedIcons() {

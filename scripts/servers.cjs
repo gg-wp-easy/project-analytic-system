@@ -309,10 +309,23 @@ function resolvePythonLaunch(envVarName) {
     });
   }
 
+  const pythonLocation = process.env.pythonLocation;
+  if (pythonLocation) {
+    const resolvedPython = process.platform === "win32"
+      ? path.join(pythonLocation, "python.exe")
+      : path.join(pythonLocation, "bin", "python3");
+
+    candidates.push({
+      command: resolvedPython,
+      args: [],
+      label: resolvedPython,
+    });
+  }
+
   if (process.platform === "win32") {
     candidates.push(
-      { command: "py", args: ["-3"], label: "py -3" },
       { command: "python", args: [], label: "python" },
+      { command: "py", args: ["-3"], label: "py -3" },
     );
   } else {
     candidates.push(
