@@ -30,6 +30,7 @@ import {
 import { AnalysisRunningIndicator } from "../../../shared/ui/analysis/AnalysisRunningIndicator";
 import { PortfolioHoldingsPanel } from "../../../shared/ui/analysis/PortfolioHoldingsPanel";
 import { AppErrorDialog } from "../../../shared/ui/app-error-dialog";
+import { TableSkeleton } from "../../../shared/ui/loading-state";
 
 const BONDS_STATE_KEY = "bonds-analysis-state-v3";
 const PAGE_SIZE = 25;
@@ -439,7 +440,19 @@ export function BondsAnalysisPage() {
           />
         ) : null}
 
-        {!allBonds.length && !summary ? (
+        {isBusy && !allBonds.length && !summary ? (
+          <SectionCard
+            title={t("Готовим список облигаций", "Preparing bond list")}
+            description={t(
+              "После загрузки появятся строки облигаций и рассчитанный портфель.",
+              "Rows and the calculated portfolio will appear after loading.",
+            )}
+          >
+            <TableSkeleton rows={10} columns={8} />
+          </SectionCard>
+        ) : null}
+
+        {!isBusy && !allBonds.length && !summary ? (
           <SectionCard
             title={t("Список облигаций не загружен", "Bond list is not loaded")}
             description={t(

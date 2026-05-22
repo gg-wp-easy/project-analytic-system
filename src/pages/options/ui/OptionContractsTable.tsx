@@ -8,11 +8,11 @@ import {
 type OptionContractsTableProps = {
   items: TBankOption[];
   locale: "ru" | "en";
+  framed?: boolean;
 };
 
-export function OptionContractsTable({ items, locale }: OptionContractsTableProps) {
-  return (
-    <div className="ui-table-shell overflow-x-auto">
+export function OptionContractsTable({ items, locale, framed = true }: OptionContractsTableProps) {
+  const table = (
       <table className="ui-data-table">
         <thead>
           <tr>
@@ -44,6 +44,15 @@ export function OptionContractsTable({ items, locale }: OptionContractsTableProp
           ))}
         </tbody>
       </table>
+  );
+
+  if (!framed) {
+    return table;
+  }
+
+  return (
+    <div className="ui-table-shell overflow-x-auto">
+      {table}
     </div>
   );
 }

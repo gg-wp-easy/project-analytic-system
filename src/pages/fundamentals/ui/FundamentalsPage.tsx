@@ -5,6 +5,7 @@ import { useAppSettings } from "../../../app/context/AppSettingsContext";
 import { useFundamentals } from "../../../entities/fundamentals";
 import { Link } from "react-router-dom";
 import { MetricCard, MetricGrid, PageHero, SectionCard } from "../../../shared/ui/analysis-shell";
+import { MetricSkeletonGrid, PageLoadingState, TableSkeleton } from "../../../shared/ui/loading-state";
 import { formatFundamentalMetricValue, type FundamentalMetricKey } from "../../../shared/lib/format/fundamentals";
 import { AppErrorDialog } from "../../../shared/ui/app-error-dialog";
 import { FundamentalMetricLabel } from "../../../shared/ui/fundamentals/FundamentalMetricLabel";
@@ -89,13 +90,11 @@ export function FundamentalsPage() {
 
       {isLoading && (
         <SectionCard>
-          <div className="flex flex-col items-center justify-center gap-3 text-center" role="status" aria-live="polite">
-            <RefreshCw className="w-8 h-8 animate-spin text-slate-700 dark:text-slate-200" />
-            <div className="text-base font-semibold text-slate-900 dark:text-slate-100">{t("fund.loading")}</div>
-            <div className="text-sm text-slate-500 dark:text-slate-400">
-              Loading shares and asset fundamentals
-            </div>
-          </div>
+          <PageLoadingState
+            title={t("fund.loading")}
+            subtitle={isEn ? "Loading shares, close prices, and asset fundamentals." : "Загружаем акции, цены закрытия и фундаментальные показатели."}
+            accentClassName="text-slate-700"
+          />
         </SectionCard>
       )}
 
@@ -124,16 +123,20 @@ export function FundamentalsPage() {
           </div>
         </div>
 
-        <MetricGrid className="xl:grid-cols-2">
-          <MetricCard label={t("fund.countShares")} value={cache.shares.length} />
-          <MetricCard
-            label={t("fund.lastUpdated")}
-            value={cache.lastUpdated ? new Date(cache.lastUpdated).toLocaleString() : t("fund.never")}
-          />
-        </MetricGrid>
+        {isLoading && !hasData ? (
+          <MetricSkeletonGrid count={2} />
+        ) : (
+          <MetricGrid className="xl:grid-cols-2">
+            <MetricCard label={t("fund.countShares")} value={cache.shares.length} />
+            <MetricCard
+              label={t("fund.lastUpdated")}
+              value={cache.lastUpdated ? new Date(cache.lastUpdated).toLocaleString() : t("fund.never")}
+            />
+          </MetricGrid>
+        )}
       </SectionCard>
 
-      {hasData && !isLoading && (
+      {(hasData || isLoading) && (
         <SectionCard
           title={t("fund.sampleTitle")}
           description={
@@ -151,6 +154,9 @@ export function FundamentalsPage() {
               className="ui-input md:w-80"
             />
           </div>
+          {isLoading && !hasData ? (
+            <TableSkeleton rows={10} columns={13} />
+          ) : (
           <div className="ui-table-shell overflow-x-auto">
             <table className="ui-data-table">
               <thead>
@@ -199,6 +205,8 @@ export function FundamentalsPage() {
               </tbody>
             </table>
           </div>
+          )}
+          {isLoading && !hasData ? null : (
           <div className="mt-4 flex items-center justify-between gap-3">
             <div className="text-sm text-slate-600 dark:text-slate-300">
               Page {page} / {pageCount}
@@ -222,6 +230,7 @@ export function FundamentalsPage() {
               </button>
             </div>
           </div>
+          )}
         </SectionCard>
       )}
 

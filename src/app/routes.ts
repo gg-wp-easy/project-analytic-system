@@ -9,6 +9,7 @@ import { HybridAnalysis } from "../pages/hybrid-analysis";
 import { BondsAnalysis } from "../pages/bonds-analysis";
 import { FundamentalsDetailsPage, FundamentalsPage } from "../pages/fundamentals";
 import { OptionsPage, UnderlyingOptionsPage } from "../pages/options";
+import { SettingsPage } from "../pages/settings";
 import { NotFound } from "./components/NotFound";
 import { RouteError } from "./components/RouteError";
 
@@ -28,6 +29,7 @@ const routes = [
       { path: "fundamentals/:figi", Component: FundamentalsDetailsPage },
       { path: "options", Component: OptionsPage },
       { path: "options/asset/:underlyingKey", Component: UnderlyingOptionsPage },
+      { path: "settings", Component: SettingsPage },
       { path: "*", Component: NotFound },
     ],
   },

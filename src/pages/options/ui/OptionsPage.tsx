@@ -1,16 +1,18 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Activity, RefreshCw, Trash2 } from "lucide-react";
 import { Link } from "react-router-dom";
 import { useAppSettings } from "../../../app/context/AppSettingsContext";
 import { useOptionsData } from "../../../entities/options";
 import { AppErrorDialog } from "../../../shared/ui/app-error-dialog";
 import { MetricCard, MetricGrid, PageHero, SectionCard } from "../../../shared/ui/analysis-shell";
+import { PageLoadingState, TableSkeleton } from "../../../shared/ui/loading-state";
 import {
   buildUnderlyingSummaries,
   formatTimestamp,
   getCategoryLabel,
   type UnderlyingCategory,
 } from "../lib/options-helpers";
+import { PaginationControls } from "./PaginationControls";
 
 type UnderlyingRouteState = {
   summaryLabel?: string;
@@ -23,6 +25,8 @@ export function OptionsPage() {
   const { cache, hasData, isLoading, loadOptions, clearCache } = useOptionsData();
   const [groupFilter, setGroupFilter] = useState<UnderlyingCategory>("all");
   const [searchQuery, setSearchQuery] = useState("");
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(25);
   const [errorDialogMessage, setErrorDialogMessage] = useState<string | null>(null);
 
   const summaries = useMemo(() => buildUnderlyingSummaries(cache.options), [cache.options]);
@@ -49,6 +53,20 @@ export function OptionsPage() {
     () => filteredSummaries.reduce((sum, summary) => sum + summary.puts, 0),
     [filteredSummaries],
   );
+  const pageCount = Math.max(1, Math.ceil(filteredSummaries.length / pageSize));
+  const safePage = Math.min(page, pageCount);
+  const paginatedSummaries = useMemo(
+    () => filteredSummaries.slice((safePage - 1) * pageSize, safePage * pageSize),
+    [filteredSummaries, pageSize, safePage],
+  );
+
+  useEffect(() => {
+    setPage(1);
+  }, [groupFilter, searchQuery]);
+
+  useEffect(() => {
+    setPage((current) => Math.min(current, pageCount));
+  }, [pageCount]);
 
   const handleLoadOptions = async () => {
     try {
@@ -183,12 +201,14 @@ export function OptionsPage() {
 
       {isLoading ? (
         <SectionCard>
-          <div className="flex flex-col items-center justify-center gap-3 text-center" role="status" aria-live="polite">
-            <RefreshCw className="h-8 w-8 animate-spin text-slate-700 dark:text-slate-200" />
-            <div className="text-base font-semibold text-slate-900 dark:text-slate-100">
-              {t({ ru: "Загружаем список опционов...", en: "Loading the option list..." })}
-            </div>
-          </div>
+          <PageLoadingState
+            title={t({ ru: "Загружаем список опционов", en: "Loading the option list" })}
+            subtitle={t({
+              ru: "Получаем цепочки, группируем их по базовым активам и готовим таблицу.",
+              en: "Fetching option chains, grouping them by underlying assets, and preparing the table.",
+            })}
+            accentClassName="text-amber-600"
+          />
         </SectionCard>
       ) : null}
 
@@ -199,7 +219,9 @@ export function OptionsPage() {
           en: "Each ticker has a button that opens the dedicated page for that asset and its options.",
         })}
       >
-        {!hasData ? (
+        {isLoading && !hasData ? (
+          <TableSkeleton rows={8} columns={6} />
+        ) : !hasData ? (
           <div className="ui-surface-muted text-center text-sm leading-7 text-slate-600 dark:text-slate-300">
             {t({
               ru: "Список опционов пока пуст. Нажмите кнопку «Загрузить данные», чтобы получить и сохранить данные.",
@@ -224,7 +246,7 @@ export function OptionsPage() {
                 </tr>
               </thead>
               <tbody>
-                {filteredSummaries.map((summary) => {
+                {paginatedSummaries.map((summary) => {
                   const state: UnderlyingRouteState = {
                     summaryLabel: summary.label,
                     category: summary.category,
@@ -256,6 +278,17 @@ export function OptionsPage() {
                 })}
               </tbody>
             </table>
+            <PaginationControls
+              page={safePage}
+              pageSize={pageSize}
+              totalItems={filteredSummaries.length}
+              locale={locale}
+              onPageChange={setPage}
+              onPageSizeChange={(value) => {
+                setPageSize(value);
+                setPage(1);
+              }}
+            />
           </div>
         )}
       </SectionCard>

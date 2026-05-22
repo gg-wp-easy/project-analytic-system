@@ -13,6 +13,7 @@ import {
 import { formatFundamentalMetricValue } from "../../../shared/lib/format/fundamentals";
 import { AppErrorDialog } from "../../../shared/ui/app-error-dialog";
 import { MetricCard, MetricGrid, PageHero, SectionCard } from "../../../shared/ui/analysis-shell";
+import { ChartSkeleton, MetricSkeletonGrid, PageLoadingState } from "../../../shared/ui/loading-state";
 import { FundamentalMetricLabel } from "../../../shared/ui/fundamentals/FundamentalMetricLabel";
 
 type ChartRange = "1D" | "1W" | "1M" | "1Y";
@@ -884,9 +885,17 @@ export function FundamentalsDetailsPage() {
           }
         />
         <SectionCard>
-          <div className="ui-surface-muted text-sm leading-7 text-slate-600 dark:text-slate-300">
-            {t("В локальном кэше пока нет подходящей компании. Загрузите или обновите фундаментальные данные на основной странице, затем снова откройте карточку акции.", "No matching company was found in the local cache yet. Load or refresh fundamentals on the main page, then open the stock card again.")}
-          </div>
+          {isLoading ? (
+            <PageLoadingState
+              title={t("Загружаем фундаментальные данные", "Loading fundamentals")}
+              subtitle={t("Обновляем локальный кэш компаний и показателей.", "Refreshing the local company and metrics cache.")}
+              accentClassName="text-slate-700"
+            />
+          ) : (
+            <div className="ui-surface-muted text-sm leading-7 text-slate-600 dark:text-slate-300">
+              {t("В локальном кэше пока нет подходящей компании. Загрузите или обновите фундаментальные данные на основной странице, затем снова откройте карточку акции.", "No matching company was found in the local cache yet. Load or refresh fundamentals on the main page, then open the stock card again.")}
+            </div>
+          )}
         </SectionCard>
         <AppErrorDialog
           message={errorDialogMessage}
@@ -1011,10 +1020,7 @@ export function FundamentalsDetailsPage() {
           </div>
 
           {isHistoryLoading && selectedHistory.length === 0 ? (
-            <div className="flex h-[22rem] items-center justify-center rounded-[1.75rem] border border-slate-200/80 bg-slate-50/70 text-sm text-slate-500 dark:border-slate-800 dark:bg-slate-950/40 dark:text-slate-400">
-              <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
-              {t("Загружаем историю графика...", "Loading chart history...")}
-            </div>
+            <ChartSkeleton className="min-h-[22rem]" />
           ) : selectedHistory.length > 0 ? (
             chartMode === "line" ? (
               <div className="overflow-hidden rounded-[1.75rem] border border-slate-200/80 bg-gradient-to-b from-slate-50 via-white to-slate-100/80 p-3 dark:border-slate-800 dark:from-slate-950 dark:via-slate-950 dark:to-slate-900/90">
@@ -1115,9 +1121,13 @@ export function FundamentalsDetailsPage() {
         }
       >
         {isCapmLoading ? (
-          <div className="flex min-h-[12rem] items-center justify-center rounded-[1.75rem] border border-slate-200/80 bg-slate-50/70 text-sm text-slate-500 dark:border-slate-800 dark:bg-slate-950/40 dark:text-slate-400">
-            <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
-            {t("Строим CAPM по свежим рыночным данным...", "Building CAPM from fresh market data...")}
+          <div className="space-y-4">
+            <PageLoadingState
+              title={t("Строим CAPM", "Building CAPM")}
+              subtitle={t("Загружаем рыночные свечи и считаем доходности относительно индекса.", "Loading market candles and calculating returns against the index.")}
+              accentClassName="text-blue-600"
+            />
+            <MetricSkeletonGrid count={4} />
           </div>
         ) : capmError ? (
           <div className="rounded-[1.75rem] border border-rose-200/80 bg-rose-50/75 px-5 py-4 text-sm leading-7 text-rose-700 dark:border-rose-500/20 dark:bg-rose-500/10 dark:text-rose-200">

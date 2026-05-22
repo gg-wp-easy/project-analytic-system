@@ -4,6 +4,8 @@ const LOG_IPC_CHANNEL = "app:log";
 const CHECK_FOR_UPDATES_CHANNEL = "app:check-for-updates";
 const INSTALL_UPDATE_CHANNEL = "app:install-update";
 const UPDATE_STATUS_CHANNEL = "app:update-status";
+const GET_LOG_INFO_CHANNEL = "app:get-log-info";
+const OPEN_LOGS_DIRECTORY_CHANNEL = "app:open-logs-directory";
 
 function normalizeForIpc(value) {
   if (value instanceof Error) {
@@ -47,6 +49,8 @@ contextBridge.exposeInMainWorld("electron", {
   isDesktop: true,
   checkForUpdates: () => ipcRenderer.invoke(CHECK_FOR_UPDATES_CHANNEL),
   installUpdate: () => ipcRenderer.invoke(INSTALL_UPDATE_CHANNEL),
+  getLogInfo: () => ipcRenderer.invoke(GET_LOG_INFO_CHANNEL),
+  openLogsDirectory: () => ipcRenderer.invoke(OPEN_LOGS_DIRECTORY_CHANNEL),
   onUpdateStatus: (listener) => {
     const handler = (_event, payload) => listener(payload);
     ipcRenderer.on(UPDATE_STATUS_CHANNEL, handler);

@@ -11,6 +11,8 @@ const LOG_IPC_CHANNEL = "app:log";
 const CHECK_FOR_UPDATES_CHANNEL = "app:check-for-updates";
 const INSTALL_UPDATE_CHANNEL = "app:install-update";
 const UPDATE_STATUS_CHANNEL = "app:update-status";
+const GET_LOG_INFO_CHANNEL = "app:get-log-info";
+const OPEN_LOGS_DIRECTORY_CHANNEL = "app:open-logs-directory";
 const LOG_LEVELS = new Set(["debug", "info", "warn", "error"]);
 const AUTO_UPDATE_INITIAL_DELAY_MS = 12_000;
 const AUTO_UPDATE_INTERVAL_MS = 4 * 60 * 60 * 1000;
@@ -160,6 +162,24 @@ function registerAppIpcHandlers() {
     return {
       status: "installing",
       message: "Installing update.",
+    };
+  });
+
+  ipcMain.handle(GET_LOG_INFO_CHANNEL, async () => {
+    return {
+      logsDirectory: getAppLogsDirectory(),
+      logFilePath: getAppLogFilePath(),
+    };
+  });
+
+  ipcMain.handle(OPEN_LOGS_DIRECTORY_CHANNEL, async () => {
+    const logsDirectory = getAppLogsDirectory();
+    const result = await shell.openPath(logsDirectory);
+    return {
+      status: result ? "error" : "ok",
+      message: result,
+      logsDirectory,
+      logFilePath: getAppLogFilePath(),
     };
   });
 }

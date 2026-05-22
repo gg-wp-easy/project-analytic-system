@@ -28,7 +28,7 @@ const CANDLES_ENDPOINT =
   "https://invest-public-api.tbank.ru/rest/tinkoff.public.invest.api.contract.v1.MarketDataService/GetCandles";
 const MAX_ASSETS_PER_REQUEST = 30;
 
-const TOKEN_STORAGE_KEY = "tbank_api_token";
+export const TBANK_TOKEN_STORAGE_KEY = "tbank_api_token";
 const LEGACY_OPTIONS_CACHE_STORAGE_KEY = "tbank_options_cache_v1";
 const OPTIONS_CACHE_STORAGE_KEY = "tbank_options_cache_v2";
 const OPTIONS_CACHE_TTL_MS = 5 * 60 * 1000;
@@ -47,6 +47,18 @@ const OPTIONS_DISCOVERY_ASSET_TYPES = [
   "INSTRUMENT_TYPE_CLEARING_CERTIFICATE",
 ] as const;
 const OPTIONS_DISCOVERY_ERROR_PREVIEW_LIMIT = 6;
+
+export function normalizeTBankToken(value: string | null | undefined): string {
+  if (!value) {
+    return "";
+  }
+
+  return value
+    .trim()
+    .replace(/^bearer\s+/i, "")
+    .replace(/^["']|["']$/g, "")
+    .trim();
+}
 
 type AnyRecord = Record<string, unknown>;
 type TBankOptionsCachePayload = {
@@ -174,6 +186,10 @@ export type TBankInstrumentReference = {
   classCode: string;
   name: string;
   instrumentType: string;
+};
+
+export type TBankAssetInstrumentReference = TBankInstrumentReference & {
+  assetUid: string;
 };
 
 export type TBankOptionsByResult = {
@@ -494,6 +510,27 @@ function normalizeInstrumentReference(item: AnyRecord): TBankInstrumentReference
     name: pickString(item, ["name"]),
     instrumentType: pickString(item, ["instrumentType", "instrument_type", "instrumentKind", "instrument_kind"]),
   };
+}
+
+function normalizeAssetInstrumentReferences(asset: AnyRecord): TBankAssetInstrumentReference[] {
+  const assetUid = pickString(asset, ["uid", "assetUid", "asset_uid"]);
+  if (!assetUid) {
+    return [];
+  }
+
+  const rawInstruments =
+    (Array.isArray(asset.instruments) && asset.instruments) ||
+    (Array.isArray(asset.instrumentList) && asset.instrumentList) ||
+    (Array.isArray(asset.instrument_list) && asset.instrument_list) ||
+    [];
+
+  return rawInstruments
+    .map((raw) => normalizeInstrumentReference((raw ?? {}) as AnyRecord))
+    .filter((item): item is TBankInstrumentReference => Boolean(item))
+    .map((instrument) => ({
+      ...instrument,
+      assetUid,
+    }));
 }
 
 function buildInstrumentId(instrument: TBankInstrumentReference): string {
@@ -844,9 +881,9 @@ function resolveRuntimeToken(): string | undefined {
     return undefined;
   }
 
-  const fromStorage = window.localStorage.getItem(TOKEN_STORAGE_KEY);
-  if (fromStorage && fromStorage.trim()) {
-    return fromStorage.trim();
+  const fromStorage = normalizeTBankToken(window.localStorage.getItem(TBANK_TOKEN_STORAGE_KEY));
+  if (fromStorage) {
+    return fromStorage;
   }
 
   return undefined;
@@ -1002,7 +1039,7 @@ function saveOptionsCacheToStorage(items: TBankOption[]): void {
 
 export function createTBankInstrumentsApi(token?: string) {
   function ensureToken(): string {
-    const resolved = token?.trim() || resolveRuntimeToken();
+    const resolved = normalizeTBankToken(token) || resolveRuntimeToken();
     if (!resolved) {
       throw new Error(
         "Market data access token is not configured.",
@@ -1309,12 +1346,16 @@ export function createTBankInstrumentsApi(token?: string) {
     return optionsCacheInFlight;
   }
 
-  async function findInstrumentReferences(query: string): Promise<TBankInstrumentReference[]> {
+  async function findInstrumentReferences(
+    query: string,
+    options?: { apiTradeAvailableFlag?: boolean },
+  ): Promise<TBankInstrumentReference[]> {
     const authToken = ensureToken();
-    const payload = await requestJson<AnyRecord>(FIND_INSTRUMENT_ENDPOINT, authToken, {
-      query,
-      apiTradeAvailableFlag: true,
-    });
+    const requestBody: Record<string, unknown> = { query };
+    if (typeof options?.apiTradeAvailableFlag === "boolean") {
+      requestBody.apiTradeAvailableFlag = options.apiTradeAvailableFlag;
+    }
+    const payload = await requestJson<AnyRecord>(FIND_INSTRUMENT_ENDPOINT, authToken, requestBody);
 
     const instruments =
       (Array.isArray(payload.instruments) && payload.instruments) ||
@@ -1325,6 +1366,47 @@ export function createTBankInstrumentsApi(token?: string) {
     return instruments
       .map((raw) => normalizeInstrumentReference((raw ?? {}) as AnyRecord))
       .filter((item): item is TBankInstrumentReference => Boolean(item));
+  }
+
+  async function fetchAssetInstrumentReferences(assetUids: string[]): Promise<TBankAssetInstrumentReference[]> {
+    const authToken = ensureToken();
+    const requestedAssetUids = new Set(assetUids.map((value) => value.trim()).filter(Boolean));
+    if (requestedAssetUids.size === 0) {
+      return [];
+    }
+
+    const result: TBankAssetInstrumentReference[] = [];
+    const assetTypes = OPTIONS_DISCOVERY_ASSET_TYPES;
+
+    for (const instrumentType of assetTypes) {
+      const payload = await requestJson<AnyRecord>(ASSETS_ENDPOINT, authToken, {
+        instrumentType,
+        instrumentStatus: "INSTRUMENT_STATUS_ALL",
+      });
+      const assets =
+        (Array.isArray(payload.assets) && payload.assets) ||
+        (Array.isArray(payload.items) && payload.items) ||
+        (Array.isArray(payload.data) && payload.data) ||
+        [];
+
+      for (const raw of assets) {
+        const asset = (raw ?? {}) as AnyRecord;
+        const assetUid = pickString(asset, ["uid", "assetUid", "asset_uid"]);
+        if (!requestedAssetUids.has(assetUid)) {
+          continue;
+        }
+        result.push(...normalizeAssetInstrumentReferences(asset));
+      }
+
+      if (result.some((item) => requestedAssetUids.has(item.assetUid))) {
+        const foundAssetUids = new Set(result.map((item) => item.assetUid));
+        if ([...requestedAssetUids].every((assetUid) => foundAssetUids.has(assetUid))) {
+          break;
+        }
+      }
+    }
+
+    return result;
   }
 
   async function fetchOptionsBy(params: {
@@ -1340,7 +1422,7 @@ export function createTBankInstrumentsApi(token?: string) {
     const candidateIds: string[] = [];
 
     if (!normalizedQuery.includes("_")) {
-      const references = await findInstrumentReferences(normalizedQuery);
+      const references = await findInstrumentReferences(normalizedQuery, { apiTradeAvailableFlag: true });
       if (references.length > 0) {
         underlying = [...references].sort((left, right) => {
           const scoreDiff =
@@ -1612,6 +1694,8 @@ export function createTBankInstrumentsApi(token?: string) {
     fetchOptions,
     fetchOptionsBy,
     fetchOptionBy,
+    findInstrumentReferences,
+    fetchAssetInstrumentReferences,
     fetchAssetFundamentals,
     fetchClosePrices,
     fetchClosePricesByInstrumentIds,
