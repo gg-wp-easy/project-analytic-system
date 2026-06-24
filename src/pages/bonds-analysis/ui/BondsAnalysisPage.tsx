@@ -501,8 +501,8 @@ export function BondsAnalysisPage() {
                 <table className="ui-data-table">
                   <thead>
                     <tr>
-                      <th>{t("Тикер", "Ticker")}</th>
-                      <th>{t("Облигация", "Bond")}</th>
+                      <th className="min-w-28 whitespace-nowrap">{t("Тикер", "Ticker")}</th>
+                      <th className="min-w-80">{t("Облигация", "Bond")}</th>
                       <th>{t("Сектор", "Sector")}</th>
                       <th>{t("Валюта", "Currency")}</th>
                       <th>{t("Риск", "Risk")}</th>
@@ -514,8 +514,8 @@ export function BondsAnalysisPage() {
                   <tbody>
                     {paginatedBonds.map((bond) => (
                       <tr key={`${bond.ticker}-${bond.name}`}>
-                        <td className="font-medium text-slate-900 dark:text-slate-100">{bond.ticker}</td>
-                        <td className="ui-cell-name">{bond.name}</td>
+                        <td className="min-w-28 whitespace-nowrap font-medium text-slate-900 dark:text-slate-100">{bond.ticker}</td>
+                        <td className="ui-cell-name min-w-80 max-w-[28rem] whitespace-normal break-words pr-6 leading-5">{bond.name}</td>
                         <td>{bond.sector}</td>
                         <td>{bond.currency}</td>
                         <td>{bond.riskLevel.toFixed(0)}</td>

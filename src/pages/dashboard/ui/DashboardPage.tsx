@@ -1,99 +1,100 @@
 import { Link } from "react-router-dom";
-import { Network, GitBranch, Brain, Layers, Database, Landmark, ArrowRight, TrendingUp, Activity } from "lucide-react";
+import { Activity, ArrowRight, Database, Landmark, Layers, TrendingUp } from "lucide-react";
 import { useAppSettings } from "../../../app/context/AppSettingsContext";
 
 export function Dashboard() {
   const { t } = useAppSettings();
 
-  const analysisTools = [
+  const sections = [
     {
-      title: t("tool.cluster.title"),
-      description: t("tool.cluster.description"),
-      path: "/cluster",
-      icon: Network,
-      color: "from-purple-500 to-pink-500",
+      title: t({ ru: "Фундаментальные данные акций", en: "Stock Fundamentals" }),
+      description: t({
+        ru: "Список акций, фундаментальные показатели, детали по эмитентам и первичная обработка данных.",
+        en: "Stock list, fundamentals, issuer details, and data preprocessing.",
+      }),
+      path: "/fundamentals",
+      icon: Database,
+      color: "from-slate-600 to-slate-800",
     },
     {
-      title: t("tool.tree.title"),
-      description: t("tool.tree.description"),
-      path: "/decision-tree",
-      icon: GitBranch,
-      color: "from-green-500 to-emerald-500",
-    },
-    {
-      title: t("tool.neural.title"),
-      description: t("tool.neural.description"),
-      path: "/neural-network",
-      icon: Brain,
-      color: "from-orange-500 to-red-500",
-    },
-    {
-      title: t("tool.hybrid.title"),
-      description: t("tool.hybrid.description"),
-      path: "/hybrid",
+      title: t({ ru: "Анализ акций", en: "Stock Analysis" }),
+      description: t({
+        ru: "Единая точка выбора: кластерный анализ, дерево решений, нейросеть и гибридный анализ.",
+        en: "One entry point for clustering, decision tree, neural network, and hybrid analysis.",
+      }),
+      path: "/stock-analysis",
       icon: Layers,
-      color: "from-cyan-500 to-blue-500",
+      color: "from-cyan-600 to-blue-700",
     },
     {
-      title: t("Анализ облигаций", "Bond Analysis"),
-      description: t(
-        "Загрузка облигаций, локальный расчёт метрик и портфеля, полный список с пагинацией.",
-        "Bond loading, local portfolio calculations, and the full universe with pagination.",
-      ),
+      title: t({ ru: "Анализ облигаций", en: "Bond Analysis" }),
+      description: t({
+        ru: "Загрузка облигаций, расчёт локальных метрик, подбор и выгрузка портфеля.",
+        en: "Bond loading, local metrics, portfolio selection, and export.",
+      }),
       path: "/bonds",
       icon: Landmark,
       color: "from-amber-500 to-orange-600",
     },
     {
-      title: t("tool.fundamentals.title"),
-      description: t("tool.fundamentals.description"),
-      path: "/fundamentals",
-      icon: Database,
-      color: "from-slate-600 to-slate-800",
+      title: t({ ru: "Анализ опционов", en: "Options Analysis" }),
+      description: t({
+        ru: "Общий список базовых активов, контракты, детали и конструктор опционных стратегий.",
+        en: "Underlying assets, contracts, details, and option strategy builder.",
+      }),
+      path: "/options",
+      icon: Activity,
+      color: "from-blue-500 to-cyan-600",
     },
   ];
-  const activeAnalysesCount = analysisTools.filter((tool) => tool.path !== "/fundamentals").length;
 
   return (
     <div className="space-y-8">
-      <div className="bg-gradient-to-r from-blue-600 to-cyan-700 rounded-2xl p-8 text-white shadow-xl">
-        <div className="flex items-start justify-between">
+      <div className="rounded-2xl bg-gradient-to-r from-blue-600 to-cyan-700 p-8 text-white shadow-xl">
+        <div className="flex items-start justify-between gap-6">
           <div className="space-y-4">
-            <div className="inline-flex items-center gap-2 bg-white/20 backdrop-blur-sm px-4 py-2 rounded-full">
-              <Activity className="w-4 h-4" />
-              <span className="text-sm font-medium">{t("dashboard.badge")}</span>
+            <div className="inline-flex items-center gap-2 rounded-full bg-white/20 px-4 py-2 backdrop-blur-sm">
+              <Activity className="h-4 w-4" />
+              <span className="text-sm font-medium">{t({ ru: "Платформа аналитики", en: "Analytics Platform" })}</span>
             </div>
-            <h1 className="text-4xl font-bold text-white">{t("dashboard.title")}</h1>
-            <p className="text-lg text-blue-50 max-w-2xl">{t("dashboard.description")}</p>
+            <h1 className="text-4xl font-bold text-white">{t({ ru: "Анализ фондового рынка", en: "Market Analysis" })}</h1>
+            <p className="max-w-2xl text-lg text-blue-50">
+              {t({
+                ru: "Разделы сгруппированы по рабочему процессу: данные акций, модели анализа, облигации и опционы.",
+                en: "Sections are grouped by workflow: stock data, analysis models, bonds, and options.",
+              })}
+            </p>
           </div>
-          <TrendingUp className="w-24 h-24 opacity-20" />
+          <TrendingUp className="h-24 w-24 shrink-0 opacity-20" />
         </div>
       </div>
 
       <div>
-        <h2 className="text-2xl font-semibold text-slate-900 dark:text-slate-100 mb-6">{t("dashboard.toolsTitle")}</h2>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {analysisTools.map((tool) => {
-            const Icon = tool.icon;
+        <h2 className="mb-6 text-2xl font-semibold text-slate-900 dark:text-slate-100">
+          {t({ ru: "Разделы", en: "Sections" })}
+        </h2>
+        <div className="grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-4">
+          {sections.map((section) => {
+            const Icon = section.icon;
             return (
               <Link
-                key={tool.path}
-                to={tool.path}
-                className="group bg-white dark:bg-slate-900 rounded-xl p-6 shadow-sm hover:shadow-xl transition-all duration-300 border border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700"
+                key={section.path}
+                to={section.path}
+                className="group rounded-xl border border-slate-200 bg-white p-6 shadow-sm transition-all duration-300 hover:border-slate-300 hover:shadow-xl dark:border-slate-800 dark:bg-slate-900 dark:hover:border-slate-700"
               >
                 <div className="space-y-4">
-                  <div className={`inline-flex p-3 rounded-lg bg-gradient-to-br ${tool.color}`}>
-                    <Icon className="w-6 h-6 text-white" />
+                  <div className={`inline-flex rounded-lg bg-gradient-to-br p-3 ${section.color}`}>
+                    <Icon className="h-6 w-6 text-white" />
                   </div>
                   <div className="space-y-2">
-                    <h3 className="font-semibold text-slate-900 dark:text-slate-100 group-hover:text-blue-600 transition-colors">
-                      {tool.title}
+                    <h3 className="font-semibold text-slate-900 transition-colors group-hover:text-blue-600 dark:text-slate-100">
+                      {section.title}
                     </h3>
-                    <p className="text-sm text-slate-600 dark:text-slate-300 leading-relaxed">{tool.description}</p>
+                    <p className="text-sm leading-relaxed text-slate-600 dark:text-slate-300">{section.description}</p>
                   </div>
-                  <div className="flex items-center gap-2 text-blue-600 dark:text-blue-400 font-medium text-sm pt-2">
-                    {t("dashboard.open")}
-                    <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+                  <div className="flex items-center gap-2 pt-2 text-sm font-medium text-blue-600 dark:text-blue-400">
+                    {t({ ru: "Перейти", en: "Open" })}
+                    <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
                   </div>
                 </div>
               </Link>

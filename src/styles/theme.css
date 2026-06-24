@@ -462,12 +462,13 @@
   }
 
   .ui-portfolio-table {
-    table-layout: fixed;
+    table-layout: auto;
   }
 
   .ui-portfolio-table th:nth-child(1),
   .ui-portfolio-table td:nth-child(1) {
-    width: 7rem;
+    width: 11rem;
+    min-width: 11rem;
     white-space: nowrap;
   }
 
@@ -479,5 +480,35 @@
   .ui-portfolio-table .ui-cell-name {
     max-width: none;
     overflow-wrap: anywhere;
+  }
+}
+.market-indicatives-marquee {
+  mask-image: linear-gradient(90deg, transparent, #000 4%, #000 96%, transparent);
+  -webkit-mask-image: linear-gradient(90deg, transparent, #000 4%, #000 96%, transparent);
+}
+
+.market-indicatives-marquee-track {
+  animation: market-indicatives-scroll 42s linear infinite;
+}
+
+.market-indicatives-marquee:hover .market-indicatives-marquee-track {
+  animation-play-state: paused;
+}
+
+@keyframes market-indicatives-scroll {
+  from {
+    transform: translateX(0);
+  }
+
+  to {
+    transform: translateX(-50%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .market-indicatives-marquee-track {
+    animation: none;
+    flex-wrap: wrap;
+    width: auto;
   }
 }

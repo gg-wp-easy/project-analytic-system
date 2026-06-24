@@ -1,0 +1,1 @@
+export { StockAvatar } from "./StockAvatar";

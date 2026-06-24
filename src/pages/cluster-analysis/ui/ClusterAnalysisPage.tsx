@@ -9,11 +9,8 @@ import {
   YAxis,
   CartesianGrid,
   Tooltip,
-  Legend,
   ResponsiveContainer,
   Cell,
-  PieChart,
-  Pie,
 } from "recharts";
 import { useFundamentals } from "../../../entities/fundamentals";
 import { useAppSettings } from "../../../app/context/AppSettingsContext";
@@ -56,7 +53,12 @@ import { PortfolioHoldingsPanel } from "../../../shared/ui/analysis/PortfolioHol
 
 const palette = ["#3b82f6", "#10b981", "#f59e0b", "#ef4444", "#8b5cf6", "#06b6d4", "#14b8a6", "#f97316"];
 const ENABLE_TEMP_LOGS = true;
-const CLUSTER_STATE_KEY = "cluster-analysis-state-v1";
+const CLUSTER_STATE_KEY = "cluster-analysis-state-v2";
+
+function getClusterColor(cluster: number): string {
+  const safeCluster = Number.isFinite(cluster) ? Math.abs(Math.trunc(cluster)) : 0;
+  return palette[safeCluster % palette.length];
+}
 
 function formatMetric(value: unknown): string {
   if (typeof value === "number") {
@@ -135,7 +137,7 @@ function extractPoints(parsed: Record<string, unknown>): ClusterPoint[] {
           numberOr(row.clusterId, numberOr(row.cluster_label, numberOr(row.group, numberOr(row.Cluster, 0)))),
         ),
       );
-      const color = palette[cluster % palette.length];
+      const color = getClusterColor(cluster);
       return {
         ticker: String(row.ticker ?? row.Ticker ?? row.name ?? row.Company ?? `Asset ${index + 1}`),
         figi: String(row.figi ?? row.id ?? index),
@@ -187,7 +189,7 @@ function extractGroups(parsed: Record<string, unknown>, points: ClusterPoint[]):
         count,
         avgPE,
         avgG,
-        color: palette[cluster % palette.length],
+        color: getClusterColor(cluster),
         description: String(row.description ?? "Результат серверной кластеризации (k-means)"),
       } satisfies ClusterGroup;
     });
@@ -208,7 +210,7 @@ function extractGroups(parsed: Record<string, unknown>, points: ClusterPoint[]):
       count: pointsInCluster.length,
       avgPE,
       avgG,
-      color: palette[cluster % palette.length],
+      color: getClusterColor(cluster),
       description: "Результат серверной кластеризации (k-means)",
     };
   });
@@ -300,7 +302,7 @@ function extractSummary(parsed: Record<string, unknown>): AnalysisSummary | null
   const clusterDistribution = Object.entries(rawDistribution).map(([cluster, value], index) => ({
     cluster: `Кластер ${Number(cluster) + 1}`,
     count: numberOr(value, 0),
-    color: palette[index % palette.length],
+    color: getClusterColor(numberOr(cluster, index)),
   }));
 
   return {
@@ -410,6 +412,21 @@ export function ClusterAnalysis() {
   const [bestPortfolioAssetsCount, setBestPortfolioAssetsCount] = useState(0);
   const portfolioChartRef = useRef<HTMLDivElement | null>(null);
   const visibleMetrics = useMemo(() => metrics.filter((item) => isVisibleAnalysisMetric(item.label)), [metrics]);
+  const clusterSeries = useMemo(
+    () =>
+      Array.from(new Set(clusterData.map((point) => point.cluster)))
+        .sort((left, right) => left - right)
+        .map((cluster) => {
+          const points = clusterData.filter((point) => point.cluster === cluster);
+          return {
+            cluster,
+            name: `${t("Кластер", "Cluster")} ${cluster + 1}`,
+            color: points[0]?.color ?? getClusterColor(cluster),
+            points,
+          };
+        }),
+    [clusterData, t],
+  );
   const showErrorDialog = (message: string) => {
     setError(message);
     setErrorDialogMessage(message);
@@ -754,7 +771,7 @@ export function ClusterAnalysis() {
           {summaryInfo && (
             <SectionCard title={t("Сводка по результату", "Result Summary")}>
               <div className="space-y-5">
-                <div className="grid grid-cols-1 gap-3 text-sm md:grid-cols-3">
+                <div className="grid grid-cols-1 gap-3 text-sm md:grid-cols-2">
                   <div className="ui-stat-card">
                     <div className="text-slate-500 dark:text-slate-400">{t("Компаний", "Companies")}</div>
                     <div className="text-xl font-semibold text-slate-900 dark:text-slate-100">{summaryInfo.companiesCount}</div>
@@ -762,10 +779,6 @@ export function ClusterAnalysis() {
                   <div className="ui-stat-card">
                     <div className="text-slate-500 dark:text-slate-400">{t("Кластеров", "Clusters")}</div>
                     <div className="text-xl font-semibold text-slate-900 dark:text-slate-100">{summaryInfo.clustersCount}</div>
-                  </div>
-                  <div className="ui-stat-card">
-                    <div className="text-slate-500 dark:text-slate-400">{t("Портфелей", "Portfolios")}</div>
-                    <div className="text-xl font-semibold text-slate-900 dark:text-slate-100">{summaryInfo.portfoliosCount}</div>
                   </div>
                 </div>
 
@@ -786,37 +799,6 @@ export function ClusterAnalysis() {
                     </ResponsiveContainer>
                   </div>
                 )}
-              </div>
-            </SectionCard>
-          )}
-
-          {!!portfolioStrategies.length && (
-            <SectionCard title={t("Стратегии портфелей", "Portfolio Strategies")}>
-              <div className="ui-table-shell overflow-x-auto">
-                <table className="ui-data-table">
-                  <thead>
-                    <tr>
-                      <th>{t("Стратегия", "Strategy")}</th>
-                      <th>Expected return</th>
-                      <th>Risk</th>
-                      <th>Sharpe</th>
-                      <th>Diversification</th>
-                      <th>{t("Позиций", "Positions")}</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {portfolioStrategies.map((row) => (
-                      <tr key={row.name}>
-                        <td className="font-medium text-slate-900 dark:text-slate-100">{row.name}</td>
-                        <td>{row.expectedReturn.toFixed(4)}</td>
-                        <td>{row.risk.toFixed(4)}</td>
-                        <td>{row.sharpe.toFixed(4)}</td>
-                        <td>{row.diversification.toFixed(4)}</td>
-                        <td>{row.assetsCount}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
               </div>
             </SectionCard>
           )}
@@ -866,6 +848,16 @@ export function ClusterAnalysis() {
               "Compare companies by valuation and growth across the detected clusters.",
             )}
           >
+            {!!clusterSeries.length && (
+              <div className="mb-4 flex flex-wrap items-center gap-2">
+                {clusterSeries.map((series) => (
+                  <div key={series.cluster} className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white/80 px-3 py-1 text-xs font-semibold text-slate-700 dark:border-slate-700 dark:bg-slate-900/70 dark:text-slate-200">
+                    <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: series.color }} />
+                    <span>{series.name}</span>
+                  </div>
+                ))}
+              </div>
+            )}
             <ResponsiveContainer width="100%" height={460}>
               <ScatterChart margin={{ top: 20, right: 30, left: 20, bottom: 20 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
@@ -888,17 +880,16 @@ export function ClusterAnalysis() {
                     );
                   }}
                 />
-                {Array.from(new Set(clusterData.map((d) => d.cluster))).map((cluster) => {
-                  const points = clusterData.filter((d) => d.cluster === cluster);
-                  return (
-                    <Scatter key={cluster} name={`${t("Кластер", "Cluster")} ${cluster + 1}`} data={points}>
-                      {points.map((entry) => (
-                        <Cell key={`${entry.figi}-${entry.cluster}`} fill={entry.color} />
-                      ))}
-                    </Scatter>
-                  );
-                })}
-                <Legend />
+                {clusterSeries.map((series) => (
+                  <Scatter
+                    key={series.cluster}
+                    name={series.name}
+                    data={series.points}
+                    fill={series.color}
+                    stroke={series.color}
+                    fillOpacity={0.86}
+                  />
+                ))}
               </ScatterChart>
             </ResponsiveContainer>
           </SectionCard>

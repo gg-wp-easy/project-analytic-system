@@ -1,10 +1,12 @@
 import type { RefObject } from "react";
 import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from "recharts";
+import { StockAvatar } from "../stock-avatar";
 
 type PortfolioHoldingRow = {
   ticker: string;
   name?: string | null;
   weight: number;
+  logoUrl?: string | null;
 };
 
 type PortfolioHoldingsPanelProps<Row extends PortfolioHoldingRow> = {
@@ -50,21 +52,26 @@ export function PortfolioHoldingsPanel<Row extends PortfolioHoldingRow>({
         </ResponsiveContainer>
       </div>
 
-      <div className="ui-table-shell ui-table-shell-static">
-        <table className="ui-data-table ui-portfolio-table">
+      <div className="ui-table-shell overflow-x-auto">
+        <table className="ui-data-table ui-portfolio-table min-w-[48rem]">
           <thead>
             <tr>
-              <th>Ticker</th>
-              <th>{companyLabel}</th>
-              <th>{weightLabel}</th>
+              <th className="w-44 min-w-44 whitespace-nowrap">Ticker</th>
+              <th className="min-w-[22rem]">{companyLabel}</th>
+              <th className="w-32 min-w-32 whitespace-nowrap">{weightLabel}</th>
             </tr>
           </thead>
           <tbody>
             {rows.map((row) => (
               <tr key={`${row.ticker}-${row.name ?? ""}`}>
-                <td className="font-medium text-slate-900 dark:text-slate-100">{row.ticker}</td>
-                <td className="ui-cell-name">{row.name || "-"}</td>
-                <td className="ui-cell-number">{row.weight.toFixed(2)}</td>
+                <td className="w-44 min-w-44 whitespace-nowrap align-top">
+                  <div className="flex min-w-0 items-center gap-2 font-medium text-slate-900 dark:text-slate-100">
+                    <StockAvatar ticker={row.ticker} name={row.name} logoUrl={row.logoUrl} size="sm" />
+                    <span className="inline-block max-w-[7.5rem] truncate" title={row.ticker}>{row.ticker}</span>
+                  </div>
+                </td>
+                <td className="ui-cell-name min-w-[22rem] whitespace-normal break-words pr-6 leading-5">{row.name || "-"}</td>
+                <td className="ui-cell-number w-32 min-w-32">{row.weight.toFixed(2)}</td>
               </tr>
             ))}
           </tbody>

@@ -1,4 +1,4 @@
-﻿import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Database, Download, RefreshCw, Trash2 } from "lucide-react";
 import { useRef } from "react";
 import { useAppSettings } from "../../../app/context/AppSettingsContext";
@@ -9,6 +9,8 @@ import { MetricSkeletonGrid, PageLoadingState, TableSkeleton } from "../../../sh
 import { formatFundamentalMetricValue, type FundamentalMetricKey } from "../../../shared/lib/format/fundamentals";
 import { AppErrorDialog } from "../../../shared/ui/app-error-dialog";
 import { FundamentalMetricLabel } from "../../../shared/ui/fundamentals/FundamentalMetricLabel";
+import { StockAvatar } from "../../../shared/ui/stock-avatar";
+import { FundamentalsTabs } from "./FundamentalsTabs";
 
 export function FundamentalsPage() {
   const { cache, isLoading, hasData, error, loadFundamentals, clearCache } = useFundamentals();
@@ -73,6 +75,8 @@ export function FundamentalsPage() {
         description={t("fund.description")}
         accent="slate"
       />
+
+      <FundamentalsTabs />
 
       {/*<div className="bg-white dark:bg-slate-900 rounded-xl p-6 shadow-sm border border-slate-200 dark:border-slate-800">
         <h2 className="font-semibold text-slate-900 dark:text-slate-100 mb-4">{t("fund.sourcesTitle")}</h2>
@@ -183,7 +187,12 @@ export function FundamentalsPage() {
                     const f = cache.fundamentalsByFigi[share.figi];
                     return (
                       <tr key={share.figi}>
-                        <td className="ui-cell-number font-medium text-slate-900 dark:text-slate-100">{share.ticker}</td>
+                        <td>
+                          <div className="flex items-center gap-2 font-medium text-slate-900 dark:text-slate-100">
+                            <StockAvatar ticker={share.ticker} name={share.name} size="sm" />
+                            <span>{share.ticker}</span>
+                          </div>
+                        </td>
                         <td className="ui-cell-name">{share.name}</td>
                         <td className="ui-cell-action">
                           <Link

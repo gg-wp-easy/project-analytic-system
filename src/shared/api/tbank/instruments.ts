@@ -2,6 +2,8 @@ const SHARES_ENDPOINT =
   "https://invest-public-api.tbank.ru/rest/tinkoff.public.invest.api.contract.v1.InstrumentsService/Shares";
 const INDICATIVES_ENDPOINT =
   "https://invest-public-api.tbank.ru/rest/tinkoff.public.invest.api.contract.v1.InstrumentsService/Indicatives";
+const CURRENCIES_ENDPOINT =
+  "https://invest-public-api.tbank.ru/rest/tinkoff.public.invest.api.contract.v1.InstrumentsService/Currencies";
 const BONDS_ENDPOINT =
   "https://invest-public-api.tbank.ru/rest/tinkoff.public.invest.api.contract.v1.InstrumentsService/Bonds";
 const FUTURES_ENDPOINT =
@@ -105,6 +107,7 @@ export type TBankShare = {
   lot: number;
   currency: string;
   exchange: string;
+  sector?: string;
   liquidityFlag?: boolean;
   apiTradeAvailableFlag?: boolean;
   buyAvailableFlag?: boolean;
@@ -122,6 +125,23 @@ export type TBankIndicative = {
   instrumentKind: string;
   buyAvailableFlag: boolean;
   sellAvailableFlag: boolean;
+};
+
+export type TBankCurrency = {
+  figi: string;
+  uid: string;
+  ticker: string;
+  name: string;
+  currency: string;
+  isoCurrencyName: string;
+  exchange: string;
+  classCode: string;
+  lot: number;
+  nominal: number;
+  buyAvailableFlag: boolean;
+  sellAvailableFlag: boolean;
+  apiTradeAvailableFlag?: boolean;
+  otcFlag?: boolean;
 };
 
 export type TBankBond = {
@@ -360,6 +380,17 @@ function quotationToNumber(value: unknown): number {
   return units + nano / 1_000_000_000;
 }
 
+function numberLikeToNumber(value: unknown): number {
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return value;
+  }
+  if (typeof value === "string") {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : 0;
+  }
+  return quotationToNumber(value);
+}
+
 function chunkArray<T>(source: T[], size: number): T[][] {
   const chunks: T[][] = [];
   for (let i = 0; i < source.length; i += size) {
@@ -442,6 +473,44 @@ function normalizeLastPriceItem(item: AnyRecord, nowIso: string): TBankLastPrice
     price: quotationToNumber(priceSource),
     time: pickTimestampIso(item, ["time", "timestamp", "date"]) || nowIso,
   };
+}
+
+function normalizeCurrencyItem(item: AnyRecord): TBankCurrency | null {
+  const figi = pickString(item, ["figi"]);
+  const uid = pickString(item, ["uid", "instrumentUid", "instrument_uid"]);
+  const ticker = pickString(item, ["ticker"]);
+  if (!ticker || (!uid && !figi)) {
+    return null;
+  }
+
+  return {
+    figi,
+    uid,
+    ticker,
+    name: pickString(item, ["name"]),
+    currency: pickString(item, ["currency"]),
+    isoCurrencyName: pickString(item, ["isoCurrencyName", "iso_currency_name"]),
+    exchange: pickString(item, ["exchange", "realExchange", "real_exchange"]),
+    classCode: pickString(item, ["classCode", "class_code"]),
+    lot: pickNumber(item, ["lot"]),
+    nominal: numberLikeToNumber(item.nominal ?? item.initialNominal ?? item.initial_nominal),
+    buyAvailableFlag: Boolean(item.buyAvailableFlag ?? item.buy_available_flag),
+    sellAvailableFlag: Boolean(item.sellAvailableFlag ?? item.sell_available_flag),
+    apiTradeAvailableFlag: pickOptionalBoolean(item, ["apiTradeAvailableFlag", "api_trade_available_flag"]),
+    otcFlag: pickOptionalBoolean(item, ["otcFlag", "otc_flag"]),
+  };
+}
+
+function dedupeCurrencies(items: TBankCurrency[]): TBankCurrency[] {
+  const seen = new Set<string>();
+  return items.filter((item) => {
+    const key = item.uid || item.figi || `${item.ticker}_${item.classCode}`;
+    if (!key || seen.has(key)) {
+      return false;
+    }
+    seen.add(key);
+    return true;
+  });
 }
 
 function normalizeIndicativeItem(item: AnyRecord): TBankIndicative | null {
@@ -1077,6 +1146,7 @@ export function createTBankInstrumentsApi(token?: string) {
           lot: pickNumber(item, ["lot"]),
           currency: pickString(item, ["currency"]),
           exchange: pickString(item, ["exchange", "realExchange", "real_exchange"]),
+          sector: pickString(item, ["sector"]),
           liquidityFlag: pickOptionalBoolean(item, ["liquidityFlag", "liquidity_flag"]),
           apiTradeAvailableFlag: pickOptionalBoolean(item, ["apiTradeAvailableFlag", "api_trade_available_flag"]),
           buyAvailableFlag: pickOptionalBoolean(item, ["buyAvailableFlag", "buy_available_flag"]),
@@ -1101,6 +1171,44 @@ export function createTBankInstrumentsApi(token?: string) {
     return instruments
       .map((raw) => normalizeIndicativeItem((raw ?? {}) as AnyRecord))
       .filter((item): item is TBankIndicative => Boolean(item));
+  }
+
+  async function fetchCurrencies(): Promise<TBankCurrency[]> {
+    const authToken = ensureToken();
+    const requestBodies: Record<string, unknown>[] = [
+      { instrumentStatus: "INSTRUMENT_STATUS_ALL" },
+      { instrumentStatus: "INSTRUMENT_STATUS_ALL", instrumentExchange: "INSTRUMENT_EXCHANGE_DEALER" },
+    ];
+
+    const settled = await Promise.allSettled(
+      requestBodies.map((body) => requestJson<AnyRecord>(CURRENCIES_ENDPOINT, authToken, body)),
+    );
+    const failures = settled
+      .filter((result): result is PromiseRejectedResult => result.status === "rejected")
+      .map((result) => (result.reason instanceof Error ? result.reason.message : String(result.reason)));
+
+    const currencies = settled.flatMap((result) => {
+      if (result.status !== "fulfilled") {
+        return [];
+      }
+      const payload = result.value;
+      const instruments =
+        (Array.isArray(payload.instruments) && payload.instruments) ||
+        (Array.isArray(payload.currencies) && payload.currencies) ||
+        (Array.isArray(payload.items) && payload.items) ||
+        (Array.isArray(payload.data) && payload.data) ||
+        [];
+
+      return instruments
+        .map((raw) => normalizeCurrencyItem((raw ?? {}) as AnyRecord))
+        .filter((item): item is TBankCurrency => Boolean(item));
+    });
+
+    if (currencies.length === 0 && failures.length > 0) {
+      throw new Error(failures.slice(0, OPTIONS_DISCOVERY_ERROR_PREVIEW_LIMIT).join(" | "));
+    }
+
+    return dedupeCurrencies(currencies);
   }
 
   async function fetchBonds(): Promise<TBankBond[]> {
@@ -1690,6 +1798,7 @@ export function createTBankInstrumentsApi(token?: string) {
   return {
     fetchShares,
     fetchIndicatives,
+    fetchCurrencies,
     fetchBonds,
     fetchOptions,
     fetchOptionsBy,
@@ -1705,6 +1814,7 @@ export function createTBankInstrumentsApi(token?: string) {
     endpoints: {
       shares: SHARES_ENDPOINT,
       indicatives: INDICATIVES_ENDPOINT,
+      currencies: CURRENCIES_ENDPOINT,
       bonds: BONDS_ENDPOINT,
       futures: FUTURES_ENDPOINT,
       options: OPTIONS_ENDPOINT,

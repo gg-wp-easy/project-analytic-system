@@ -15,6 +15,7 @@ import { AppErrorDialog } from "../../../shared/ui/app-error-dialog";
 import { MetricCard, MetricGrid, PageHero, SectionCard } from "../../../shared/ui/analysis-shell";
 import { ChartSkeleton, MetricSkeletonGrid, PageLoadingState } from "../../../shared/ui/loading-state";
 import { FundamentalMetricLabel } from "../../../shared/ui/fundamentals/FundamentalMetricLabel";
+import { StockAvatar } from "../../../shared/ui/stock-avatar";
 
 type ChartRange = "1D" | "1W" | "1M" | "1Y";
 type ChartMode = "line" | "candles";
@@ -913,9 +914,12 @@ export function FundamentalsDetailsPage() {
       <PageHero
         icon={TrendingUp}
         title={
-          <div className="space-y-2">
-            <div className="text-sm font-semibold uppercase tracking-[0.18em] text-white/72">{share.ticker}</div>
-            <div>{share.name}</div>
+          <div className="flex items-center gap-3">
+            <StockAvatar ticker={share.ticker} name={share.name} size="lg" className="ring-white/40" />
+            <div className="space-y-2">
+              <div className="text-sm font-semibold uppercase tracking-[0.18em] text-white/72">{share.ticker}</div>
+              <div>{share.name}</div>
+            </div>
           </div>
         }
         description={

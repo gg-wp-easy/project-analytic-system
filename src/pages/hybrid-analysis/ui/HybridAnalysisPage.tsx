@@ -53,7 +53,7 @@ import { PortfolioHoldingsPanel } from "../../../shared/ui/analysis/PortfolioHol
 
 const ENABLE_TEMP_LOGS = true;
 const palette = ["#0891b2", "#2563eb", "#f97316", "#16a34a", "#e11d48", "#a855f7", "#0ea5e9", "#f59e0b"];
-const HYBRID_STATE_KEY = "hybrid-analysis-state-v1";
+const HYBRID_STATE_KEY = "hybrid-analysis-state-v2";
 const DEFAULT_SERVER_ERROR_RU = "Сервер вернул ошибку. Попробуйте повторить позже.";
 const DEFAULT_SERVER_ERROR_EN = "Server returned an error. Please try again later.";
 
@@ -118,6 +118,7 @@ function extractMetrics(parsed: Record<string, unknown>): MetricItem[] {
   const countMapping: Array<{ key: string; label: string }> = [
     { key: "cluster_selected_count", label: "Cluster Selected" },
     { key: "tree_selected_count", label: "Tree Selected" },
+    { key: "hybrid_selected_count", label: "Hybrid Selected" },
     { key: "undervalued_count", label: "Undervalued" },
     { key: "models_count", label: "Models" },
   ];
@@ -191,6 +192,8 @@ function extractPortfolioPositions(parsed: Record<string, unknown>): PortfolioPo
   const tickerMap = new Map<string, { name: string; expectedReturn: number }>();
   const merged = [
     ...(Array.isArray(parsed.cluster_selected) ? parsed.cluster_selected : []),
+    ...(Array.isArray(parsed.tree_selected) ? parsed.tree_selected : []),
+    ...(Array.isArray(parsed.hybrid_selected) ? parsed.hybrid_selected : []),
     ...(Array.isArray(parsed.undervalued_stocks) ? parsed.undervalued_stocks : []),
   ];
 
@@ -295,9 +298,9 @@ export function HybridAnalysis() {
   const [error, setError] = useState<string | null>(null);
   const [errorDialogMessage, setErrorDialogMessage] = useState<string | null>(null);
   const [weights, setWeights] = useState({
-    clusterWeight: "30",
-    treeWeight: "30",
-    neuralWeight: "40",
+    clusterWeight: "50",
+    treeWeight: "25",
+    neuralWeight: "25",
   });
   const [modelComparison, setModelComparison] = useState<ModelScore[]>([]);
   const [metrics, setMetrics] = useState<MetricItem[]>([]);
@@ -307,6 +310,14 @@ export function HybridAnalysis() {
   const [portfolioAssetsCount, setPortfolioAssetsCount] = useState(0);
   const portfolioChartRef = useRef<HTMLDivElement | null>(null);
   const visibleMetrics = useMemo(() => metrics.filter((item) => isVisibleAnalysisMetric(item.label)), [metrics]);
+  const modelWeightChartData = useMemo(
+    () =>
+      modelComparison.map((row) => ({
+        model: row.model,
+        score: Number.isFinite(row.score) ? (Math.abs(row.score) <= 1 ? row.score * 100 : row.score) : 0,
+      })),
+    [modelComparison],
+  );
 
   const requestData = useMemo(
     () =>
@@ -366,9 +377,9 @@ export function HybridAnalysis() {
       };
       if (parsed.weights) {
         setWeights({
-          clusterWeight: String(parsed.weights.clusterWeight ?? "30"),
-          treeWeight: String(parsed.weights.treeWeight ?? "30"),
-          neuralWeight: String(parsed.weights.neuralWeight ?? "40"),
+          clusterWeight: String(parsed.weights.clusterWeight ?? "50"),
+          treeWeight: String(parsed.weights.treeWeight ?? "25"),
+          neuralWeight: String(parsed.weights.neuralWeight ?? "25"),
         });
       }
       if (Array.isArray(parsed.modelComparison)) setModelComparison(parsed.modelComparison);
@@ -549,6 +560,28 @@ export function HybridAnalysis() {
     }
   };
 
+  const analysisWeightFields = [
+    {
+      key: "clusterWeight" as const,
+      label: t("Кластерный анализ", "Cluster analysis"),
+      defaultValue: 50,
+    },
+    {
+      key: "treeWeight" as const,
+      label: t("Дерево решений", "Decision tree"),
+      defaultValue: 25,
+    },
+    {
+      key: "neuralWeight" as const,
+      label: t("Нейросетевой анализ", "Neural analysis"),
+      defaultValue: 25,
+    },
+  ];
+  const analysisWeightTotal = analysisWeightFields.reduce(
+    (sum, item) => sum + Math.max(numberOr(weights[item.key], item.defaultValue), 0),
+    0,
+  );
+
   return (
     <>
       <AnalysisPageFrame
@@ -577,6 +610,31 @@ export function HybridAnalysis() {
               <div className="ui-surface-muted">
                 <p className="text-sm text-slate-700 dark:text-slate-300">{t("Источник: кэш фундаментальных данных", "Source: fundamentals cache")}</p>
                 <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">{t("Записей", "Records")}: {requestData.length}</p>
+              </div>
+              <div className="ui-surface-muted space-y-3">
+                <p className="text-sm font-medium text-slate-700 dark:text-slate-300">
+                  {t("Коэффициенты важности анализов", "Analysis Importance Coefficients")}
+                </p>
+                {analysisWeightFields.map((field) => {
+                  const rawValue = Math.max(numberOr(weights[field.key], field.defaultValue), 0);
+                  const share = analysisWeightTotal > 0 ? (rawValue / analysisWeightTotal) * 100 : 0;
+                  return (
+                    <label key={field.key} className="block text-xs text-slate-600 dark:text-slate-400">
+                      <span className="flex items-center justify-between gap-3">
+                        <span>{field.label}</span>
+                        <span className="font-semibold text-cyan-700 dark:text-cyan-300">{share.toFixed(0)}%</span>
+                      </span>
+                      <input
+                        type="number"
+                        min="0"
+                        step="1"
+                        className="ui-input mt-1"
+                        value={weights[field.key]}
+                        onChange={(e) => setWeights((current) => ({ ...current, [field.key]: e.target.value }))}
+                      />
+                    </label>
+                  );
+                })}
               </div>
               <OptimizerSettingsFields
                 settings={optimizerSettings}
@@ -623,6 +681,30 @@ export function HybridAnalysis() {
                 />
               ))}
             </MetricGrid>
+          )}
+
+          {!!modelWeightChartData.length && (
+            <SectionCard
+              title={t("Вклад анализов в гибрид", "Analysis Contribution Weights")}
+              description={t(
+                "Нормализованные коэффициенты, по которым усреднялись сигналы моделей.",
+                "Normalized coefficients used to average model signals.",
+              )}
+            >
+              <ResponsiveContainer width="100%" height={260}>
+                <BarChart data={modelWeightChartData} layout="vertical" margin={{ left: 16, right: 20 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                  <XAxis type="number" domain={[0, 100]} tickFormatter={(value) => `${Number(value).toFixed(0)}%`} stroke="#64748b" />
+                  <YAxis dataKey="model" type="category" width={110} stroke="#64748b" />
+                  <Tooltip formatter={(value: number) => `${Number(value).toFixed(1)}%`} />
+                  <Bar dataKey="score" radius={[0, 6, 6, 0]}>
+                    {modelWeightChartData.map((entry, index) => (
+                      <Cell key={entry.model} fill={palette[index % palette.length]} />
+                    ))}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            </SectionCard>
           )}
 
           {!!trainingHistory.length && (

@@ -26,6 +26,7 @@ export type ShareRecord = {
   lot: number;
   currency: string;
   exchange: string;
+  sector?: string;
   liquidityFlag?: boolean;
   apiTradeAvailableFlag?: boolean;
   buyAvailableFlag?: boolean;

@@ -2,6 +2,7 @@ export { createTBankInstrumentsApi, normalizeTBankToken, TBANK_TOKEN_STORAGE_KEY
 export type {
   TBankShare,
   TBankIndicative,
+  TBankCurrency,
   TBankBond,
   TBankOption,
   TBankInstrumentReference,
@@ -10,5 +11,6 @@ export type {
   TBankBondCoupon,
   TBankFundamental,
   TBankClosePrice,
+  TBankLastPrice,
   TBankCandle,
 } from "./instruments";
