@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { ArrowLeft, BarChart3, Calendar, RefreshCw, TrendingUp } from "lucide-react";
 import { Link, useParams } from "react-router-dom";
-import { Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { useAppSettings } from "../../../app/context/AppSettingsContext";
 import { useFundamentals, type AssetFundamentalRecord, type ShareRecord } from "../../../entities/fundamentals";
 import { createTBankInstrumentsApi, type TBankCandle } from "../../../shared/api/tbank";
@@ -73,6 +72,11 @@ const RANGE_CONFIG: Record<ChartRange, RangeConfig> = {
 };
 
 const RANGE_ORDER: ChartRange[] = ["1D", "1W", "1M", "1Y"];
+const CHART_UP_COLOR = "#16a34a";
+const CHART_DOWN_COLOR = "#64748b";
+const CHART_UP_MUTED_COLOR = "rgba(22, 163, 74, 0.16)";
+const CANDLE_DOWN_COLOR = "#e11d48";
+const CANDLE_DOWN_MUTED_COLOR = "rgba(225, 29, 72, 0.16)";
 
 const METRIC_ITEMS: Array<{
   key: keyof AssetFundamentalRecord;
@@ -394,41 +398,162 @@ function useElementWidth() {
   return { ref, width };
 }
 
-function HistoryTooltip({
-  active,
-  payload,
+function getChartPriceDomain(data: PriceCandle[], mode: "close" | "ohlc") {
+  const rawMin = data.reduce((acc, item) => Math.min(acc, mode === "close" ? item.close : item.low), data[0]?.close ?? 0);
+  const rawMax = data.reduce((acc, item) => Math.max(acc, mode === "close" ? item.close : item.high), data[0]?.close ?? 0);
+  const spread = rawMax - rawMin;
+  const padding = spread > 0 ? spread * 0.08 : Math.max(rawMax * 0.015, 1);
+  return {
+    minPrice: rawMin - padding,
+    maxPrice: rawMax + padding,
+  };
+}
+
+function getCandleTone(candle: PriceCandle): { color: string; mutedColor: string; isUp: boolean } {
+  const isUp = candle.close >= candle.open;
+  return {
+    color: isUp ? CHART_UP_COLOR : CANDLE_DOWN_COLOR,
+    mutedColor: isUp ? CHART_UP_MUTED_COLOR : CANDLE_DOWN_MUTED_COLOR,
+    isUp,
+  };
+}
+
+function PriceLineChart({
+  data,
   currency,
   locale,
   range,
   isEn,
 }: {
-  active?: boolean;
-  payload?: Array<{ payload: PriceCandle }>;
+  data: PriceCandle[];
   currency: string;
   locale: "ru" | "en";
   range: ChartRange;
   isEn: boolean;
 }) {
-  if (!active || !payload?.length) {
-    return null;
-  }
+  const { ref, width } = useElementWidth();
+  const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
+  const activeIndex = hoveredIndex ?? data.length - 1;
+  const activePoint = data[activeIndex] ?? null;
+  const latestPoint = data[data.length - 1] ?? null;
+  const height = 352;
+  const marginTop = 30;
+  const marginRight = 88;
+  const marginBottom = 34;
+  const marginLeft = 14;
+  const chartWidth = Math.max(width, marginLeft + marginRight + 160);
+  const plotWidth = Math.max(chartWidth - marginLeft - marginRight, 1);
+  const plotHeight = Math.max(height - marginTop - marginBottom, 1);
+  const { minPrice, maxPrice } = useMemo(() => getChartPriceDomain(data, "close"), [data]);
+  const trendIsUp = data.length < 2 || data[data.length - 1].close >= data[0].close;
+  const lineColor = trendIsUp ? CHART_UP_COLOR : CHART_DOWN_COLOR;
 
-  const candle = payload[0]?.payload;
-  if (!candle) {
-    return null;
-  }
+  const yToCoord = useCallback(
+    (price: number) => {
+      if (maxPrice === minPrice) {
+        return marginTop + plotHeight / 2;
+      }
+      const ratio = (price - minPrice) / (maxPrice - minPrice);
+      return marginTop + plotHeight - ratio * plotHeight;
+    },
+    [maxPrice, minPrice, plotHeight],
+  );
+
+  const xToCoord = useCallback(
+    (index: number) => {
+      if (data.length <= 1) {
+        return marginLeft + plotWidth / 2;
+      }
+      return marginLeft + (plotWidth / (data.length - 1)) * index;
+    },
+    [data.length, plotWidth],
+  );
+
+  const axisValues = Array.from({ length: 5 }, (_, index) => maxPrice - ((maxPrice - minPrice) / 4) * index);
+  const labelIndices = [...new Set([0, Math.floor(data.length / 3), Math.floor((data.length * 2) / 3), data.length - 1])]
+    .filter((index) => index >= 0 && index < data.length);
+  const path = data
+    .map((point, index) => `${index === 0 ? "M" : "L"} ${xToCoord(index).toFixed(2)} ${yToCoord(point.close).toFixed(2)}`)
+    .join(" ");
+  const activeX = activePoint ? xToCoord(activeIndex) : 0;
+  const activeY = activePoint ? yToCoord(activePoint.close) : 0;
+  const latestY = latestPoint ? yToCoord(latestPoint.close) : 0;
+  const hitWidth = data.length > 1 ? Math.max(plotWidth / (data.length - 1), 12) : plotWidth;
 
   return (
-    <div className="rounded-2xl border border-slate-200/90 bg-white/95 px-4 py-3 text-sm shadow-xl dark:border-slate-700 dark:bg-slate-950/95">
-      <div className="mb-2 text-xs font-semibold uppercase tracking-[0.14em] text-slate-500 dark:text-slate-400">
-        {range === "1D" || range === "1W" ? formatDateTime(candle.time, locale) : formatDateLabel(candle.time, range, locale)}
-      </div>
-      <div className="space-y-1 text-slate-700 dark:text-slate-200">
-        <div>{isEn ? "Close" : "Закрытие"}: {formatPriceValue(candle.close, currency, locale)}</div>
-        <div>{isEn ? "Open" : "Открытие"}: {formatPriceValue(candle.open, currency, locale)}</div>
-        <div>{isEn ? "High" : "Максимум"}: {formatPriceValue(candle.high, currency, locale)}</div>
-        <div>{isEn ? "Low" : "Минимум"}: {formatPriceValue(candle.low, currency, locale)}</div>
-      </div>
+    <div
+      ref={ref}
+      className="relative h-[22rem] w-full overflow-hidden rounded-xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-950"
+    >
+      {activePoint ? (
+        <div className="pointer-events-none absolute left-4 top-3 z-10 flex flex-wrap items-center gap-2 text-xs font-medium text-slate-500 dark:text-slate-400">
+          <span className="font-semibold text-slate-800 dark:text-slate-100">
+            {range === "1D" ? formatDateTime(activePoint.time, locale) : formatDateLabel(activePoint.time, range, locale)}
+          </span>
+          <span>{isEn ? "Price" : "Цена"}</span>
+          <span className={trendIsUp ? "font-semibold text-emerald-600" : "font-semibold text-slate-600 dark:text-slate-300"}>
+            {formatPriceValue(activePoint.close, currency, locale)}
+          </span>
+        </div>
+      ) : null}
+      {width > 0 ? (
+        <svg width={chartWidth} height={height} viewBox={`0 0 ${chartWidth} ${height}`} className="h-full w-full">
+          <rect x="0" y="0" width={chartWidth} height={height} fill="transparent" />
+          {axisValues.map((value) => {
+            const y = yToCoord(value);
+            return (
+              <g key={value}>
+                <line x1={marginLeft} x2={chartWidth - marginRight} y1={y} y2={y} stroke="rgba(148, 163, 184, 0.16)" />
+                <text x={chartWidth - marginRight + 12} y={y + 4} fontSize="11" fill="rgb(100, 116, 139)">
+                  {formatPriceValue(value, currency, locale)}
+                </text>
+              </g>
+            );
+          })}
+          {labelIndices.map((index) => {
+            const item = data[index];
+            const x = xToCoord(index);
+            return (
+              <g key={`${item.time}-grid`}>
+                <line x1={x} x2={x} y1={marginTop} y2={height - marginBottom} stroke="rgba(148, 163, 184, 0.10)" />
+                <text x={x} y={height - 11} textAnchor="middle" fontSize="11" fill="rgb(100, 116, 139)">
+                  {formatDateLabel(item.time, range, locale)}
+                </text>
+              </g>
+            );
+          })}
+          {latestPoint ? (
+            <g>
+              <line x1={marginLeft} x2={chartWidth - marginRight} y1={latestY} y2={latestY} stroke={lineColor} strokeDasharray="4 4" strokeOpacity="0.56" />
+              <rect x={chartWidth - marginRight + 5} y={latestY - 11} width="76" height="22" rx="6" fill={lineColor} />
+              <text x={chartWidth - marginRight + 43} y={latestY + 4} textAnchor="middle" fontSize="11" fontWeight="700" fill="white">
+                {formatPriceValue(latestPoint.close, currency, locale)}
+              </text>
+            </g>
+          ) : null}
+          <path d={path} fill="none" stroke={lineColor} strokeWidth="2.2" strokeLinejoin="round" strokeLinecap="round" />
+          {activePoint ? (
+            <g>
+              <line x1={activeX} x2={activeX} y1={marginTop} y2={height - marginBottom} stroke="rgba(15, 23, 42, 0.22)" strokeDasharray="4 4" />
+              <line x1={marginLeft} x2={chartWidth - marginRight} y1={activeY} y2={activeY} stroke="rgba(15, 23, 42, 0.18)" strokeDasharray="4 4" />
+              <circle cx={activeX} cy={activeY} r="4" fill={lineColor} stroke="white" strokeWidth="2" />
+            </g>
+          ) : null}
+          {data.map((point, index) => (
+            <rect
+              key={`${point.time}-hit`}
+              x={xToCoord(index) - hitWidth / 2}
+              y={marginTop}
+              width={hitWidth}
+              height={plotHeight}
+              fill="transparent"
+              onMouseEnter={() => setHoveredIndex(index)}
+              onMouseMove={() => setHoveredIndex(index)}
+              onMouseLeave={() => setHoveredIndex(null)}
+            />
+          ))}
+        </svg>
+      ) : null}
     </div>
   );
 }
@@ -448,27 +573,20 @@ function CandlestickChart({
 }) {
   const { ref, width } = useElementWidth();
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
-  const activeCandle = data[hoveredIndex ?? data.length - 1] ?? null;
-  const height = 336;
-  const marginTop = 14;
-  const marginRight = 18;
-  const marginBottom = 32;
-  const marginLeft = 56;
-  const minStep = range === "1Y" ? 3.4 : range === "1M" ? 11 : range === "1W" ? 18 : 22;
-  const chartWidth = Math.max(width, marginLeft + marginRight + Math.max(data.length, 1) * minStep);
+  const activeIndex = hoveredIndex ?? data.length - 1;
+  const activeCandle = data[activeIndex] ?? null;
+  const latestCandle = data[data.length - 1] ?? null;
+  const height = 352;
+  const marginTop = 30;
+  const marginRight = 88;
+  const marginBottom = 34;
+  const marginLeft = 14;
+  const chartWidth = Math.max(width, marginLeft + marginRight + 160);
   const plotWidth = Math.max(chartWidth - marginLeft - marginRight, 1);
   const plotHeight = Math.max(height - marginTop - marginBottom, 1);
-
-  const { minPrice, maxPrice } = useMemo(() => {
-    const rawMin = data.reduce((acc, item) => Math.min(acc, item.low), data[0]?.low ?? 0);
-    const rawMax = data.reduce((acc, item) => Math.max(acc, item.high), data[0]?.high ?? 0);
-    const spread = rawMax - rawMin;
-    const padding = spread > 0 ? spread * 0.08 : Math.max(rawMax * 0.015, 1);
-    return {
-      minPrice: rawMin - padding,
-      maxPrice: rawMax + padding,
-    };
-  }, [data]);
+  const volumeHeight = 42;
+  const { minPrice, maxPrice } = useMemo(() => getChartPriceDomain(data, "ohlc"), [data]);
+  const maxVolume = Math.max(...data.map((item) => (Number.isFinite(item.volume) ? item.volume : 0)), 0);
 
   const yToCoord = useCallback(
     (price: number) => {
@@ -478,137 +596,126 @@ function CandlestickChart({
       const ratio = (price - minPrice) / (maxPrice - minPrice);
       return marginTop + plotHeight - ratio * plotHeight;
     },
-    [marginTop, maxPrice, minPrice, plotHeight],
+    [maxPrice, minPrice, plotHeight],
   );
 
-  const step = data.length > 1 ? plotWidth / data.length : plotWidth;
-  const bodyWidth = clamp(step * (range === "1Y" ? 0.46 : 0.58), range === "1Y" ? 2 : 4, 12);
   const axisValues = Array.from({ length: 5 }, (_, index) => maxPrice - ((maxPrice - minPrice) / 4) * index);
   const labelIndices = [...new Set([0, Math.floor(data.length / 3), Math.floor((data.length * 2) / 3), data.length - 1])]
     .filter((index) => index >= 0 && index < data.length);
+  const step = data.length > 0 ? plotWidth / data.length : plotWidth;
+  const bodyWidth = clamp(step * 0.62, 2, 10);
+  const hitWidth = Math.max(step, 8);
+  const latestTone = latestCandle ? getCandleTone(latestCandle) : null;
+  const latestY = latestCandle ? yToCoord(latestCandle.close) : 0;
+  const activeX = activeCandle ? marginLeft + step * activeIndex + step / 2 : 0;
+  const activeY = activeCandle ? yToCoord(activeCandle.close) : 0;
 
   return (
-    <div className="space-y-4">
+    <div
+      ref={ref}
+      className="relative h-[22rem] w-full overflow-hidden rounded-xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-950"
+    >
       {activeCandle ? (
-        <div className="ui-surface-muted flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <div className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">
-              {isEn ? "Selected candle" : "Выбранная свеча"}
-            </div>
-            <div className="mt-1 text-sm font-medium text-slate-900 dark:text-slate-100">
-              {range === "1D" ? formatDateTime(activeCandle.time, locale) : formatDateLabel(activeCandle.time, range, locale)}
-            </div>
-          </div>
-          <div className="flex flex-wrap items-center gap-2 text-xs font-medium">
-            <span className="rounded-full bg-slate-900 px-3 py-1.5 text-white dark:bg-slate-100 dark:text-slate-950">
-              {isEn ? "Open" : "Откр."}: {formatPriceValue(activeCandle.open, currency, locale)}
-            </span>
-            <span className="rounded-full bg-emerald-500/12 px-3 py-1.5 text-emerald-700 dark:bg-emerald-500/16 dark:text-emerald-300">
-              {isEn ? "High" : "Макс."}: {formatPriceValue(activeCandle.high, currency, locale)}
-            </span>
-            <span className="rounded-full bg-rose-500/12 px-3 py-1.5 text-rose-700 dark:bg-rose-500/16 dark:text-rose-300">
-              {isEn ? "Low" : "Мин."}: {formatPriceValue(activeCandle.low, currency, locale)}
-            </span>
-            <span className="rounded-full bg-blue-500/12 px-3 py-1.5 text-blue-700 dark:bg-blue-500/16 dark:text-blue-300">
-              {isEn ? "Close" : "Закр."}: {formatPriceValue(activeCandle.close, currency, locale)}
-            </span>
-          </div>
+        <div className="pointer-events-none absolute left-4 top-3 z-10 flex flex-wrap items-center gap-2 text-xs font-medium text-slate-500 dark:text-slate-400">
+          <span className="font-semibold text-slate-800 dark:text-slate-100">
+            {range === "1D" ? formatDateTime(activeCandle.time, locale) : formatDateLabel(activeCandle.time, range, locale)}
+          </span>
+          <span>{isEn ? "O" : "О"} {formatPriceValue(activeCandle.open, currency, locale)}</span>
+          <span>{isEn ? "H" : "М"} {formatPriceValue(activeCandle.high, currency, locale)}</span>
+          <span>{isEn ? "L" : "Н"} {formatPriceValue(activeCandle.low, currency, locale)}</span>
+          <span className={getCandleTone(activeCandle).isUp ? "font-semibold text-emerald-600" : "font-semibold text-rose-600 dark:text-rose-400"}>
+            {isEn ? "C" : "З"} {formatPriceValue(activeCandle.close, currency, locale)}
+          </span>
         </div>
       ) : null}
-
-      <div
-        ref={ref}
-        className="h-84 w-full overflow-x-auto overflow-y-hidden rounded-[1.75rem] border border-slate-200/80 bg-gradient-to-b from-slate-50 via-white to-slate-100/80 p-2 dark:border-slate-800 dark:from-slate-950 dark:via-slate-950 dark:to-slate-900/90"
-      >
-        {width > 0 ? (
-          <svg width={chartWidth} height={height} viewBox={`0 0 ${chartWidth} ${height}`} className="h-full">
-            {axisValues.map((value) => {
-              const y = yToCoord(value);
-              return (
-                <g key={value}>
-                  <line
-                    x1={marginLeft}
-                    x2={chartWidth - marginRight}
-                    y1={y}
-                    y2={y}
-                    stroke="rgba(148, 163, 184, 0.18)"
-                    strokeDasharray="4 6"
-                  />
-                  <text
-                    x={marginLeft - 10}
-                    y={y + 4}
-                    textAnchor="end"
-                    fontSize="11"
-                    fill="rgba(100, 116, 139, 0.9)"
-                  >
-                    {formatPriceValue(value, currency, locale)}
-                  </text>
-                </g>
-              );
-            })}
-
-            {hoveredIndex !== null ? (
-              <line
-                x1={marginLeft + step * hoveredIndex + step / 2}
-                x2={marginLeft + step * hoveredIndex + step / 2}
-                y1={marginTop}
-                y2={height - marginBottom}
-                stroke="rgba(59, 130, 246, 0.28)"
-                strokeDasharray="5 5"
-              />
-            ) : null}
-
-            {data.map((candle, index) => {
-              const x = marginLeft + step * index + step / 2;
-              const openY = yToCoord(candle.open);
-              const closeY = yToCoord(candle.close);
-              const highY = yToCoord(candle.high);
-              const lowY = yToCoord(candle.low);
-              const isUp = candle.close >= candle.open;
-              const color = isUp ? "#16a34a" : "#e11d48";
-              const bodyTop = Math.min(openY, closeY);
-              const bodyHeight = Math.max(Math.abs(closeY - openY), 2);
-
-              return (
-                <g
-                  key={`${candle.time}-${index}`}
-                  onMouseEnter={() => setHoveredIndex(index)}
-                  onMouseLeave={() => setHoveredIndex(null)}
-                >
-                  <line x1={x} x2={x} y1={highY} y2={lowY} stroke={color} strokeWidth="1.5" />
-                  <rect
-                    x={x - bodyWidth / 2}
-                    y={bodyTop}
-                    width={bodyWidth}
-                    height={bodyHeight}
-                    rx="2"
-                    fill={isUp ? "rgba(22, 163, 74, 0.16)" : "rgba(225, 29, 72, 0.16)"}
-                    stroke={color}
-                    strokeWidth="1.6"
-                  />
-                </g>
-              );
-            })}
-
-            {labelIndices.map((index) => {
-              const item = data[index];
-              const x = marginLeft + step * index + step / 2;
-              return (
-                <text
-                  key={`${item.time}-label`}
-                  x={x}
-                  y={height - 10}
-                  textAnchor="middle"
-                  fontSize="11"
-                  fill="rgba(100, 116, 139, 0.9)"
-                >
+      {width > 0 ? (
+        <svg width={chartWidth} height={height} viewBox={`0 0 ${chartWidth} ${height}`} className="h-full w-full">
+          <rect x="0" y="0" width={chartWidth} height={height} fill="transparent" />
+          {axisValues.map((value) => {
+            const y = yToCoord(value);
+            return (
+              <g key={value}>
+                <line x1={marginLeft} x2={chartWidth - marginRight} y1={y} y2={y} stroke="rgba(148, 163, 184, 0.16)" />
+                <text x={chartWidth - marginRight + 12} y={y + 4} fontSize="11" fill="rgb(100, 116, 139)">
+                  {formatPriceValue(value, currency, locale)}
+                </text>
+              </g>
+            );
+          })}
+          {labelIndices.map((index) => {
+            const item = data[index];
+            const x = marginLeft + step * index + step / 2;
+            return (
+              <g key={`${item.time}-label`}>
+                <line x1={x} x2={x} y1={marginTop} y2={height - marginBottom} stroke="rgba(148, 163, 184, 0.10)" />
+                <text x={x} y={height - 11} textAnchor="middle" fontSize="11" fill="rgb(100, 116, 139)">
                   {formatDateLabel(item.time, range, locale)}
                 </text>
-              );
-            })}
-          </svg>
-        ) : null}
-      </div>
+              </g>
+            );
+          })}
+          {latestCandle && latestTone ? (
+            <g>
+              <line x1={marginLeft} x2={chartWidth - marginRight} y1={latestY} y2={latestY} stroke={latestTone.color} strokeDasharray="4 4" strokeOpacity="0.56" />
+              <rect x={chartWidth - marginRight + 5} y={latestY - 11} width="76" height="22" rx="6" fill={latestTone.color} />
+              <text x={chartWidth - marginRight + 43} y={latestY + 4} textAnchor="middle" fontSize="11" fontWeight="700" fill="white">
+                {formatPriceValue(latestCandle.close, currency, locale)}
+              </text>
+            </g>
+          ) : null}
+          {data.map((candle, index) => {
+            const x = marginLeft + step * index + step / 2;
+            const openY = yToCoord(candle.open);
+            const closeY = yToCoord(candle.close);
+            const highY = yToCoord(candle.high);
+            const lowY = yToCoord(candle.low);
+            const tone = getCandleTone(candle);
+            const bodyTop = Math.min(openY, closeY);
+            const bodyHeight = Math.max(Math.abs(closeY - openY), 2);
+            const volumeBarHeight = maxVolume > 0 ? clamp((candle.volume / maxVolume) * volumeHeight, 1, volumeHeight) : 0;
+            const volumeY = height - marginBottom - volumeBarHeight;
+
+            return (
+              <g key={`${candle.time}-${index}`}>
+                {volumeBarHeight > 0 ? (
+                  <rect
+                    x={x - bodyWidth / 2}
+                    y={volumeY}
+                    width={bodyWidth}
+                    height={volumeBarHeight}
+                    fill={tone.mutedColor}
+                  />
+                ) : null}
+                <line x1={x} x2={x} y1={highY} y2={lowY} stroke={tone.color} strokeWidth="1.25" />
+                <rect
+                  x={x - bodyWidth / 2}
+                  y={bodyTop}
+                  width={bodyWidth}
+                  height={bodyHeight}
+                  rx="1.5"
+                  fill={tone.color}
+                />
+                <rect
+                  x={x - hitWidth / 2}
+                  y={marginTop}
+                  width={hitWidth}
+                  height={plotHeight}
+                  fill="transparent"
+                  onMouseEnter={() => setHoveredIndex(index)}
+                  onMouseMove={() => setHoveredIndex(index)}
+                  onMouseLeave={() => setHoveredIndex(null)}
+                />
+              </g>
+            );
+          })}
+          {activeCandle ? (
+            <g pointerEvents="none">
+              <line x1={activeX} x2={activeX} y1={marginTop} y2={height - marginBottom} stroke="rgba(15, 23, 42, 0.22)" strokeDasharray="4 4" />
+              <line x1={marginLeft} x2={chartWidth - marginRight} y1={activeY} y2={activeY} stroke="rgba(15, 23, 42, 0.18)" strokeDasharray="4 4" />
+            </g>
+          ) : null}
+        </svg>
+      ) : null}
     </div>
   );
 }
@@ -628,7 +735,7 @@ function buildHeroAside(
     return (
       <div className="min-w-[220px] space-y-2">
         <div className="text-xs font-semibold uppercase tracking-[0.16em] text-white/60">
-          {isEn ? "Price snapshot" : "Снимок цены"}
+          {isEn ? "Price" : "Цена"}
         </div>
         <div className="text-2xl font-semibold text-white">{isEn ? "Loading..." : "Загрузка..."}</div>
         <div className="text-sm text-white/72">
@@ -641,7 +748,7 @@ function buildHeroAside(
   return (
     <div className="min-w-[220px] space-y-3">
       <div className="text-xs font-semibold uppercase tracking-[0.16em] text-white/60">
-        {isEn ? "Price snapshot" : "Снимок цены"}
+        {isEn ? "Price" : "Цена"}
       </div>
       <div className="text-3xl font-semibold tracking-tight text-white">{content.currentPrice}</div>
       <div
@@ -822,19 +929,6 @@ export function FundamentalsDetailsPage() {
     );
   }, [fallbackClosePrice, isEn, locale, selectedRange, selectedSummary, share?.currency]);
 
-  const gradientId = useMemo(() => `fundamentals-price-gradient-${figi.replace(/[^a-zA-Z0-9]/g, "") || "chart"}`, [figi]);
-
-  const chartDomain = useMemo<[number, number]>(() => {
-    if (!selectedHistory.length) {
-      return [0, 100];
-    }
-    const min = selectedHistory.reduce((acc, item) => Math.min(acc, item.low), selectedHistory[0].low);
-    const max = selectedHistory.reduce((acc, item) => Math.max(acc, item.high), selectedHistory[0].high);
-    const spread = max - min;
-    const padding = spread > 0 ? spread * 0.12 : Math.max(max * 0.015, 1);
-    return [min - padding, max + padding];
-  }, [selectedHistory]);
-
   const chartHeadline = useMemo(() => {
     if (!selectedSummary) {
       return {
@@ -863,7 +957,7 @@ export function FundamentalsDetailsPage() {
           icon={TrendingUp}
           title={t("Акция не найдена", "Share not found")}
           description={
-            t("Откройте страницу после загрузки кэша фундаментальных данных, чтобы сопоставить FIGI с карточкой акции.", "Open this page after loading the fundamentals cache, so we can match the FIGI with a stock card.")
+            t("Откройте страницу после загрузки кеша фундаментальных данных, чтобы сопоставить FIGI с карточкой акции.", "Open this page after loading the fundamentals cache, so we can match the FIGI with a stock card.")
           }
           badge={t("Фундаментальные данные", "Fundamentals")}
           accent="slate"
@@ -889,12 +983,12 @@ export function FundamentalsDetailsPage() {
           {isLoading ? (
             <PageLoadingState
               title={t("Загружаем фундаментальные данные", "Loading fundamentals")}
-              subtitle={t("Обновляем локальный кэш компаний и показателей.", "Refreshing the local company and metrics cache.")}
+              subtitle={t("Обновляем локальный кеш компаний и показателей.", "Refreshing the local company and metrics cache.")}
               accentClassName="text-slate-700"
             />
           ) : (
             <div className="ui-surface-muted text-sm leading-7 text-slate-600 dark:text-slate-300">
-              {t("В локальном кэше пока нет подходящей компании. Загрузите или обновите фундаментальные данные на основной странице, затем снова откройте карточку акции.", "No matching company was found in the local cache yet. Load or refresh fundamentals on the main page, then open the stock card again.")}
+              {t("В локальном кеше пока нет подходящей компании. Загрузите или обновите фундаментальные данные на основной странице, затем снова откройте карточку акции.", "No matching company was found in the local cache yet. Load or refresh fundamentals on the main page, then open the stock card again.")}
             </div>
           )}
         </SectionCard>
@@ -921,9 +1015,6 @@ export function FundamentalsDetailsPage() {
               <div>{share.name}</div>
             </div>
           </div>
-        }
-        description={
-          t("Интерактивная история цены с быстрым переключением периода и более наглядным отображением текущего движения рынка.", "Interactive price history with fast period switching and a cleaner view of current market action.")
         }
         badge={mapExchangeLabel(share.exchange, isEn)}
         accent="blue"
@@ -1008,18 +1099,16 @@ export function FundamentalsDetailsPage() {
               </button>
             </div>
           </div>
-
           <div className="ui-surface-muted flex flex-wrap items-center gap-3 text-sm text-slate-600 dark:text-slate-300">
             <span className="inline-flex items-center gap-2">
               <Calendar className="h-4 w-4" />
               {t("Период", "Period")}: {getRangeLabel(selectedRange, isEn)}
             </span>
             <span>
-              {t("Режим", "Mode")}:{" "}
-              {chartMode === "line" ? (t("Линейный график", "Line chart")) : (t("Свечи", "Candlesticks"))}
+              {t("Режим", "Mode")}: {chartMode === "line" ? t("Линия", "Line") : t("Свечи", "Candlesticks")}
             </span>
             <span>
-              {chartMode === "candles" ? (t("Свечей", "Candles")) : t("Точек", "Points")}: {displayedHistory.length}
+              {chartMode === "candles" ? t("Свечей", "Candles") : t("Точек", "Points")}: {displayedHistory.length}
             </span>
           </div>
 
@@ -1027,55 +1116,12 @@ export function FundamentalsDetailsPage() {
             <ChartSkeleton className="min-h-[22rem]" />
           ) : selectedHistory.length > 0 ? (
             chartMode === "line" ? (
-              <div className="overflow-hidden rounded-[1.75rem] border border-slate-200/80 bg-gradient-to-b from-slate-50 via-white to-slate-100/80 p-3 dark:border-slate-800 dark:from-slate-950 dark:via-slate-950 dark:to-slate-900/90">
-                <div className="h-[22rem] w-full">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <AreaChart data={selectedHistory} margin={{ top: 18, right: 18, left: 4, bottom: 8 }}>
-                      <defs>
-                        <linearGradient id={gradientId} x1="0" x2="0" y1="0" y2="1">
-                          <stop offset="5%" stopColor="#2563eb" stopOpacity={0.38} />
-                          <stop offset="95%" stopColor="#60a5fa" stopOpacity={0.02} />
-                        </linearGradient>
-                      </defs>
-                      <CartesianGrid stroke="rgba(148, 163, 184, 0.16)" strokeDasharray="4 6" vertical={false} />
-                      <XAxis
-                        dataKey="time"
-                        tickLine={false}
-                        axisLine={false}
-                        minTickGap={28}
-                        tick={{ fill: "rgb(100 116 139)", fontSize: 11 }}
-                        tickFormatter={(value) => formatDateLabel(String(value), selectedRange, locale)}
-                      />
-                      <YAxis
-                        domain={chartDomain}
-                        tickLine={false}
-                        axisLine={false}
-                        width={70}
-                        tick={{ fill: "rgb(100 116 139)", fontSize: 11 }}
-                        tickFormatter={(value) => formatPriceValue(Number(value), share.currency, locale)}
-                      />
-                      <Tooltip
-                        cursor={{ stroke: "rgba(37, 99, 235, 0.22)", strokeDasharray: "4 4" }}
-                        content={<HistoryTooltip currency={share.currency} locale={locale} range={selectedRange} isEn={isEn} />}
-                      />
-                      <Area
-                        type="monotone"
-                        dataKey="close"
-                        stroke="#2563eb"
-                        strokeWidth={2.5}
-                        fill={`url(#${gradientId})`}
-                        dot={false}
-                        activeDot={{ r: 4, fill: "#2563eb", strokeWidth: 0 }}
-                      />
-                    </AreaChart>
-                  </ResponsiveContainer>
-                </div>
-              </div>
+              <PriceLineChart data={selectedHistory} currency={share.currency} locale={locale} range={selectedRange} isEn={isEn} />
             ) : (
               <CandlestickChart data={candleHistory} currency={share.currency} locale={locale} range={selectedRange} isEn={isEn} />
             )
           ) : (
-            <div className="flex h-[22rem] items-center justify-center rounded-[1.75rem] border border-dashed border-slate-300/80 bg-slate-50/70 text-sm text-slate-500 dark:border-slate-700 dark:bg-slate-950/40 dark:text-slate-400">
+            <div className="flex h-[22rem] items-center justify-center rounded-xl border border-dashed border-slate-300/80 bg-slate-50/70 text-sm text-slate-500 dark:border-slate-700 dark:bg-slate-950/40 dark:text-slate-400">
               {t("Для этого периода API не вернул свечи.", "No candles were returned for this period.")}
             </div>
           )}
