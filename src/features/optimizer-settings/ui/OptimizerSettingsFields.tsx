@@ -78,6 +78,13 @@ export function OptimizerSettingsFields({ settings, onChange }: OptimizerSetting
           onChange={(e) => onChange({ ...settings, portfolioAssetsCount: e.target.value })}
         />
       </label>
+
+      <p className="rounded-md border border-slate-200 bg-white/70 px-3 py-2 text-[11px] leading-5 text-slate-500 dark:border-slate-700 dark:bg-slate-950/30 dark:text-slate-400">
+        {t(
+          "Риск автоматически корректируется по капитализации: топ-50 крупнейших компаний получают меньший риск, малые компании — надбавку к риску перед отбором в портфель.",
+          "Risk is automatically adjusted by market cap: the top 50 largest companies receive lower risk, while smaller companies get a risk premium before portfolio selection.",
+        )}
+      </p>
     </div>
   );
 }

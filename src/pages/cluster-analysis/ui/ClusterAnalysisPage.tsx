@@ -1,5 +1,19 @@
 ﻿import { useEffect, useMemo, useRef, useState } from "react";
-import { FileSpreadsheet, FileText, ImageDown, Network, Play, Settings } from "lucide-react";
+import {
+  CheckSquare,
+  FileSpreadsheet,
+  FileText,
+  HelpCircle,
+  ImageDown,
+  ListFilter,
+  Network,
+  Play,
+  RotateCcw,
+  Search,
+  Settings,
+  Square,
+  X,
+} from "lucide-react";
 import {
   ScatterChart,
   Scatter,
@@ -14,6 +28,15 @@ import {
 } from "recharts";
 import { useFundamentals } from "../../../entities/fundamentals";
 import { useAppSettings } from "../../../app/context/AppSettingsContext";
+import { Checkbox } from "../../../app/components/ui/checkbox";
+import { Input } from "../../../app/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "../../../app/components/ui/select";
 import { OptimizerSettingsFields } from "../../../features/optimizer-settings/ui/OptimizerSettingsFields";
 import { submitOptimizerSettings, useOptimizerSettings } from "../../../features/optimizer-settings/model/optimizerSettings";
 import { API_BASE_URL } from "../../../config/api";
@@ -52,8 +75,54 @@ import { MetricTooltip } from "../../../shared/ui/analysis/MetricTooltip";
 import { PortfolioHoldingsPanel } from "../../../shared/ui/analysis/PortfolioHoldingsPanel";
 
 const palette = ["#3b82f6", "#10b981", "#f59e0b", "#ef4444", "#8b5cf6", "#06b6d4", "#14b8a6", "#f97316"];
-const ENABLE_TEMP_LOGS = true;
 const CLUSTER_STATE_KEY = "cluster-analysis-state-v2";
+
+type SelectionMode = "all" | "manual";
+type ClusterAlgorithm = "kmeans" | "agglomerative" | "dbscan";
+type DistanceMetric = "euclidean" | "manhattan" | "cosine";
+type ScalingMethod = "standard" | "minmax" | "robust" | "none";
+type ClusterTuningMetric = "silhouette" | "davies_bouldin" | "calinski_harabasz";
+type TuningBudget = "fast" | "balanced" | "quality";
+
+type ClusterAnalysisSettings = {
+  algorithm: ClusterAlgorithm;
+  clustersCount: number;
+  distanceMetric: DistanceMetric;
+  scalingMethod: ScalingMethod;
+  randomState: number;
+  includeOutliers: boolean;
+  autoTune: boolean;
+  tuningMetric: ClusterTuningMetric;
+  tuningBudget: TuningBudget;
+  features: string[];
+};
+
+const clusterFeatureOptions = [
+  { key: "g", labelRu: "g / темпы роста", labelEn: "g / growth rate" },
+  { key: "pe_ratio", labelRu: "P/E", labelEn: "P/E" },
+  { key: "pb_ratio", labelRu: "P/B", labelEn: "P/B" },
+  { key: "ps_ratio", labelRu: "P/S", labelEn: "P/S" },
+  { key: "ev_to_ebitda", labelRu: "EV/EBITDA", labelEn: "EV/EBITDA" },
+  { key: "roe", labelRu: "ROE", labelEn: "ROE" },
+  { key: "roa", labelRu: "ROA", labelEn: "ROA" },
+  { key: "net_margin", labelRu: "Маржа", labelEn: "Margin" },
+  { key: "dividend_yield", labelRu: "Дивиденды", labelEn: "Dividend yield" },
+  { key: "market_cap_bn", labelRu: "Капитализация", labelEn: "Market cap" },
+  { key: "beta", labelRu: "Beta", labelEn: "Beta" },
+] as const;
+
+const defaultClusterSettings: ClusterAnalysisSettings = {
+  algorithm: "kmeans",
+  clustersCount: 4,
+  distanceMetric: "euclidean",
+  scalingMethod: "standard",
+  randomState: 42,
+  includeOutliers: true,
+  autoTune: true,
+  tuningMetric: "silhouette",
+  tuningBudget: "balanced",
+  features: ["g", "pe_ratio", "pb_ratio", "ev_to_ebitda", "roe", "net_margin", "dividend_yield"],
+};
 
 function getClusterColor(cluster: number): string {
   const safeCluster = Number.isFinite(cluster) ? Math.abs(Math.trunc(cluster)) : 0;
@@ -402,7 +471,6 @@ export function ClusterAnalysis() {
   const [isRunning, setIsRunning] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [errorDialogMessage, setErrorDialogMessage] = useState<string | null>(null);
-  const [serverRaw, setServerRaw] = useState<Record<string, unknown> | null>(null);
   const [clusterData, setClusterData] = useState<ClusterPoint[]>([]);
   const [clusterGroups, setClusterGroups] = useState<ClusterGroup[]>([]);
   const [metrics, setMetrics] = useState<MetricItem[]>([]);
@@ -410,6 +478,10 @@ export function ClusterAnalysis() {
   const [portfolioStrategies, setPortfolioStrategies] = useState<StrategyPortfolio[]>([]);
   const [summaryInfo, setSummaryInfo] = useState<AnalysisSummary | null>(null);
   const [bestPortfolioAssetsCount, setBestPortfolioAssetsCount] = useState(0);
+  const [selectionMode, setSelectionMode] = useState<SelectionMode>("all");
+  const [selectedFigis, setSelectedFigis] = useState<string[]>([]);
+  const [stockSearch, setStockSearch] = useState("");
+  const [clusterSettings, setClusterSettings] = useState<ClusterAnalysisSettings>(defaultClusterSettings);
   const portfolioChartRef = useRef<HTMLDivElement | null>(null);
   const visibleMetrics = useMemo(() => metrics.filter((item) => isVisibleAnalysisMetric(item.label)), [metrics]);
   const clusterSeries = useMemo(
@@ -440,7 +512,6 @@ export function ClusterAnalysis() {
       }
       const parsed = JSON.parse(raw) as {
         error?: string | null;
-        serverRaw?: Record<string, unknown> | null;
         clusterData?: ClusterPoint[];
         clusterGroups?: ClusterGroup[];
         metrics?: MetricItem[];
@@ -448,10 +519,12 @@ export function ClusterAnalysis() {
         portfolioStrategies?: StrategyPortfolio[];
         summaryInfo?: AnalysisSummary | null;
         bestPortfolioAssetsCount?: number;
+        selectionMode?: SelectionMode;
+        selectedFigis?: string[];
+        clusterSettings?: Partial<ClusterAnalysisSettings>;
       };
 
       if (typeof parsed.error === "string" || parsed.error === null) setError(parsed.error);
-      if (parsed.serverRaw && typeof parsed.serverRaw === "object") setServerRaw(parsed.serverRaw);
       if (Array.isArray(parsed.clusterData)) setClusterData(parsed.clusterData);
       if (Array.isArray(parsed.clusterGroups)) setClusterGroups(parsed.clusterGroups);
       if (Array.isArray(parsed.metrics)) setMetrics(parsed.metrics.filter((item) => isVisibleAnalysisMetric(item.label)));
@@ -459,6 +532,19 @@ export function ClusterAnalysis() {
       if (Array.isArray(parsed.portfolioStrategies)) setPortfolioStrategies(parsed.portfolioStrategies);
       if (parsed.summaryInfo && typeof parsed.summaryInfo === "object") setSummaryInfo(parsed.summaryInfo);
       if (typeof parsed.bestPortfolioAssetsCount === "number") setBestPortfolioAssetsCount(parsed.bestPortfolioAssetsCount);
+      if (parsed.selectionMode === "all" || parsed.selectionMode === "manual") setSelectionMode(parsed.selectionMode);
+      if (Array.isArray(parsed.selectedFigis)) setSelectedFigis(parsed.selectedFigis.filter((figi) => typeof figi === "string"));
+      if (parsed.clusterSettings && typeof parsed.clusterSettings === "object") {
+        setClusterSettings({
+          ...defaultClusterSettings,
+          ...parsed.clusterSettings,
+          clustersCount: numberOr(parsed.clusterSettings.clustersCount, defaultClusterSettings.clustersCount),
+          randomState: numberOr(parsed.clusterSettings.randomState, defaultClusterSettings.randomState),
+          features: Array.isArray(parsed.clusterSettings.features)
+            ? parsed.clusterSettings.features.filter((item) => typeof item === "string")
+            : defaultClusterSettings.features,
+        });
+      }
     } catch {
       // ignore broken persisted state
     }
@@ -467,7 +553,6 @@ export function ClusterAnalysis() {
   useEffect(() => {
     const payload = {
       error,
-      serverRaw,
       clusterData,
       clusterGroups,
       metrics,
@@ -475,9 +560,24 @@ export function ClusterAnalysis() {
       portfolioStrategies,
       summaryInfo,
       bestPortfolioAssetsCount,
+      selectionMode,
+      selectedFigis,
+      clusterSettings,
     };
     window.localStorage.setItem(CLUSTER_STATE_KEY, JSON.stringify(payload));
-  }, [error, serverRaw, clusterData, clusterGroups, metrics, optimalPortfolio, portfolioStrategies, summaryInfo, bestPortfolioAssetsCount]);
+  }, [
+    error,
+    clusterData,
+    clusterGroups,
+    metrics,
+    optimalPortfolio,
+    portfolioStrategies,
+    summaryInfo,
+    bestPortfolioAssetsCount,
+    selectionMode,
+    selectedFigis,
+    clusterSettings,
+  ]);
 
   const displayPortfolio = useMemo(() => {
     if (optimalPortfolio.length) {
@@ -518,6 +618,9 @@ export function ClusterAnalysis() {
             net_debt_to_ebitda: f.netDebtToEbitda,
             total_debt: f.totalDebt,
             roe: f.roe,
+            g: f.roe,
+            growth_rate: f.roe,
+            growthRate: f.roe,
             dividend_yield: f.dividendYield,
             beta: f.beta,
             peRatio: f.peRatio,
@@ -529,6 +632,121 @@ export function ClusterAnalysis() {
         .filter((row): row is NonNullable<typeof row> => Boolean(row)),
     [cache.fundamentalsByFigi, cache.shares],
   );
+
+  const sortedRequestData = useMemo(
+    () => [...requestData].sort((left, right) => left.ticker.localeCompare(right.ticker)),
+    [requestData],
+  );
+
+  const selectedFigisSet = useMemo(() => new Set(selectedFigis), [selectedFigis]);
+  const selectedRequestData = useMemo(
+    () => (selectionMode === "all" ? requestData : requestData.filter((row) => selectedFigisSet.has(row.figi))),
+    [requestData, selectedFigisSet, selectionMode],
+  );
+
+  const filteredStockRows = useMemo(() => {
+    const normalizedSearch = stockSearch.trim().toLowerCase();
+    if (!normalizedSearch) {
+      return sortedRequestData;
+    }
+    return sortedRequestData.filter((row) => {
+      const haystack = `${row.ticker} ${row.name} ${row.exchange} ${row.currency}`.toLowerCase();
+      return haystack.includes(normalizedSearch);
+    });
+  }, [sortedRequestData, stockSearch]);
+
+  const selectedFeatureLabels = useMemo(
+    () =>
+      clusterFeatureOptions
+        .filter((option) => clusterSettings.features.includes(option.key))
+        .map((option) => (isEn ? option.labelEn : option.labelRu)),
+    [clusterSettings.features, isEn],
+  );
+
+  const algorithmHelp = useMemo(() => {
+    if (clusterSettings.algorithm === "agglomerative") {
+      return {
+        title: t("Иерархическая кластеризация", "Agglomerative clustering"),
+        text: t(
+          "Строит группы по близости компаний и постепенно объединяет похожие акции. Подходит для поиска структуры без случайного старта.",
+          "Builds groups by company proximity and gradually merges similar stocks. Useful for reading structure without random initialization.",
+        ),
+        note: t(
+          "Число кластеров задает, на сколько групп разрезать итоговую структуру.",
+          "Clusters count defines how many groups the final hierarchy is split into.",
+        ),
+      };
+    }
+    if (clusterSettings.algorithm === "dbscan") {
+      return {
+        title: "DBSCAN",
+        text: t(
+          "Ищет плотные группы и может отделять нестандартные компании как выбросы. Хорош для неоднородной выборки.",
+          "Finds dense groups and can separate unusual companies as outliers. Useful for uneven stock universes.",
+        ),
+        note: t(
+          "Число кластеров может игнорироваться серверной реализацией DBSCAN.",
+          "Clusters count may be ignored by the server-side DBSCAN implementation.",
+        ),
+      };
+    }
+    return {
+      title: "K-Means",
+      text: t(
+        "Делит акции на заданное число групп вокруг центров кластеров. Быстрый базовый алгоритм для сравнения похожих компаний.",
+        "Splits stocks into a chosen number of groups around cluster centers. A fast baseline for comparing similar companies.",
+      ),
+      note: t(
+        "Число кластеров напрямую задает количество групп в результате.",
+        "Clusters count directly defines the number of resulting groups.",
+      ),
+    };
+  }, [clusterSettings.algorithm, t]);
+
+  const maxClustersCount = Math.max(2, Math.min(12, selectedRequestData.length || 12));
+  const hasValidClusterInput =
+    hasData &&
+    selectedRequestData.length >= Math.max(2, Math.min(clusterSettings.clustersCount, 12)) &&
+    clusterSettings.features.length >= 2;
+  const canRunClusterAnalysis = hasValidClusterInput && !isRunning;
+
+  const updateClusterSettings = (patch: Partial<ClusterAnalysisSettings>) => {
+    setClusterSettings((prev) => ({ ...prev, ...patch }));
+  };
+
+  const setManualSelectionMode = () => {
+    setSelectionMode("manual");
+    setSelectedFigis((prev) => (prev.length ? prev : requestData.map((row) => row.figi)));
+  };
+
+  const toggleStockSelection = (figi: string) => {
+    setSelectionMode("manual");
+    setSelectedFigis((prev) => (prev.includes(figi) ? prev.filter((item) => item !== figi) : [...prev, figi]));
+  };
+
+  const selectAllStocks = () => {
+    setSelectionMode("manual");
+    setSelectedFigis(requestData.map((row) => row.figi));
+  };
+
+  const clearStockSelection = () => {
+    setSelectionMode("manual");
+    setSelectedFigis([]);
+  };
+
+  const resetClusterSettings = () => {
+    setClusterSettings(defaultClusterSettings);
+  };
+
+  const toggleClusterFeature = (key: string) => {
+    setClusterSettings((prev) => {
+      const isSelected = prev.features.includes(key);
+      return {
+        ...prev,
+        features: isSelected ? prev.features.filter((item) => item !== key) : [...prev.features, key],
+      };
+    });
+  };
 
   const exportPortfolioToXlsx = async () => {
     if (!displayPortfolio.length) {
@@ -587,28 +805,52 @@ export function ClusterAnalysis() {
     }
   };
 
-  useEffect(() => {
-    if (!ENABLE_TEMP_LOGS) {
-      return;
-    }
-    console.info("[Cluster][RequestData][Prepared]", {
-      ts: new Date().toISOString(),
-      sharesInCache: cache.shares.length,
-      fundamentalsInCache: Object.keys(cache.fundamentalsByFigi).length,
-      requestRows: requestData.length,
-      sample: requestData.slice(0, 2),
-    });
-  }, [cache.fundamentalsByFigi, cache.shares.length, requestData]);
-
   const runClusterAnalysis = async () => {
     setError(null);
     setErrorDialogMessage(null);
+
+    if (!hasValidClusterInput) {
+      showErrorDialog(
+        t(
+          "Выберите минимум две акции и минимум два параметра кластеризации.",
+          "Select at least two stocks and at least two clustering parameters.",
+        ),
+      );
+      return;
+    }
+
     setIsRunning(true);
-    const startedAt = performance.now();
 
     try {
       await submitOptimizerSettings(optimizerSettings);
-      const body = JSON.stringify({ data: requestData });
+      const sanitizedClustersCount = Math.max(2, Math.min(clusterSettings.clustersCount, selectedRequestData.length));
+      const selectedTickers = selectedRequestData.map((row) => row.ticker);
+      const selectedFigisForRequest = selectedRequestData.map((row) => row.figi);
+      const body = JSON.stringify({
+        data: selectedRequestData,
+        parameters: {
+          algorithm: clusterSettings.algorithm,
+          n_clusters: sanitizedClustersCount,
+          clusters_count: sanitizedClustersCount,
+          distance_metric: clusterSettings.distanceMetric,
+          scaling_method: clusterSettings.scalingMethod,
+          standardize: clusterSettings.scalingMethod !== "none",
+          random_state: clusterSettings.randomState,
+          include_outliers: clusterSettings.includeOutliers,
+          auto_tune: clusterSettings.autoTune,
+          tuning_metric: clusterSettings.tuningMetric,
+          tuning_budget: clusterSettings.tuningBudget,
+          tuning_scope: "cluster_analysis",
+          features: clusterSettings.features,
+        },
+        selected_figis: selectedFigisForRequest,
+        selected_tickers: selectedTickers,
+        selection: {
+          mode: selectionMode,
+          total_records: requestData.length,
+          selected_records: selectedRequestData.length,
+        },
+      });
       const response = await fetch(`${API_BASE_URL}/cluster-analysis`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -622,8 +864,6 @@ export function ClusterAnalysis() {
         throw new Error(`HTTP ${response.status}${text ? `: ${text}` : ""}`);
       }
 
-      setServerRaw(parsed);
-
       const points = extractPoints(parsed);
       const groups = extractGroups(parsed, points);
       const parsedMetrics = extractMetrics(parsed, points, groups);
@@ -631,14 +871,6 @@ export function ClusterAnalysis() {
       const strategies = extractPortfolioStrategies(parsed);
       const summary = extractSummary(parsed);
       const bestAssetsCount = extractBestPortfolioAssetsCount(parsed);
-
-      if (!points.length && ENABLE_TEMP_LOGS) {
-        console.warn("[Cluster][Parse][NoPoints]", {
-          ts: new Date().toISOString(),
-          responseKeys: Object.keys(parsed),
-          companiesPreview: Array.isArray(parsed.companies) ? parsed.companies.slice(0, 2) : null,
-        });
-      }
 
       setClusterData(points);
       setClusterGroups(groups);
@@ -648,21 +880,9 @@ export function ClusterAnalysis() {
       setSummaryInfo(summary);
       setBestPortfolioAssetsCount(bestAssetsCount);
 
-      if (ENABLE_TEMP_LOGS) {
-        console.info("[Cluster][Request][Success]", {
-          ts: new Date().toISOString(),
-          durationMs: Number((performance.now() - startedAt).toFixed(1)),
-          status: response.status,
-          points: points.length,
-          groups: groups.length,
-          portfolioRows: portfolio.length,
-          responseKeys: Object.keys(parsed),
-        });
-      }
     } catch (e) {
       const message = e instanceof Error ? e.message : t("Не удалось выполнить кластеризацию", "Failed to run clustering");
       showErrorDialog(message);
-      setServerRaw(null);
       setClusterData([]);
       setClusterGroups([]);
       setMetrics([]);
@@ -670,14 +890,6 @@ export function ClusterAnalysis() {
       setPortfolioStrategies([]);
       setSummaryInfo(null);
       setBestPortfolioAssetsCount(0);
-
-      if (ENABLE_TEMP_LOGS) {
-        console.error("[Cluster][Request][Error]", {
-          ts: new Date().toISOString(),
-          durationMs: Number((performance.now() - startedAt).toFixed(1)),
-          message,
-        });
-      }
     } finally {
       setIsRunning(false);
     }
@@ -691,8 +903,8 @@ export function ClusterAnalysis() {
           icon={Network}
           title={t("Кластерный анализ", "Cluster Analysis")}
           description={t(
-            "Кластеризация выполняется на сервере. По умолчанию используется алгоритм K-Means.",
-            "Clustering is performed on the server. K-Means is used by default.",
+            "Выберите акции, настройте признаки и запустите серверную кластеризацию по нужной выборке.",
+            "Select stocks, tune features, and run server-side clustering for the chosen universe.",
           )}
           accent="violet"
         />
@@ -700,10 +912,10 @@ export function ClusterAnalysis() {
       sidebar={(
         <AnalysisSidebarCard
           icon={Settings}
-          title={t("Параметры анализа", "Analysis Parameters")}
+          title={t("Настройки", "Settings")}
           description={t(
-            "Единый запуск на базе кэша фундаментальных данных и настроек оптимизатора.",
-            "Unified run based on fundamentals cache and shared optimizer settings.",
+            "Модель, признаки и портфель.",
+            "Model, features, and portfolio.",
           )}
           accent="violet"
         >
@@ -713,9 +925,242 @@ export function ClusterAnalysis() {
                 {t("Источник: кэш фундаментальных данных", "Source: fundamentals cache")}
               </p>
               <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
-                {t("Записей", "Records")}: {requestData.length}
+                {t("Выбрано", "Selected")}: {selectedRequestData.length} / {requestData.length}
               </p>
             </div>
+
+            <div className="space-y-3">
+              <div className="flex items-center justify-between gap-3">
+                <div className="text-sm font-semibold text-slate-800 dark:text-slate-100">
+                  {t("Модель", "Model")}
+                </div>
+                <button
+                  type="button"
+                  onClick={resetClusterSettings}
+                  className="ui-secondary-button px-2 py-1 text-xs"
+                  title={t("Сбросить параметры", "Reset parameters")}
+                >
+                  <RotateCcw className="h-3.5 w-3.5" />
+                  {t("Сброс", "Reset")}
+                </button>
+              </div>
+
+              {!clusterSettings.autoTune && (
+                <>
+              <label className="block space-y-1.5">
+                <span className="text-xs font-medium text-slate-600 dark:text-slate-300">
+                  {t("Алгоритм", "Algorithm")}
+                </span>
+                <Select
+                  value={clusterSettings.algorithm}
+                  onValueChange={(value) => updateClusterSettings({ algorithm: value as ClusterAlgorithm })}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="kmeans">K-Means</SelectItem>
+                    <SelectItem value="agglomerative">{t("Иерархический", "Agglomerative")}</SelectItem>
+                    <SelectItem value="dbscan">DBSCAN</SelectItem>
+                  </SelectContent>
+                </Select>
+              </label>
+
+              <label className="block space-y-1.5">
+                <span className="text-xs font-medium text-slate-600 dark:text-slate-300">
+                  {t("Количество кластеров", "Clusters count")}
+                </span>
+                <Input
+                  type="number"
+                  min={2}
+                  max={maxClustersCount}
+                  value={clusterSettings.clustersCount}
+                  onChange={(event) =>
+                    updateClusterSettings({
+                      clustersCount: Math.max(2, Math.min(Number(event.target.value) || 2, 12)),
+                    })
+                  }
+                />
+              </label>
+
+              <label className="block space-y-1.5">
+                <span className="text-xs font-medium text-slate-600 dark:text-slate-300">
+                  {t("Расстояние", "Distance")}
+                </span>
+                <Select
+                  value={clusterSettings.distanceMetric}
+                  onValueChange={(value) => updateClusterSettings({ distanceMetric: value as DistanceMetric })}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="euclidean">Euclidean</SelectItem>
+                    <SelectItem value="manhattan">Manhattan</SelectItem>
+                    <SelectItem value="cosine">Cosine</SelectItem>
+                  </SelectContent>
+                </Select>
+              </label>
+
+              <label className="block space-y-1.5">
+                <span className="text-xs font-medium text-slate-600 dark:text-slate-300">
+                  {t("Масштабирование", "Scaling")}
+                </span>
+                <Select
+                  value={clusterSettings.scalingMethod}
+                  onValueChange={(value) => updateClusterSettings({ scalingMethod: value as ScalingMethod })}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="standard">Standard</SelectItem>
+                    <SelectItem value="minmax">MinMax</SelectItem>
+                    <SelectItem value="robust">Robust</SelectItem>
+                    <SelectItem value="none">{t("Без масштабирования", "No scaling")}</SelectItem>
+                  </SelectContent>
+                </Select>
+              </label>
+
+              <label className="block space-y-1.5">
+                <span className="text-xs font-medium text-slate-600 dark:text-slate-300">
+                  Random state
+                </span>
+                <Input
+                  type="number"
+                  value={clusterSettings.randomState}
+                  onChange={(event) =>
+                    updateClusterSettings({ randomState: Number(event.target.value) || defaultClusterSettings.randomState })
+                  }
+                />
+              </label>
+
+              <label className="flex items-center gap-2 rounded-md border border-slate-200 px-3 py-2 text-sm text-slate-700 dark:border-slate-700 dark:text-slate-200">
+                <Checkbox
+                  checked={clusterSettings.includeOutliers}
+                  onCheckedChange={(checked) => updateClusterSettings({ includeOutliers: checked === true })}
+                />
+                <span>{t("Учитывать выбросы", "Include outliers")}</span>
+              </label>
+                </>
+              )}
+
+              <label className="flex items-center gap-2 rounded-md border border-violet-200 bg-violet-50/70 px-3 py-2 text-sm text-violet-900 dark:border-violet-900 dark:bg-violet-950/20 dark:text-violet-200">
+                <Checkbox
+                  checked={clusterSettings.autoTune}
+                  onCheckedChange={(checked) => updateClusterSettings({ autoTune: checked === true })}
+                />
+                <span>{t("Автоподбор", "Auto-tune")}</span>
+              </label>
+
+              {clusterSettings.autoTune && (
+                <div className="grid grid-cols-2 gap-2">
+                  <label className="block space-y-1.5">
+                    <span className="text-xs font-medium text-slate-600 dark:text-slate-300">
+                      {t("Критерий", "Metric")}
+                    </span>
+                    <Select
+                      value={clusterSettings.tuningMetric}
+                      onValueChange={(value) => updateClusterSettings({ tuningMetric: value as ClusterTuningMetric })}
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="silhouette">Silhouette</SelectItem>
+                        <SelectItem value="davies_bouldin">Davies-Bouldin</SelectItem>
+                        <SelectItem value="calinski_harabasz">Calinski-Harabasz</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </label>
+                  <label className="block space-y-1.5">
+                    <span className="text-xs font-medium text-slate-600 dark:text-slate-300">
+                      {t("Бюджет", "Budget")}
+                    </span>
+                    <Select
+                      value={clusterSettings.tuningBudget}
+                      onValueChange={(value) => updateClusterSettings({ tuningBudget: value as TuningBudget })}
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="fast">{t("Быстро", "Fast")}</SelectItem>
+                        <SelectItem value="balanced">{t("Баланс", "Balanced")}</SelectItem>
+                        <SelectItem value="quality">{t("Качество", "Quality")}</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </label>
+                </div>
+              )}
+            </div>
+
+            <div className="rounded-md border border-violet-200 bg-violet-50/70 p-3 text-sm dark:border-violet-900 dark:bg-violet-950/20">
+              <div className="mb-2 flex items-center gap-2 font-semibold text-violet-900 dark:text-violet-200">
+                <HelpCircle className="h-4 w-4" />
+                <span>{t("Краткая справка", "Quick reference")}</span>
+              </div>
+              <div className="space-y-2 text-xs leading-5 text-slate-700 dark:text-slate-300">
+                <p>
+                  <span className="font-semibold text-slate-900 dark:text-slate-100">{algorithmHelp.title}: </span>
+                  {algorithmHelp.text}
+                </p>
+                <p>{algorithmHelp.note}</p>
+                <div className="grid gap-1.5">
+                  <div>
+                    <span className="font-semibold">{t("Расстояние", "Distance")}:</span>{" "}
+                    {t("определяет, какие акции считаются похожими.", "defines which stocks are considered similar.")}
+                  </div>
+                  <div>
+                    <span className="font-semibold">{t("Масштабирование", "Scaling")}:</span>{" "}
+                    {t("выравнивает размерности метрик перед расчетом.", "aligns metric scales before calculation.")}
+                  </div>
+                  <div>
+                    <span className="font-semibold">g:</span>{" "}
+                    {t("темпы роста; в текущем кэше передаются через доступный ROE-показатель.", "growth rate; in the current cache it is sent through the available ROE metric.")}
+                  </div>
+                  <div>
+                    <span className="font-semibold">Random state:</span>{" "}
+                    {t("фиксирует повторяемость результата для алгоритмов со случайным стартом.", "keeps results reproducible for algorithms with random starts.")}
+                  </div>
+                  <div>
+                    <span className="font-semibold">{t("Автоподбор", "Auto-tune")}:</span>{" "}
+                    {t("сервер подбирает алгоритм, число кластеров и метрики в рамках выбранного бюджета.", "the server tunes algorithm, cluster count, and metrics within the selected budget.")}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="space-y-3">
+              <div>
+                <div className="text-sm font-semibold text-slate-800 dark:text-slate-100">
+                  {t("Параметры", "Features")}
+                </div>
+                <div className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                  {t("Минимум два параметра", "At least two parameters")}
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                {clusterFeatureOptions.map((option) => {
+                  const checked = clusterSettings.features.includes(option.key);
+                  const label = isEn ? option.labelEn : option.labelRu;
+                  return (
+                    <label
+                      key={option.key}
+                      className="flex min-h-10 items-center gap-2 rounded-md border border-slate-200 px-2 py-2 text-xs text-slate-700 dark:border-slate-700 dark:text-slate-200"
+                    >
+                      <Checkbox
+                        checked={checked}
+                        disabled={checked && clusterSettings.features.length <= 2}
+                        onCheckedChange={() => toggleClusterFeature(option.key)}
+                      />
+                      <span>{label}</span>
+                    </label>
+                  );
+                })}
+              </div>
+            </div>
+
             <OptimizerSettingsFields
               settings={optimizerSettings}
               onChange={setOptimizerSettings}
@@ -731,7 +1176,7 @@ export function ClusterAnalysis() {
 
             <button
               onClick={runClusterAnalysis}
-              disabled={!hasData || !requestData.length || isRunning}
+              disabled={!canRunClusterAnalysis}
               className="ui-primary-button w-full bg-gradient-to-r from-violet-600 to-fuchsia-600 hover:from-violet-700 hover:to-fuchsia-700"
             >
               <Play className="h-5 w-5" />
@@ -741,6 +1186,151 @@ export function ClusterAnalysis() {
         </AnalysisSidebarCard>
       )}
     >
+          <SectionCard
+            title={t("Состав выборки", "Stock Universe")}
+            description={t(
+              "Можно запустить анализ по всему кэшу или вручную оставить только нужные акции.",
+              "Run analysis on the full cache or keep only the stocks you need.",
+            )}
+            action={(
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setSelectionMode("all")}
+                  className={`ui-secondary-button px-3 py-2 text-xs ${
+                    selectionMode === "all" ? "border-violet-300 bg-violet-50 text-violet-700 dark:border-violet-700 dark:bg-violet-950/30 dark:text-violet-200" : ""
+                  }`}
+                >
+                  <Square className="h-4 w-4" />
+                  {t("Весь кэш", "All cache")}
+                </button>
+                <button
+                  type="button"
+                  onClick={setManualSelectionMode}
+                  className={`ui-secondary-button px-3 py-2 text-xs ${
+                    selectionMode === "manual" ? "border-violet-300 bg-violet-50 text-violet-700 dark:border-violet-700 dark:bg-violet-950/30 dark:text-violet-200" : ""
+                  }`}
+                >
+                  <ListFilter className="h-4 w-4" />
+                  {t("Ручной отбор", "Manual")}
+                </button>
+              </div>
+            )}
+          >
+            <div className="space-y-4">
+              <div className="grid grid-cols-1 gap-3 text-sm md:grid-cols-3">
+                <div className="ui-stat-card">
+                  <div className="text-slate-500 dark:text-slate-400">{t("Доступно", "Available")}</div>
+                  <div className="text-xl font-semibold text-slate-900 dark:text-slate-100">{requestData.length}</div>
+                </div>
+                <div className="ui-stat-card">
+                  <div className="text-slate-500 dark:text-slate-400">{t("В анализе", "In analysis")}</div>
+                  <div className="text-xl font-semibold text-slate-900 dark:text-slate-100">{selectedRequestData.length}</div>
+                </div>
+                <div className="ui-stat-card">
+                  <div className="text-slate-500 dark:text-slate-400">{t("Признаков", "Features")}</div>
+                  <div className="text-xl font-semibold text-slate-900 dark:text-slate-100">{clusterSettings.features.length}</div>
+                </div>
+              </div>
+
+              <div className="ui-surface-muted">
+                <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                  <div className="min-w-0">
+                    <div className="text-sm font-semibold text-slate-800 dark:text-slate-100">
+                      {selectionMode === "all"
+                        ? t("Используются все акции с фундаментальными данными", "All stocks with fundamentals are used")
+                        : t("Используется ручной список акций", "Manual stock list is used")}
+                    </div>
+                    <div className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                      {t("Параметры:", "Parameters:")} {selectedFeatureLabels.join(", ")}
+                    </div>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={selectAllStocks}
+                      disabled={!requestData.length}
+                      className="ui-secondary-button px-3 py-2 text-xs"
+                    >
+                      <CheckSquare className="h-4 w-4" />
+                      {t("Выбрать все", "Select all")}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={clearStockSelection}
+                      disabled={!requestData.length}
+                      className="ui-secondary-button px-3 py-2 text-xs"
+                    >
+                      <X className="h-4 w-4" />
+                      {t("Очистить", "Clear")}
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {selectionMode === "manual" && (
+                <div className="space-y-3">
+                  <label className="relative block">
+                    <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                    <Input
+                      value={stockSearch}
+                      onChange={(event) => setStockSearch(event.target.value)}
+                      placeholder={t("Поиск по тикеру, названию или бирже", "Search by ticker, name, or exchange")}
+                      className="pl-9"
+                    />
+                  </label>
+
+                  <div className="max-h-[420px] overflow-y-auto rounded-md border border-slate-200 dark:border-slate-700">
+                    {filteredStockRows.length ? (
+                      <div className="divide-y divide-slate-100 dark:divide-slate-800">
+                        {filteredStockRows.map((row) => {
+                          const checked = selectedFigisSet.has(row.figi);
+                          return (
+                            <label
+                              key={row.figi}
+                              className="flex cursor-pointer items-center gap-3 px-3 py-2.5 transition-colors hover:bg-slate-50 dark:hover:bg-slate-900/50"
+                            >
+                              <Checkbox
+                                checked={checked}
+                                onCheckedChange={() => toggleStockSelection(row.figi)}
+                              />
+                              <div className="min-w-0 flex-1">
+                                <div className="flex flex-wrap items-center gap-2">
+                                  <span className="font-semibold text-slate-900 dark:text-slate-100">{row.ticker}</span>
+                                  <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] text-slate-600 dark:bg-slate-800 dark:text-slate-300">
+                                    {row.exchange || row.currency}
+                                  </span>
+                                </div>
+                                <div className="truncate text-xs text-slate-500 dark:text-slate-400">{row.name}</div>
+                              </div>
+                              <div className="hidden text-right text-xs text-slate-500 dark:text-slate-400 sm:block">
+                                <div>P/E {Number(row.pe_ratio).toFixed(2)}</div>
+                                <div>ROE {Number(row.roe).toFixed(2)}%</div>
+                              </div>
+                            </label>
+                          );
+                        })}
+                      </div>
+                    ) : (
+                      <div className="px-4 py-8 text-center text-sm text-slate-500 dark:text-slate-400">
+                        {t("Ничего не найдено", "No stocks found")}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {!hasValidClusterInput && hasData && (
+                <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:border-amber-900 dark:bg-amber-950/20 dark:text-amber-300">
+                  {t(
+                    "Для запуска нужны минимум две выбранные акции, два признака и количество кластеров не больше числа выбранных акций.",
+                    "To run, select at least two stocks, two features, and no more clusters than selected stocks.",
+                  )}
+                </div>
+              )}
+            </div>
+          </SectionCard>
+
           {isRunning && (
             <AnalysisRunningIndicator
               title={t("Выполняем кластеризацию", "Running clustering")}

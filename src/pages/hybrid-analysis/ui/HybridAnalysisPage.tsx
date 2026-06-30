@@ -15,6 +15,7 @@ import {
 } from "recharts";
 import { useFundamentals } from "../../../entities/fundamentals";
 import { useAppSettings } from "../../../app/context/AppSettingsContext";
+import { Checkbox } from "../../../app/components/ui/checkbox";
 import { OptimizerSettingsFields } from "../../../features/optimizer-settings/ui/OptimizerSettingsFields";
 import { submitOptimizerSettings, useOptimizerSettings } from "../../../features/optimizer-settings/model/optimizerSettings";
 import { API_BASE_URL } from "../../../config/api";
@@ -51,9 +52,11 @@ import { AnalysisRunningIndicator } from "../../../shared/ui/analysis/AnalysisRu
 import { MetricTooltip } from "../../../shared/ui/analysis/MetricTooltip";
 import { PortfolioHoldingsPanel } from "../../../shared/ui/analysis/PortfolioHoldingsPanel";
 
-const ENABLE_TEMP_LOGS = true;
 const palette = ["#0891b2", "#2563eb", "#f97316", "#16a34a", "#e11d48", "#a855f7", "#0ea5e9", "#f59e0b"];
 const HYBRID_STATE_KEY = "hybrid-analysis-state-v2";
+const CLUSTER_ANALYSIS_STATE_KEY = "cluster-analysis-state-v2";
+const TREE_ANALYSIS_STATE_KEY = "decision-tree-analysis-state-v1";
+const NEURAL_ANALYSIS_STATE_KEY = "neural-analysis-state-v1";
 const DEFAULT_SERVER_ERROR_RU = "Сервер вернул ошибку. Попробуйте повторить позже.";
 const DEFAULT_SERVER_ERROR_EN = "Server returned an error. Please try again later.";
 
@@ -288,6 +291,224 @@ function extractErrorText(payload: Record<string, unknown> | null): string | nul
   return null;
 }
 
+function asRecord(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : null;
+}
+
+function asStringArray(value: unknown): string[] {
+  return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : [];
+}
+
+function parseHiddenLayers(value: unknown): number[] {
+  if (Array.isArray(value)) {
+    return value.map((item) => Math.trunc(numberOr(item, NaN))).filter((item) => Number.isFinite(item) && item > 0);
+  }
+  if (typeof value === "string") {
+    return value
+      .split(",")
+      .map((item) => Math.trunc(Number(item.trim())))
+      .filter((item) => Number.isFinite(item) && item > 0);
+  }
+  return [];
+}
+
+function readAnalysisState(storageKey: string): Record<string, unknown> | null {
+  if (typeof window === "undefined") {
+    return null;
+  }
+  const raw = window.localStorage.getItem(storageKey);
+  return raw ? safeParseJsonObject(raw) : null;
+}
+
+function readSavedModelSelection(state: Record<string, unknown> | null): Record<string, unknown> {
+  return {
+    mode: state?.selectionMode === "manual" ? "manual" : "all",
+    selected_figis: asStringArray(state?.selectedFigis),
+  };
+}
+
+function normalizeClusterSettings(settings: Record<string, unknown> | null): Record<string, unknown> | null {
+  if (!settings) return null;
+  const clustersCount = numberOr(settings.clustersCount, 4);
+  return {
+    algorithm: String(settings.algorithm ?? "kmeans"),
+    n_clusters: clustersCount,
+    clusters_count: clustersCount,
+    distance_metric: String(settings.distanceMetric ?? "euclidean"),
+    scaling_method: String(settings.scalingMethod ?? "standard"),
+    standardize: settings.scalingMethod !== "none",
+    random_state: numberOr(settings.randomState, 42),
+    include_outliers: settings.includeOutliers !== false,
+    auto_tune: settings.autoTune !== false,
+    tuning_metric: String(settings.tuningMetric ?? "silhouette"),
+    tuning_budget: String(settings.tuningBudget ?? "balanced"),
+    tuning_scope: "cluster_analysis",
+    features: asStringArray(settings.features),
+  };
+}
+
+function normalizeTreeSettings(settings: Record<string, unknown> | null): Record<string, unknown> | null {
+  if (!settings) return null;
+  return {
+    algorithm: String(settings.algorithm ?? "decision_tree"),
+    criterion: String(settings.criterion ?? "gini"),
+    max_depth: numberOr(settings.maxDepth, 5),
+    min_samples_split: numberOr(settings.minSamplesSplit, 4),
+    min_samples_leaf: numberOr(settings.minSamplesLeaf, 2),
+    test_size: numberOr(settings.testSize, 25) / 100,
+    random_state: numberOr(settings.randomState, 42),
+    class_weight: settings.classBalance === false ? null : "balanced",
+    balance_classes: settings.classBalance !== false,
+    auto_tune: settings.autoTune !== false,
+    tuning_metric: String(settings.tuningMetric ?? "f1"),
+    tuning_budget: String(settings.tuningBudget ?? "balanced"),
+    tuning_scope: "decision_tree_analysis",
+    features: asStringArray(settings.features),
+  };
+}
+
+function normalizeNeuralSettings(settings: Record<string, unknown> | null): Record<string, unknown> | null {
+  if (!settings) return null;
+  const hiddenLayers = parseHiddenLayers(settings.hiddenLayers);
+  return {
+    model_type: String(settings.modelType ?? "mlp"),
+    activation: String(settings.activation ?? "relu"),
+    optimizer: String(settings.optimizer ?? "adam"),
+    hidden_layers: hiddenLayers.length ? hiddenLayers : [64, 32],
+    hidden_layers_raw: String(settings.hiddenLayers ?? "64,32"),
+    epochs: numberOr(settings.epochs, 120),
+    batch_size: numberOr(settings.batchSize, 32),
+    learning_rate: numberOr(settings.learningRate, 0.001),
+    dropout: numberOr(settings.dropout, 0.2),
+    validation_split: numberOr(settings.validationSplit, 20) / 100,
+    random_state: numberOr(settings.randomState, 42),
+    early_stopping: settings.earlyStopping !== false,
+    auto_tune: settings.autoTune !== false,
+    tuning_metric: String(settings.tuningMetric ?? "val_loss"),
+    tuning_budget: String(settings.tuningBudget ?? "balanced"),
+    tuning_scope: "neural_analysis",
+    features: asStringArray(settings.features),
+  };
+}
+
+function readHybridModelSettings(): Record<string, unknown> {
+  const clusterState = readAnalysisState(CLUSTER_ANALYSIS_STATE_KEY);
+  const treeState = readAnalysisState(TREE_ANALYSIS_STATE_KEY);
+  const neuralState = readAnalysisState(NEURAL_ANALYSIS_STATE_KEY);
+
+  const clusterSettings = asRecord(clusterState?.clusterSettings);
+  const treeSettings = asRecord(treeState?.treeSettings);
+  const neuralSettings = asRecord(neuralState?.neuralSettings);
+
+  return {
+    cluster: {
+      parameters: normalizeClusterSettings(clusterSettings),
+      selection: readSavedModelSelection(clusterState),
+      raw_settings: clusterSettings,
+    },
+    tree: {
+      parameters: normalizeTreeSettings(treeSettings),
+      selection: readSavedModelSelection(treeState),
+      raw_settings: treeSettings,
+    },
+    neural: {
+      parameters: normalizeNeuralSettings(neuralSettings),
+      selection: readSavedModelSelection(neuralState),
+      raw_settings: neuralSettings,
+    },
+  };
+}
+
+function countSavedAutoTuneModels(modelSettings: Record<string, unknown>): number {
+  return Object.values(modelSettings).filter((value) => {
+    const model = asRecord(value);
+    const parameters = asRecord(model?.parameters);
+    return parameters?.auto_tune === true;
+  }).length;
+}
+
+function normalizePortfolioSettings(settings: {
+  minWeight: string;
+  maxWeight: string;
+  riskFreeRate: string;
+  sharpeBlendWeight: string;
+  minRiskBlendWeight: string;
+  optimizationObjective: "max_sharpe" | "min_risk";
+  portfolioAssetsCount: string;
+}): Record<string, unknown> {
+  const optimizationObjective = settings.optimizationObjective === "min_risk" ? "min_risk" : "max_sharpe";
+  const portfolioAssetsCount = Math.max(0, Math.trunc(numberOr(settings.portfolioAssetsCount, 0)));
+
+  return {
+    risk_free_rate: numberOr(settings.riskFreeRate, 0),
+    min_weight: Math.max(0, numberOr(settings.minWeight, 0)),
+    max_weight: Math.max(0, numberOr(settings.maxWeight, 0)),
+    sharpe_blend_weight: optimizationObjective === "max_sharpe" ? Math.max(numberOr(settings.sharpeBlendWeight, 0), 100) : 0,
+    min_risk_blend_weight: optimizationObjective === "min_risk" ? Math.max(numberOr(settings.minRiskBlendWeight, 0), 100) : 0,
+    optimization_objective: optimizationObjective,
+    portfolio_assets_count: portfolioAssetsCount,
+    requested_assets_count: portfolioAssetsCount,
+    enforce_requested_count: portfolioAssetsCount > 0,
+  };
+}
+
+function buildHybridPipelinePayload(
+  modelSettings: Record<string, unknown>,
+  portfolioSettings: Record<string, unknown>,
+  weights: { cluster: number; tree: number; neural: number },
+): Record<string, unknown> {
+  const cluster = asRecord(modelSettings.cluster);
+  const tree = asRecord(modelSettings.tree);
+  const neural = asRecord(modelSettings.neural);
+
+  return {
+    mode: "base_models_then_weighted_ensemble",
+    portfolio_settings: portfolioSettings,
+    base_models: [
+      {
+        key: "cluster",
+        endpoint: "cluster-analysis",
+        importance_weight: weights.cluster,
+        parameters: asRecord(cluster?.parameters) ?? {},
+        selection: asRecord(cluster?.selection) ?? { mode: "all", selected_figis: [] },
+        portfolio_settings: portfolioSettings,
+      },
+      {
+        key: "tree",
+        endpoint: "tree-solver-analysis",
+        importance_weight: weights.tree,
+        parameters: asRecord(tree?.parameters) ?? {},
+        selection: asRecord(tree?.selection) ?? { mode: "all", selected_figis: [] },
+        portfolio_settings: portfolioSettings,
+      },
+      {
+        key: "neural",
+        endpoint: "ai-analysis",
+        importance_weight: weights.neural,
+        parameters: asRecord(neural?.parameters) ?? {},
+        selection: asRecord(neural?.selection) ?? { mode: "all", selected_figis: [] },
+        portfolio_settings: portfolioSettings,
+      },
+    ],
+    aggregation: {
+      method: "weighted_average",
+      signal_source: "base_model_selected_assets",
+      weights,
+      normalize_model_weights: true,
+      combine_asset_scores_by: "weighted_average_importance",
+    },
+    final_portfolio: {
+      construction: "rank_weighted_assets_after_base_models",
+      portfolio_settings: portfolioSettings,
+      assets_count_policy: "up_to_requested_count",
+      allow_fewer_assets_than_requested: true,
+      clamp_assets_count_to_available_candidates: true,
+      min_weight_policy: "best_effort_after_weighted_selection",
+      avoid_hard_count_error: true,
+    },
+  };
+}
+
 export function HybridAnalysis() {
   const { hasData, cache } = useFundamentals();
   const { locale, t } = useAppSettings();
@@ -302,6 +523,7 @@ export function HybridAnalysis() {
     treeWeight: "25",
     neuralWeight: "25",
   });
+  const [useSavedAnalysisSettings, setUseSavedAnalysisSettings] = useState(true);
   const [modelComparison, setModelComparison] = useState<ModelScore[]>([]);
   const [metrics, setMetrics] = useState<MetricItem[]>([]);
   const [portfolioStrategies, setPortfolioStrategies] = useState<StrategyPortfolio[]>([]);
@@ -310,6 +532,8 @@ export function HybridAnalysis() {
   const [portfolioAssetsCount, setPortfolioAssetsCount] = useState(0);
   const portfolioChartRef = useRef<HTMLDivElement | null>(null);
   const visibleMetrics = useMemo(() => metrics.filter((item) => isVisibleAnalysisMetric(item.label)), [metrics]);
+  const savedModelSettings = useMemo(() => readHybridModelSettings(), []);
+  const savedAutoTuneCount = useMemo(() => countSavedAutoTuneModels(savedModelSettings), [savedModelSettings]);
   const modelWeightChartData = useMemo(
     () =>
       modelComparison.map((row) => ({
@@ -353,6 +577,8 @@ export function HybridAnalysis() {
             dividend_yield: f.dividendYield,
             beta: f.beta,
             g: f.roe,
+            growth_rate: f.roe,
+            growthRate: f.roe,
           };
         })
         .filter((row): row is NonNullable<typeof row> => Boolean(row)),
@@ -367,6 +593,7 @@ export function HybridAnalysis() {
       }
       const parsed = JSON.parse(raw) as {
         weights?: { clusterWeight?: string; treeWeight?: string; neuralWeight?: string };
+        useSavedAnalysisSettings?: boolean;
         modelComparison?: ModelScore[];
         metrics?: MetricItem[];
         portfolioStrategies?: StrategyPortfolio[];
@@ -381,6 +608,9 @@ export function HybridAnalysis() {
           treeWeight: String(parsed.weights.treeWeight ?? "25"),
           neuralWeight: String(parsed.weights.neuralWeight ?? "25"),
         });
+      }
+      if (typeof parsed.useSavedAnalysisSettings === "boolean") {
+        setUseSavedAnalysisSettings(parsed.useSavedAnalysisSettings);
       }
       if (Array.isArray(parsed.modelComparison)) setModelComparison(parsed.modelComparison);
       if (Array.isArray(parsed.metrics)) setMetrics(parsed.metrics.filter((item) => isVisibleAnalysisMetric(item.label)));
@@ -397,6 +627,7 @@ export function HybridAnalysis() {
   useEffect(() => {
     const payload = {
       weights,
+      useSavedAnalysisSettings,
       modelComparison,
       metrics,
       portfolioStrategies,
@@ -406,7 +637,7 @@ export function HybridAnalysis() {
       error,
     };
     window.localStorage.setItem(HYBRID_STATE_KEY, JSON.stringify(payload));
-  }, [weights, modelComparison, metrics, portfolioStrategies, portfolio, trainingHistory, portfolioAssetsCount, error]);
+  }, [weights, useSavedAnalysisSettings, modelComparison, metrics, portfolioStrategies, portfolio, trainingHistory, portfolioAssetsCount, error]);
 
   const resetAnalysisResults = () => {
     setModelComparison([]);
@@ -457,12 +688,27 @@ export function HybridAnalysis() {
 
     try {
       await submitOptimizerSettings(optimizerSettings);
+      const modelSettings = useSavedAnalysisSettings ? readHybridModelSettings() : {};
+      const portfolioSettings = normalizePortfolioSettings(optimizerSettings);
+      const hybridPipeline = buildHybridPipelinePayload(modelSettings, portfolioSettings, numericWeights);
       const response = await fetch(`${API_BASE_URL}/hybrid-analysis`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           data: requestData,
           weights: numericWeights,
+          portfolio_settings: portfolioSettings,
+          optimizer_settings: portfolioSettings,
+          model_settings: modelSettings,
+          base_model_requests: hybridPipeline.base_models,
+          hybrid_pipeline: hybridPipeline,
+          aggregation: hybridPipeline.aggregation,
+          final_portfolio: hybridPipeline.final_portfolio,
+          auto_tune: {
+            enabled: useSavedAnalysisSettings,
+            source: "saved_individual_analysis_settings",
+            models_count: useSavedAnalysisSettings ? countSavedAutoTuneModels(modelSettings) : 0,
+          },
         }),
       });
       const parsed = await parseHybridResponse(response);
@@ -480,19 +726,6 @@ export function HybridAnalysis() {
       setPortfolio(parsedPortfolio);
       setTrainingHistory(parsedHistory);
       setPortfolioAssetsCount(parsedAssetsCount);
-
-      if (ENABLE_TEMP_LOGS) {
-        console.info("[Hybrid][Request][Success]", {
-          ts: new Date().toISOString(),
-          status: response.status,
-          scores: parsedScores.length,
-          metrics: parsedMetrics.length,
-          strategies: parsedStrategies.length,
-          portfolio: parsedPortfolio.length,
-          history: parsedHistory.length,
-          responseKeys: Object.keys(parsed),
-        });
-      }
     } catch (e) {
       const fallback = t("Не удалось выполнить гибридный анализ", "Failed to run hybrid analysis");
       const message = e instanceof Error ? e.message : fallback;
@@ -601,8 +834,8 @@ export function HybridAnalysis() {
             icon={Settings}
             title={t("Параметры ансамбля", "Ensemble Parameters")}
             description={t(
-              "Общий shell для весов ансамбля и настроек оптимизатора.",
-              "Shared shell for ensemble weights and optimizer settings.",
+              "Базовые анализы получают одинаковые параметры портфеля, затем активы объединяются по средневзвешенной важности.",
+              "Base analyses receive the same portfolio settings, then assets are combined by weighted importance.",
             )}
             accent="cyan"
           >
@@ -635,6 +868,30 @@ export function HybridAnalysis() {
                     </label>
                   );
                 })}
+              </div>
+              <div className="ui-surface-muted space-y-2">
+                <label className="flex items-center gap-2 text-sm font-medium text-slate-700 dark:text-slate-200">
+                  <Checkbox
+                    checked={useSavedAnalysisSettings}
+                    onCheckedChange={(checked) => setUseSavedAnalysisSettings(checked === true)}
+                  />
+                  <span>{t("Использовать автоподборы моделей", "Use model auto-tuning")}</span>
+                </label>
+                <p className="text-xs leading-5 text-slate-500 dark:text-slate-400">
+                  {t(
+                    "Гибрид передаст серверу сохраненные настройки кластеров, дерева и нейросети.",
+                    "Hybrid will send saved cluster, tree, and neural settings to the server.",
+                  )}
+                </p>
+                <p className="text-xs font-semibold text-cyan-700 dark:text-cyan-300">
+                  {t("Найдено моделей с автоподбором", "Models with auto-tune found")}: {savedAutoTuneCount} / 3
+                </p>
+              </div>
+              <div className="rounded-md border border-cyan-200 bg-cyan-50/70 p-3 text-xs leading-5 text-slate-700 dark:border-cyan-900 dark:bg-cyan-950/20 dark:text-slate-300">
+                {t(
+                  "Схема гибрида: кластерный анализ, дерево решений и нейросеть строят свои портфели с текущими настройками ниже. Финальный список активов выбирается по средневзвешенным весам моделей; если кандидатов меньше запрошенного количества, используется доступное число без жесткой ошибки.",
+                  "Hybrid flow: clustering, decision tree, and neural network build their portfolios with the settings below. The final assets are selected by model-weighted scores; if candidates are fewer than requested, the available count is used without a hard error.",
+                )}
               </div>
               <OptimizerSettingsFields
                 settings={optimizerSettings}
@@ -822,5 +1079,3 @@ export function HybridAnalysis() {
     </>
   );
 }
-
-

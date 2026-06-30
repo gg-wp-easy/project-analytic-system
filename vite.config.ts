@@ -24,10 +24,25 @@ export default defineConfig({
     port: 5173,
     watch: {
       ignored: [
+        '**/.git/**',
+        '**/build/**',
+        '**/dist/**',
+        '**/electron/**',
+        '**/release/**',
         '**/server-analytic-system/**',
         '**/.venv/**',
         '**/.build/**',
         '**/__pycache__/**',
+        '**/*.log',
+      ],
+    },
+    fs: {
+      deny: [
+        '.git',
+        'build',
+        'dist',
+        'release',
+        'server-analytic-system',
       ],
     },
     proxy: {

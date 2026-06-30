@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Database, Download, RefreshCw, Trash2 } from "lucide-react";
+import { ArrowDown, ArrowUp, ArrowUpDown, Database, Download, RefreshCw, Trash2 } from "lucide-react";
 import { useRef } from "react";
 import { useAppSettings } from "../../../app/context/AppSettingsContext";
 import { useFundamentals } from "../../../entities/fundamentals";
@@ -12,12 +12,70 @@ import { FundamentalMetricLabel } from "../../../shared/ui/fundamentals/Fundamen
 import { StockAvatar } from "../../../shared/ui/stock-avatar";
 import { FundamentalsTabs } from "./FundamentalsTabs";
 
+function formatSectorRu(rawSector: string | null | undefined): string {
+  const sector = (rawSector ?? "").trim();
+  if (!sector) {
+    return "-";
+  }
+
+  const normalized = sector.toLowerCase().replace(/[_-]+/g, " ");
+  const exact: Record<string, string> = {
+    energy: "Энергетика",
+    financial: "Финансы",
+    financials: "Финансы",
+    industrials: "Промышленность",
+    materials: "Материалы",
+    "consumer discretionary": "Потребительский сектор",
+    "consumer staples": "Товары первой необходимости",
+    "information technology": "Информационные технологии",
+    technology: "Информационные технологии",
+    it: "Информационные технологии",
+    "communication services": "Связь и коммуникации",
+    telecom: "Связь и коммуникации",
+    utilities: "Коммунальные услуги",
+    "real estate": "Недвижимость",
+    healthcare: "Здравоохранение",
+    "health care": "Здравоохранение",
+    "health care services": "Здравоохранение",
+    government: "Государственный сектор",
+    other: "Другое",
+  };
+
+  if (exact[normalized]) {
+    return exact[normalized];
+  }
+
+  const partial: Array<[string, string]> = [
+    ["oil", "Нефть и газ"],
+    ["gas", "Нефть и газ"],
+    ["bank", "Финансы"],
+    ["finance", "Финансы"],
+    ["metal", "Металлы и добыча"],
+    ["mining", "Металлы и добыча"],
+    ["transport", "Транспорт"],
+    ["retail", "Ритейл"],
+    ["consumer", "Потребительский сектор"],
+    ["tele", "Связь и коммуникации"],
+    ["media", "Связь и коммуникации"],
+    ["software", "Информационные технологии"],
+    ["internet", "Информационные технологии"],
+    ["tech", "Информационные технологии"],
+    ["pharma", "Здравоохранение"],
+    ["health", "Здравоохранение"],
+    ["real estate", "Недвижимость"],
+    ["utility", "Коммунальные услуги"],
+  ];
+  const found = partial.find(([needle]) => normalized.includes(needle));
+  return found?.[1] ?? sector;
+}
+
 export function FundamentalsPage() {
   const { cache, isLoading, hasData, error, loadFundamentals, clearCache } = useFundamentals();
   const { t, locale } = useAppSettings();
   const isEn = locale === "en";
   const [page, setPage] = useState(1);
   const [searchQuery, setSearchQuery] = useState("");
+  const [sortState, setSortState] = useState<{ metric: FundamentalMetricKey; direction: "asc" | "desc" } | null>(null);
   const [errorDialogMessage, setErrorDialogMessage] = useState<string | null>(null);
   const prevErrorRef = useRef<string | null>(null);
   const pageSize = 20;
@@ -25,6 +83,8 @@ export function FundamentalsPage() {
     { metric: "marketCapBn", label: t("fund.table.marketCap") },
     { metric: "peRatio", label: t("fund.table.pe") },
     { metric: "pbRatio", label: t("fund.table.pb") },
+    { metric: "psRatio", label: t("fund.table.ps") },
+    { metric: "evToEbitda", label: t("fund.table.ebitda") },
     { metric: "roe", label: t("fund.table.roe") },
     { metric: "dividendYield", label: t("fund.table.divYield") },
     { metric: "beta", label: t("fund.table.beta") },
@@ -39,14 +99,61 @@ export function FundamentalsPage() {
     if (!query) {
       return cache.shares;
     }
-    return cache.shares.filter((share) => share.name.toLowerCase().includes(query));
+    return cache.shares.filter((share) => {
+      const sector = share.sector ?? "";
+      const sectorRu = formatSectorRu(sector);
+      const haystack = `${share.ticker} ${share.name} ${sector} ${sectorRu}`.toLowerCase();
+      return haystack.includes(query);
+    });
   }, [cache.shares, searchQuery]);
 
-  const pageCount = Math.max(1, Math.ceil(filteredShares.length / pageSize));
+  const sortedShares = useMemo(() => {
+    if (!sortState) {
+      return filteredShares;
+    }
+
+    return [...filteredShares].sort((left, right) => {
+      const leftValue = cache.fundamentalsByFigi[left.figi]?.[sortState.metric];
+      const rightValue = cache.fundamentalsByFigi[right.figi]?.[sortState.metric];
+      const leftIsValid = typeof leftValue === "number" && Number.isFinite(leftValue);
+      const rightIsValid = typeof rightValue === "number" && Number.isFinite(rightValue);
+
+      if (!leftIsValid && !rightIsValid) return left.ticker.localeCompare(right.ticker);
+      if (!leftIsValid) return 1;
+      if (!rightIsValid) return -1;
+
+      const diff = leftValue - rightValue;
+      if (diff === 0) return left.ticker.localeCompare(right.ticker);
+      return sortState.direction === "asc" ? diff : -diff;
+    });
+  }, [cache.fundamentalsByFigi, filteredShares, sortState]);
+
+  const pageCount = Math.max(1, Math.ceil(sortedShares.length / pageSize));
   const visibleShares = useMemo(() => {
     const start = (page - 1) * pageSize;
-    return filteredShares.slice(start, start + pageSize);
-  }, [filteredShares, page]);
+    return sortedShares.slice(start, start + pageSize);
+  }, [sortedShares, page]);
+
+  const toggleMetricSort = (metric: FundamentalMetricKey) => {
+    setSortState((current) => {
+      if (current?.metric !== metric) {
+        return { metric, direction: "desc" };
+      }
+      if (current.direction === "desc") {
+        return { metric, direction: "asc" };
+      }
+      return null;
+    });
+  };
+
+  const renderSortIcon = (metric: FundamentalMetricKey) => {
+    if (sortState?.metric !== metric) {
+      return <ArrowUpDown className="h-3.5 w-3.5 text-slate-400" />;
+    }
+    return sortState.direction === "asc"
+      ? <ArrowUp className="h-3.5 w-3.5 text-slate-700 dark:text-slate-200" />
+      : <ArrowDown className="h-3.5 w-3.5 text-slate-700 dark:text-slate-200" />;
+  };
 
   useEffect(() => {
     setPage((prev) => Math.min(prev, pageCount));
@@ -58,7 +165,7 @@ export function FundamentalsPage() {
 
   useEffect(() => {
     setPage(1);
-  }, [searchQuery]);
+  }, [searchQuery, sortState]);
 
   useEffect(() => {
     if (error && error !== prevErrorRef.current) {
@@ -154,12 +261,12 @@ export function FundamentalsPage() {
               type="text"
               value={searchQuery}
               onChange={(event) => setSearchQuery(event.target.value)}
-              placeholder={isEn ? "Search stocks by name" : "Поиск акций по названию"}
+              placeholder={isEn ? "Search by ticker, name, or sector" : "Поиск по тикеру, названию или сектору"}
               className="ui-input md:w-80"
             />
           </div>
           {isLoading && !hasData ? (
-            <TableSkeleton rows={10} columns={13} />
+            <TableSkeleton rows={10} columns={metricColumns.length + 4} />
           ) : (
           <div className="ui-table-shell overflow-x-auto">
             <table className="ui-data-table">
@@ -167,10 +274,19 @@ export function FundamentalsPage() {
                 <tr>
                   <th>{t("fund.table.ticker")}</th>
                   <th>{t("fund.table.name")}</th>
+                  <th>{t({ ru: "Сектор", en: "Sector" })}</th>
                   <th>{isEn ? "Details" : "Подробно"}</th>
                   {metricColumns.map((column) => (
                     <th key={column.metric}>
-                      <FundamentalMetricLabel label={column.label} metric={column.metric} locale={locale} />
+                      <button
+                        type="button"
+                        onClick={() => toggleMetricSort(column.metric)}
+                        className="inline-flex w-full items-center justify-end gap-1 text-right"
+                        title={isEn ? "Sort by this metric" : "Сортировать по этой метрике"}
+                      >
+                        <FundamentalMetricLabel label={column.label} metric={column.metric} locale={locale} />
+                        {renderSortIcon(column.metric)}
+                      </button>
                     </th>
                   ))}
                 </tr>
@@ -178,8 +294,8 @@ export function FundamentalsPage() {
               <tbody>
                 {visibleShares.length === 0 ? (
                   <tr>
-                    <td colSpan={13} className="py-4 text-center text-slate-500 dark:text-slate-400">
-                      {isEn ? "No stocks found by this name" : "Акции по такому названию не найдены"}
+                    <td colSpan={metricColumns.length + 4} className="py-4 text-center text-slate-500 dark:text-slate-400">
+                      {isEn ? "No stocks found by this query" : "Акции по такому запросу не найдены"}
                     </td>
                   </tr>
                 ) : (
@@ -194,6 +310,9 @@ export function FundamentalsPage() {
                           </div>
                         </td>
                         <td className="ui-cell-name">{share.name}</td>
+                        <td className="whitespace-nowrap text-slate-600 dark:text-slate-300">
+                          {formatSectorRu(share.sector)}
+                        </td>
                         <td className="ui-cell-action">
                           <Link
                             to={`/fundamentals/${share.figi}`}

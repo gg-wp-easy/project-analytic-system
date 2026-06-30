@@ -5,6 +5,7 @@ import {
   BarChart,
   CartesianGrid,
   Cell,
+  LabelList,
   ResponsiveContainer,
   Scatter,
   ScatterChart,
@@ -119,9 +120,66 @@ function formatNumber(value: number, digits = 2): string {
   return Number.isFinite(value) ? value.toFixed(digits) : "-";
 }
 
+function formatSectorRu(rawSector: string): string {
+  const sector = rawSector.trim();
+  const normalized = sector.toLowerCase().replace(/[_-]+/g, " ");
+  const exact: Record<string, string> = {
+    energy: "Энергетика",
+    financial: "Финансы",
+    financials: "Финансы",
+    industrials: "Промышленность",
+    materials: "Материалы",
+    "consumer discretionary": "Потребительский сектор",
+    "consumer staples": "Товары первой необходимости",
+    "information technology": "Информационные технологии",
+    technology: "Информационные технологии",
+    it: "Информационные технологии",
+    "communication services": "Связь и коммуникации",
+    telecom: "Связь и коммуникации",
+    utilities: "Коммунальные услуги",
+    "real estate": "Недвижимость",
+    healthcare: "Здравоохранение",
+    "health care": "Здравоохранение",
+    "health care services": "Здравоохранение",
+    government: "Государственный сектор",
+    other: "Другое",
+  };
+  const exactMatch = exact[normalized];
+  if (exactMatch) {
+    return exactMatch;
+  }
+
+  const partial: Array<[string, string]> = [
+    ["oil", "Нефть и газ"],
+    ["gas", "Нефть и газ"],
+    ["bank", "Финансы"],
+    ["finance", "Финансы"],
+    ["metal", "Металлы и добыча"],
+    ["mining", "Металлы и добыча"],
+    ["transport", "Транспорт"],
+    ["retail", "Ритейл"],
+    ["consumer", "Потребительский сектор"],
+    ["tele", "Связь и коммуникации"],
+    ["media", "Связь и коммуникации"],
+    ["software", "Информационные технологии"],
+    ["internet", "Информационные технологии"],
+    ["tech", "Информационные технологии"],
+    ["pharma", "Здравоохранение"],
+    ["health", "Здравоохранение"],
+    ["real estate", "Недвижимость"],
+    ["utility", "Коммунальные услуги"],
+  ];
+  const found = partial.find(([needle]) => normalized.includes(needle));
+  return found?.[1] ?? sector;
+}
+
 function sectorLabel(value: unknown, fallback: string): string {
   const raw = typeof value === "string" ? value.trim() : "";
-  return raw || fallback;
+  return raw ? formatSectorRu(raw) : fallback;
+}
+
+function axisTitle(label: string, unit = ""): string {
+  return unit ? `${label}, ${unit}` : label;
 }
 
 function maybeLogoUrl(source: Record<string, unknown>): string | null {
@@ -387,10 +445,26 @@ function ScatterSection({ title, description, rows, sectors, xKey, yKey, xLabel,
         ))}
       </div>
       <ResponsiveContainer width="100%" height={380}>
-        <ScatterChart margin={{ top: 10, right: 24, bottom: 16, left: 8 }}>
+        <ScatterChart margin={{ top: 10, right: 28, bottom: 42, left: 24 }}>
           <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-          <XAxis type="number" dataKey={xKey} name={xLabel} unit={xUnit} stroke="#64748b" />
-          <YAxis type="number" dataKey={yKey} name={yLabel} unit={yUnit} stroke="#64748b" />
+          <XAxis
+            type="number"
+            dataKey={xKey}
+            name={xLabel}
+            unit={xUnit}
+            stroke="#64748b"
+            tickMargin={8}
+            label={{ value: axisTitle(xLabel, xUnit), position: "insideBottom", offset: -26, fill: "#64748b" }}
+          />
+          <YAxis
+            type="number"
+            dataKey={yKey}
+            name={yLabel}
+            unit={yUnit}
+            stroke="#64748b"
+            tickMargin={8}
+            label={{ value: axisTitle(yLabel, yUnit), angle: -90, position: "insideLeft", fill: "#64748b" }}
+          />
           <Tooltip cursor={{ strokeDasharray: "3 3" }} content={<ScatterTooltip />} />
           {grouped.map((sector) => (
             <Scatter
@@ -494,10 +568,6 @@ export function DataPreprocessingPage() {
               <div className="flex justify-between gap-3">
                 <span>{t("Акций", "Shares")}</span>
                 <span className="font-semibold text-slate-900 dark:text-slate-100">{cache.shares.length}</span>
-              </div>
-              <div className="flex justify-between gap-3">
-                <span>{t("Фундаменталок", "Fundamentals")}</span>
-                <span className="font-semibold text-slate-900 dark:text-slate-100">{Object.keys(cache.fundamentalsByFigi).length}</span>
               </div>
               <div className="flex justify-between gap-3">
                 <span>{t("Секторов", "Sectors")}</span>
@@ -653,12 +723,31 @@ export function DataPreprocessingPage() {
         description={t("Количество акций и средний score в каждом секторе.", "Stock count and average score by sector.")}
       >
         <ResponsiveContainer width="100%" height={360}>
-          <BarChart data={sectorRows.slice(0, 14)} layout="vertical" margin={{ top: 4, right: 36, left: 140, bottom: 4 }}>
+          <BarChart data={sectorRows.slice(0, 14)} layout="vertical" margin={{ top: 4, right: 72, left: 168, bottom: 34 }}>
             <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-            <XAxis type="number" stroke="#64748b" />
-            <YAxis type="category" dataKey="sector" width={140} stroke="#64748b" />
+            <XAxis
+              type="number"
+              stroke="#64748b"
+              tickMargin={8}
+              label={{ value: t("Количество акций", "Stock count"), position: "insideBottom", offset: -24, fill: "#64748b" }}
+            />
+            <YAxis
+              type="category"
+              dataKey="sector"
+              width={160}
+              stroke="#64748b"
+              tickMargin={8}
+              label={{ value: t("Сектор", "Sector"), angle: -90, position: "insideLeft", fill: "#64748b" }}
+            />
             <Tooltip formatter={(value: number, name: string) => [Number(value).toFixed(name === "averageScore" ? 1 : 0), name === "averageScore" ? (isEn ? "Avg score" : "Средний score") : (isEn ? "Count" : "Количество")]} />
             <Bar dataKey="count" radius={[0, 5, 5, 0]}>
+              <LabelList
+                dataKey="count"
+                position="right"
+                formatter={(value: number) => Number(value).toFixed(0)}
+                fill="#334155"
+                fontSize={12}
+              />
               {sectorRows.slice(0, 14).map((row) => (
                 <Cell key={row.sector} fill={row.color} />
               ))}

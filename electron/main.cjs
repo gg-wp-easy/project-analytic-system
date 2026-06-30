@@ -21,7 +21,7 @@ let log;
 try {
   log = require("electron-log");
   if (typeof log.initialize === "function") {
-    log.initialize({ spyRendererConsole: true });
+    log.initialize({ spyRendererConsole: false });
   }
 } catch (error) {
   console.error("electron-log is unavailable, using console fallback.", error);
@@ -199,7 +199,8 @@ function getServiceHealthUrl(service) {
   return `http://${service.host}:${service.port}${service.healthPath}`;
 }
 
-function pingServiceHealth(service) {
+function pingServiceHealth(service, options = {}) {
+  const { logErrors = false, logResponses = false } = options;
   return new Promise((resolve) => {
     const req = http.get(getServiceHealthUrl(service), (res) => {
       let data = "";
@@ -207,13 +208,17 @@ function pingServiceHealth(service) {
         data += chunk;
       });
       res.on("end", () => {
-        log.info(`[${service.displayName}] health response: ${res.statusCode} - ${data}`);
+        if (logResponses) {
+          log.info(`[${service.displayName}] health response: ${res.statusCode} - ${data}`);
+        }
         resolve(res.statusCode === 200);
       });
     });
 
     req.on("error", (err) => {
-      log.warn(`[${service.displayName}] health check error: ${err.message}`);
+      if (logErrors) {
+        log.warn(`[${service.displayName}] health check error: ${err.message}`);
+      }
       resolve(false);
     });
 
@@ -225,11 +230,16 @@ function pingServiceHealth(service) {
 }
 
 async function waitForServiceHealth(service, timeoutMs = 60000, intervalMs = 600) {
+  let lastErrorLogged = false;
   const startedAt = Date.now();
   while (Date.now() - startedAt < timeoutMs) {
     // eslint-disable-next-line no-await-in-loop
     if (await pingServiceHealth(service)) {
       return true;
+    }
+    if (!lastErrorLogged && Date.now() - startedAt > 5000) {
+      log.info(`[${service.displayName}] waiting for backend at ${getServiceHealthUrl(service)}...`);
+      lastErrorLogged = true;
     }
     // eslint-disable-next-line no-await-in-loop
     await new Promise((resolve) => setTimeout(resolve, intervalMs));
