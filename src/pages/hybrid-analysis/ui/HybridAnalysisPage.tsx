@@ -18,6 +18,7 @@ import { useAppSettings } from "../../../app/context/AppSettingsContext";
 import { Checkbox } from "../../../app/components/ui/checkbox";
 import { OptimizerSettingsFields } from "../../../features/optimizer-settings/ui/OptimizerSettingsFields";
 import { submitOptimizerSettings, useOptimizerSettings } from "../../../features/optimizer-settings/model/optimizerSettings";
+import { PortfolioSimulationPanel } from "../../../features/portfolio-simulation/ui/PortfolioSimulationPanel";
 import { API_BASE_URL } from "../../../config/api";
 import type {
   HybridMetricItem as MetricItem,
@@ -217,6 +218,7 @@ function extractPortfolioPositions(parsed: Record<string, unknown>): PortfolioPo
     const ticker = String(row.ticker ?? `Asset ${idx + 1}`);
     const mapped = tickerMap.get(ticker);
     return {
+      figi: String(row.figi ?? row.FIGI ?? row.instrumentFigi ?? ""),
       ticker,
       name: mapped?.name ?? ticker,
       weight: numberOr(row.weight, 0),
@@ -1063,6 +1065,16 @@ export function HybridAnalysis() {
                 />
               )}
             </SectionCard>
+          )}
+
+          {!!portfolio.length && (
+            <PortfolioSimulationPanel
+              holdings={portfolio}
+              shares={cache.shares}
+              fundamentalsByFigi={cache.fundamentalsByFigi}
+              analysisName={t("Гибридный анализ", "Hybrid Analysis")}
+              filenamePrefix="hybrid-portfolio"
+            />
           )}
       </AnalysisPageFrame>
 

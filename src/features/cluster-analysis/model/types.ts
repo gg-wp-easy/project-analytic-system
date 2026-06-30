@@ -23,6 +23,7 @@ export type ClusterMetricItem = {
 };
 
 export type ClusterPortfolioRow = {
+  figi?: string;
   ticker: string;
   name: string;
   weight: number;
@@ -49,4 +50,3 @@ export type ClusterAnalysisSummary = {
   portfoliosCount: number;
   clusterDistribution: Array<{ cluster: string; count: number; color: string }>;
 };
-

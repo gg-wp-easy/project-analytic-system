@@ -40,6 +40,7 @@ import {
 } from "../../../app/components/ui/select";
 import { OptimizerSettingsFields } from "../../../features/optimizer-settings/ui/OptimizerSettingsFields";
 import { submitOptimizerSettings, useOptimizerSettings } from "../../../features/optimizer-settings/model/optimizerSettings";
+import { PortfolioSimulationPanel } from "../../../features/portfolio-simulation/ui/PortfolioSimulationPanel";
 import { API_BASE_URL } from "../../../config/api";
 import type {
   NeuralFeatureImportanceItem as FeatureImportanceItem,
@@ -227,6 +228,7 @@ function extractPortfolioStrategies(parsed: Record<string, unknown>): PortfolioS
       const row = item as Record<string, unknown>;
       const ticker = String(row.ticker ?? row.Ticker ?? `Asset ${idx + 1}`);
       return {
+        figi: String(row.figi ?? row.FIGI ?? row.instrumentFigi ?? ""),
         ticker,
         name: tickerToName.get(ticker) ?? ticker,
         weight: numberOr(row.weight, numberOr(row.weights, 0)),
@@ -1406,6 +1408,16 @@ export function NeuralNetworkAnalysis() {
                 />
               )}
             </SectionCard>
+          )}
+
+          {!!portfolioPositions.length && (
+            <PortfolioSimulationPanel
+              holdings={portfolioPositions}
+              shares={cache.shares}
+              fundamentalsByFigi={cache.fundamentalsByFigi}
+              analysisName={t("Нейросетевой анализ", "Neural Network Analysis")}
+              filenamePrefix="neural-portfolio"
+            />
           )}
 
           {!!featureImportance.length && (

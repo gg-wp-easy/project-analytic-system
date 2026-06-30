@@ -14,6 +14,7 @@ export type DecisionTreeConfusionMatrixData = {
 };
 
 export type DecisionTreePortfolioPosition = {
+  figi?: string;
   ticker: string;
   name: string;
   sector: string;
@@ -37,4 +38,3 @@ export type DecisionTreeNumericSummaryItem = {
   min: number;
   max: number;
 };
-

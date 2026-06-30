@@ -39,6 +39,7 @@ import {
 } from "../../../app/components/ui/select";
 import { OptimizerSettingsFields } from "../../../features/optimizer-settings/ui/OptimizerSettingsFields";
 import { submitOptimizerSettings, useOptimizerSettings } from "../../../features/optimizer-settings/model/optimizerSettings";
+import { PortfolioSimulationPanel } from "../../../features/portfolio-simulation/ui/PortfolioSimulationPanel";
 import { API_BASE_URL } from "../../../config/api";
 import type {
   ClusterAnalysisSummary as AnalysisSummary,
@@ -155,6 +156,7 @@ function extractPortfolioRowsFromTopPositions(
   const rows = topPositions.map((item, index) => {
     const row = item as Record<string, unknown>;
     return {
+      figi: String(row.figi ?? row.FIGI ?? row.instrumentFigi ?? ""),
       ticker: String(row.ticker ?? row.Ticker ?? row.symbol ?? `Asset ${index + 1}`),
       name: String(row.name ?? row.Name ?? ""),
       weight: numberOr(row.weight, numberOr(row.Weight, numberOr(row.allocation, numberOr(row.share, 0)))),
@@ -430,6 +432,7 @@ function extractPortfolio(parsed: Record<string, unknown>): PortfolioRow[] {
       const ticker = String(row.ticker ?? row.asset ?? row.symbol ?? `Asset ${index + 1}`);
       const weight = numberOr(row.weight, numberOr(row.allocation, numberOr(row.share, 0)));
       return {
+        figi: String(row.figi ?? row.FIGI ?? row.instrumentFigi ?? ""),
         ticker,
         name: String(row.name ?? row.company ?? row.Company ?? ticker),
         weight,
@@ -1536,6 +1539,16 @@ export function ClusterAnalysis() {
                 />
               )}
             </SectionCard>
+          )}
+
+          {!!displayPortfolio.length && (
+            <PortfolioSimulationPanel
+              holdings={displayPortfolio}
+              shares={cache.shares}
+              fundamentalsByFigi={cache.fundamentalsByFigi}
+              analysisName={t("Кластерный анализ", "Cluster Analysis")}
+              filenamePrefix="cluster-portfolio"
+            />
           )}
 
       </AnalysisPageFrame>

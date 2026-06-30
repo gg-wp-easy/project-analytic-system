@@ -28,6 +28,7 @@ import {
 } from "../../../app/components/ui/select";
 import { OptimizerSettingsFields } from "../../../features/optimizer-settings/ui/OptimizerSettingsFields";
 import { submitOptimizerSettings, useOptimizerSettings } from "../../../features/optimizer-settings/model/optimizerSettings";
+import { PortfolioSimulationPanel } from "../../../features/portfolio-simulation/ui/PortfolioSimulationPanel";
 import { API_BASE_URL } from "../../../config/api";
 import type {
   DecisionTreeConfusionMatrixData as ConfusionMatrixData,
@@ -270,6 +271,7 @@ function extractPortfolioPositions(parsed: Record<string, unknown>): PortfolioPo
   const rows = positions.map((item, idx) => {
     const row = item as Record<string, unknown>;
     return {
+      figi: String(row.figi ?? row.FIGI ?? row.instrumentFigi ?? ""),
       ticker: String(row.ticker ?? row.Ticker ?? `Asset ${idx + 1}`),
       name: String(row.name ?? row.Company ?? "-"),
       sector: String(row["Сектор"] ?? row.sector ?? "-"),
@@ -1270,6 +1272,16 @@ export function DecisionTreeAnalysis() {
                 weightLabel={t("Вес, %", "Weight, %")}
               />
             </SectionCard>
+          )}
+
+          {!!portfolioPositions.length && (
+            <PortfolioSimulationPanel
+              holdings={portfolioPositions}
+              shares={cache.shares}
+              fundamentalsByFigi={cache.fundamentalsByFigi}
+              analysisName={t("Дерево решений", "Decision Tree")}
+              filenamePrefix="decision-tree-portfolio"
+            />
           )}
 
           {!!numericSummary.length && (

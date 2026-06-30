@@ -9,6 +9,7 @@ export type NeuralFeatureImportanceItem = {
 };
 
 export type NeuralPortfolioPosition = {
+  figi?: string;
   ticker: string;
   name: string;
   weight: number;
@@ -35,4 +36,3 @@ export type NeuralTrainingPoint = {
   trainLoss: number;
   valLoss: number;
 };
-

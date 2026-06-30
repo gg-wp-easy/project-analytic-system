@@ -9,6 +9,7 @@ export type HybridModelScore = {
 };
 
 export type HybridPortfolioPosition = {
+  figi?: string;
   ticker: string;
   name: string;
   weight: number;
@@ -34,4 +35,3 @@ export type HybridTrainingPoint = {
   trainLoss: number;
   valLoss: number;
 };
-
