@@ -20,6 +20,38 @@ function pickString(source: AnyRecord, keys: string[]): string {
   return "";
 }
 
+function normalizeCurrency(value: string): string {
+  const normalized = value.trim().toLowerCase();
+  if (normalized === "rur") {
+    return "rub";
+  }
+  return normalized;
+}
+
+function pickMoneyCurrency(value: unknown): string {
+  if (!value || typeof value !== "object") {
+    return "";
+  }
+  const source = value as AnyRecord;
+  return normalizeCurrency(pickString(source, ["currency", "Currency"]));
+}
+
+function resolveBondCurrency(source: AnyRecord): string {
+  const direct = normalizeCurrency(pickString(source, ["currency", "Currency", "settlementCurrency", "settlement_currency"]));
+  if (direct) {
+    return direct;
+  }
+  return (
+    pickMoneyCurrency(source.nominal) ||
+    pickMoneyCurrency(source.initialNominal) ||
+    pickMoneyCurrency(source.initial_nominal) ||
+    pickMoneyCurrency(source.placementPrice) ||
+    pickMoneyCurrency(source.placement_price) ||
+    pickMoneyCurrency(source.aciValue) ||
+    pickMoneyCurrency(source.aci_value)
+  );
+}
+
 function toNumber(value: unknown, fallback = 0): number {
   if (typeof value === "number") {
     return Number.isFinite(value) ? value : fallback;
@@ -101,22 +133,41 @@ function parseTimestamp(value: unknown): Date | null {
   return null;
 }
 
+function isOfzBondIdentity(ticker: string, name: string): boolean {
+  const tickerUpper = ticker.trim().toUpperCase();
+  const nameLower = name.trim().toLowerCase();
+  return (
+    tickerUpper.startsWith("SU") ||
+    tickerUpper.startsWith("OFZ") ||
+    nameLower.includes("офз") ||
+    nameLower.includes("ofz") ||
+    nameLower.includes("федерального займа")
+  );
+}
+
 function normalizeSector(rawSector: string, ticker: string, name: string): string {
   const sector = rawSector.trim().toLowerCase();
   const nameLower = name.toLowerCase();
-  const tickerUpper = ticker.toUpperCase();
+  const isOfz = isOfzBondIdentity(ticker, name);
 
   if (!sector) {
-    if (nameLower.startsWith("ofz") || tickerUpper.startsWith("OFZ") || tickerUpper.startsWith("SU")) {
+    if (isOfz) {
       return "government";
+    }
+    if (nameLower.includes("муниц")) {
+      return "municipal";
     }
     return "other";
   }
 
+  if (isOfz) {
+    return "government";
+  }
+  if (sector.includes("municipal") || nameLower.includes("муниц")) {
+    return "municipal";
+  }
+
   const mapping: Array<[string, string]> = [
-    ["government", "government"],
-    ["state", "government"],
-    ["municipal", "municipal"],
     ["financial", "financial"],
     ["bank", "financial"],
     ["energy", "energy"],
@@ -295,7 +346,7 @@ async function buildSourceRow(token: string, rawBond: AnyRecord): Promise<BondSo
   const ticker = pickString(rawBond, ["ticker", "Ticker"]);
   const name = pickString(rawBond, ["name", "Name"]) || ticker;
   const maturity = parseTimestamp(rawBond.maturityDate ?? rawBond.maturity_date);
-  const currency = pickString(rawBond, ["currency", "Currency"]).toLowerCase();
+  const currency = resolveBondCurrency(rawBond);
 
   if (!ticker || !maturity || !currency || !SUPPORTED_CURRENCIES.has(currency)) {
     return null;
@@ -314,7 +365,14 @@ async function buildSourceRow(token: string, rawBond: AnyRecord): Promise<BondSo
   const sector = normalizeSector(pickString(rawBond, ["sector", "Sector"]), ticker, name);
   const riskLevel = normalizeRiskLevel(rawBond, sector);
   const couponPaymentsPerYear = Math.trunc(toNumber(rawBond.couponQuantityPerYear ?? rawBond.coupon_quantity_per_year, 0));
+  const isFloatingCoupon = pickBool(rawBond, ["floatingCouponFlag", "floating_coupon_flag"]);
+  if (isFloatingCoupon) {
+    return null;
+  }
   const couponRate = await deriveCouponRate(token, rawBond, nominal, couponPaymentsPerYear);
+  if (!Number.isFinite(couponRate) || couponRate <= 0) {
+    return null;
+  }
 
   return {
     ticker,
@@ -326,7 +384,7 @@ async function buildSourceRow(token: string, rawBond: AnyRecord): Promise<BondSo
     risk_level: Math.min(Math.max(riskLevel, 0), 3),
     coupon_rate: couponRate,
     coupon_payments_per_year: couponPaymentsPerYear > 0 ? couponPaymentsPerYear : undefined,
-    floating_coupon_flag: pickBool(rawBond, ["floatingCouponFlag", "floating_coupon_flag"]),
+    floating_coupon_flag: isFloatingCoupon,
     amortization_flag: pickBool(rawBond, ["amortizationFlag", "amortization_flag"]),
     perpetual_flag: pickBool(rawBond, ["perpetualFlag", "perpetual_flag"]),
     liquidity_flag: pickBool(rawBond, ["liquidityFlag", "liquidity_flag"]),
@@ -352,14 +410,15 @@ export async function loadBondSourceFromClient(
   const filtered = instruments
     .filter((item): item is AnyRecord => Boolean(item) && typeof item === "object" && !Array.isArray(item))
     .filter((bond) => {
-      const currency = pickString(bond, ["currency", "Currency"]).toLowerCase();
+      const currency = resolveBondCurrency(bond);
       const maturity = parseTimestamp(bond.maturityDate ?? bond.maturity_date);
       return (
         SUPPORTED_CURRENCIES.has(currency) &&
         Boolean(maturity) &&
         (maturity?.getTime() ?? 0) > Date.now() &&
         pickBool(bond, ["apiTradeAvailableFlag", "api_trade_available_flag"]) &&
-        pickBool(bond, ["buyAvailableFlag", "buy_available_flag"])
+        pickBool(bond, ["buyAvailableFlag", "buy_available_flag"]) &&
+        !pickBool(bond, ["floatingCouponFlag", "floating_coupon_flag"])
       );
     })
     .sort((left, right) => {

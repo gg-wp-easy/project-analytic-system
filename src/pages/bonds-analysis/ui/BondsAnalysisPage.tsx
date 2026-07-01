@@ -1,5 +1,16 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { FileSpreadsheet, FileText, ImageDown, Landmark, RefreshCw, Settings, Trash2 } from "lucide-react";
+import { FileSpreadsheet, FileText, ImageDown, Landmark, List, RefreshCw, ScatterChart as ScatterIcon, Settings, Trash2 } from "lucide-react";
+import {
+  CartesianGrid,
+  Cell,
+  ResponsiveContainer,
+  Scatter,
+  ScatterChart,
+  Tooltip,
+  XAxis,
+  YAxis,
+  ZAxis,
+} from "recharts";
 import { useAppSettings } from "../../../app/context/AppSettingsContext";
 import { analyzeBondSource } from "../../../features/bonds-analysis/model/clientAnalysis";
 import { loadBondSourceFromClient } from "../../../features/bonds-analysis/model/marketDataClient";
@@ -35,17 +46,40 @@ import { TableSkeleton } from "../../../shared/ui/loading-state";
 const BONDS_STATE_KEY = "bonds-analysis-state-v3";
 const PAGE_SIZE = 25;
 const palette = ["#b45309", "#f59e0b", "#f97316", "#fb7185", "#0ea5e9", "#14b8a6", "#84cc16", "#8b5cf6"];
+const riskPalette = ["#16a34a", "#0ea5e9", "#f59e0b", "#dc2626"];
 const DEFAULT_ANALYSIS_PREFERENCES: BondAnalysisPreferences = {
   targetYield: "12",
   targetDuration: "3.5",
   paymentFrequency: "quarterly",
   targetRiskLevel: "3",
+  selectionMethod: "matching",
+  portfolioBondsCount: "20",
 };
 
-const RISK_LEVEL_OPTIONS = ["0", "1", "2", "3"] as const;
+const RISK_LEVEL_OPTIONS = ["mixed", "0", "1", "2", "3"] as const;
+type BondViewMode = "charts" | "list";
+
+type BondBubblePoint = BondAnalysisBond & {
+  yieldPct: number;
+  maturityYears: number;
+  bubbleSize: number;
+};
+
+type BondChartGroup = {
+  key: string;
+  label: string;
+  description: string;
+  bonds: BondAnalysisBond[];
+};
 
 function normalizeRiskPreference(value: unknown): BondAnalysisPreferences["targetRiskLevel"] {
-  return value === "0" || value === "1" || value === "2" || value === "3" ? value : DEFAULT_ANALYSIS_PREFERENCES.targetRiskLevel;
+  return value === "mixed" || value === "0" || value === "1" || value === "2" || value === "3"
+    ? value
+    : DEFAULT_ANALYSIS_PREFERENCES.targetRiskLevel;
+}
+
+function normalizeSelectionMethod(value: unknown): BondAnalysisPreferences["selectionMethod"] {
+  return value === "immunization" ? "immunization" : "matching";
 }
 
 function getVisiblePages(currentPage: number, totalPages: number): Array<number | null> {
@@ -66,6 +100,126 @@ function isPositiveNumberString(value: string): boolean {
   return Number.isFinite(parsed) && parsed > 0;
 }
 
+function isValidBondCountString(value: string): boolean {
+  const parsed = Math.trunc(Number(value.replace(",", ".")));
+  return Number.isFinite(parsed) && parsed >= 20;
+}
+
+function isFixedCouponSourceRow(row: BondSourceRow): boolean {
+  return !row.floating_coupon_flag && Number.isFinite(row.coupon_rate) && row.coupon_rate > 0;
+}
+
+function isPositiveYieldBond(row: BondAnalysisBond): boolean {
+  return Number.isFinite(row.currentYield) && row.currentYield > 0;
+}
+
+function riskLabel(level: number, t: ReturnType<typeof useAppSettings>["t"]): string {
+  if (level <= 0) return t("Низкий риск", "Low risk");
+  if (level === 1) return t("Умеренный риск", "Moderate risk");
+  if (level === 2) return t("Повышенный риск", "Elevated risk");
+  return t("Высокий риск", "High risk");
+}
+
+function isOfzBondIdentity(ticker: string, name: string): boolean {
+  const tickerUpper = ticker.trim().toUpperCase();
+  const nameLower = name.trim().toLowerCase();
+  return (
+    tickerUpper.startsWith("SU") ||
+    tickerUpper.startsWith("OFZ") ||
+    nameLower.includes("офз") ||
+    nameLower.includes("ofz") ||
+    nameLower.includes("федерального займа")
+  );
+}
+
+function isGovernmentBond(bond: BondAnalysisBond): boolean {
+  return bond.currency === "RUB" && isOfzBondIdentity(bond.ticker, bond.name);
+}
+
+function isMunicipalBond(bond: BondAnalysisBond): boolean {
+  const nameLower = bond.name.trim().toLowerCase();
+  return bond.currency === "RUB" && !isGovernmentBond(bond) && (bond.sector === "municipal" || nameLower.includes("муниц"));
+}
+
+function isCurrencyBond(bond: BondAnalysisBond): boolean {
+  return bond.currency !== "RUB";
+}
+
+function isCorporateBond(bond: BondAnalysisBond): boolean {
+  return !isGovernmentBond(bond) && !isMunicipalBond(bond) && !isCurrencyBond(bond);
+}
+
+function buildBubblePoints(bonds: BondAnalysisBond[]): BondBubblePoint[] {
+  return bonds
+    .filter((bond) => Number.isFinite(bond.currentYield) && Number.isFinite(bond.yearsToMaturity))
+    .map((bond) => ({
+      ...bond,
+      yieldPct: bond.currentYield * 100,
+      maturityYears: bond.yearsToMaturity,
+      bubbleSize: Math.max(40, 70 + bond.totalScore * 260),
+    }));
+}
+
+function BondBubbleTooltip({ payload }: { payload?: Array<{ payload: BondBubblePoint }> }) {
+  if (!payload?.length) {
+    return null;
+  }
+  const bond = payload[0].payload;
+  return (
+    <div className="min-w-64 rounded-lg border border-slate-200 bg-white p-3 text-xs shadow-xl dark:border-slate-700 dark:bg-slate-900">
+      <div className="font-semibold text-slate-900 dark:text-slate-100">{bond.ticker}</div>
+      <div className="mb-2 max-w-64 text-slate-500 dark:text-slate-400">{bond.name}</div>
+      <div className="grid grid-cols-2 gap-x-3 gap-y-1 text-slate-600 dark:text-slate-300">
+        <span>Доходность</span><span className="text-right font-medium">{formatPercentOrNumber(bond.currentYield)}</span>
+        <span>Погашение</span><span className="text-right font-medium">{bond.yearsToMaturity.toFixed(2)} лет</span>
+        <span>Дюрация</span><span className="text-right font-medium">{bond.modifiedDuration.toFixed(2)}</span>
+        <span>Риск</span><span className="text-right font-medium">{bond.riskLevel.toFixed(0)}</span>
+        <span>Валюта</span><span className="text-right font-medium">{bond.currency}</span>
+      </div>
+    </div>
+  );
+}
+
+function BondBubbleChart({ bonds, emptyLabel }: { bonds: BondAnalysisBond[]; emptyLabel: string }) {
+  const points = useMemo(() => buildBubblePoints(bonds), [bonds]);
+
+  if (!points.length) {
+    return <div className="ui-surface-muted text-sm text-slate-600 dark:text-slate-300">{emptyLabel}</div>;
+  }
+
+  return (
+    <ResponsiveContainer width="100%" height={420}>
+      <ScatterChart margin={{ top: 16, right: 28, bottom: 42, left: 18 }}>
+        <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+        <XAxis
+          type="number"
+          dataKey="maturityYears"
+          name="Срок до погашения"
+          stroke="#64748b"
+          tickMargin={8}
+          label={{ value: "Срок до погашения, лет", position: "insideBottom", offset: -26, fill: "#64748b" }}
+        />
+        <YAxis
+          type="number"
+          dataKey="yieldPct"
+          name="Доходность"
+          stroke="#64748b"
+          tickMargin={8}
+          tickFormatter={(value: number) => `${Number(value).toFixed(0)}%`}
+          label={{ value: "Доходность, %", angle: -90, position: "insideLeft", fill: "#64748b" }}
+        />
+        <ZAxis type="number" dataKey="bubbleSize" range={[70, 520]} />
+        <Tooltip cursor={{ strokeDasharray: "3 3" }} content={<BondBubbleTooltip />} />
+        <Scatter name="Bonds" data={points} fill="#f59e0b" fillOpacity={0.78}>
+          {points.map((point) => (
+            <Cell key={`${point.ticker}-${point.name}`} fill={riskPalette[Math.round(point.riskLevel) % riskPalette.length]} />
+          ))}
+        </Scatter>
+      </ScatterChart>
+    </ResponsiveContainer>
+  );
+}
+
 export function BondsAnalysisPage() {
   const { t } = useAppSettings();
 
@@ -79,6 +233,9 @@ export function BondsAnalysisPage() {
   const [isLoadingSource, setIsLoadingSource] = useState(false);
   const [isRecalculating, setIsRecalculating] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
+  const [viewMode, setViewMode] = useState<BondViewMode>("charts");
+  const [typeChartPage, setTypeChartPage] = useState(0);
+  const [riskChartPage, setRiskChartPage] = useState(0);
 
   const portfolioChartRef = useRef<HTMLDivElement | null>(null);
 
@@ -90,17 +247,19 @@ export function BondsAnalysisPage() {
       }
 
       const parsed = JSON.parse(raw) as BondsAnalysisPersistedState;
-      if (Array.isArray(parsed.sourceRows)) setSourceRows(parsed.sourceRows);
+      if (Array.isArray(parsed.sourceRows)) setSourceRows(parsed.sourceRows.filter(isFixedCouponSourceRow));
       if (parsed.analysisPreferences && typeof parsed.analysisPreferences === "object") {
         setAnalysisPreferences({
           targetYield: String(parsed.analysisPreferences.targetYield ?? DEFAULT_ANALYSIS_PREFERENCES.targetYield),
           targetDuration: String(parsed.analysisPreferences.targetDuration ?? DEFAULT_ANALYSIS_PREFERENCES.targetDuration),
           paymentFrequency: parsed.analysisPreferences.paymentFrequency === "monthly" ? "monthly" : "quarterly",
           targetRiskLevel: normalizeRiskPreference(parsed.analysisPreferences.targetRiskLevel),
+          selectionMethod: normalizeSelectionMethod(parsed.analysisPreferences.selectionMethod),
+          portfolioBondsCount: String(parsed.analysisPreferences.portfolioBondsCount ?? DEFAULT_ANALYSIS_PREFERENCES.portfolioBondsCount),
         });
       }
-      if (Array.isArray(parsed.positions)) setPositions(parsed.positions);
-      if (Array.isArray(parsed.allBonds)) setAllBonds(parsed.allBonds);
+      if (Array.isArray(parsed.positions)) setPositions(parsed.positions.filter(isPositiveYieldBond));
+      if (Array.isArray(parsed.allBonds)) setAllBonds(parsed.allBonds.filter(isPositiveYieldBond));
       if (parsed.summary && typeof parsed.summary === "object") setSummary(parsed.summary);
       if (typeof parsed.error === "string" || parsed.error === null) setError(parsed.error ?? null);
     } catch {
@@ -123,19 +282,86 @@ export function BondsAnalysisPage() {
   const isBusy = isLoadingSource || isRecalculating;
   const canRunAnalysis =
     isPositiveNumberString(analysisPreferences.targetYield) &&
-    isPositiveNumberString(analysisPreferences.targetDuration);
+    isPositiveNumberString(analysisPreferences.targetDuration) &&
+    isValidBondCountString(analysisPreferences.portfolioBondsCount);
 
   const totalPages = Math.max(1, Math.ceil(allBonds.length / PAGE_SIZE));
   const pageStartIndex = (currentPage - 1) * PAGE_SIZE;
   const pageEndIndex = Math.min(pageStartIndex + PAGE_SIZE, allBonds.length);
   const paginatedBonds = useMemo(() => allBonds.slice(pageStartIndex, pageEndIndex), [allBonds, pageEndIndex, pageStartIndex]);
   const visiblePages = useMemo(() => getVisiblePages(currentPage, totalPages), [currentPage, totalPages]);
+  const bondTypeGroups = useMemo<BondChartGroup[]>(
+    () => [
+      {
+        key: "ofz",
+        label: t("ОФЗ", "OFZ"),
+        description: t("Государственные рублевые облигации: доходность относительно срока до погашения.", "Government RUB bonds: yield versus maturity."),
+        bonds: allBonds.filter(isGovernmentBond),
+      },
+      {
+        key: "corporate",
+        label: t("Корпоративные", "Corporate"),
+        description: t("Корпоративные рублевые облигации без муниципальных и валютных выпусков.", "Corporate RUB bonds excluding municipal and FX issues."),
+        bonds: allBonds.filter(isCorporateBond),
+      },
+      {
+        key: "municipal",
+        label: t("Муниципальные", "Municipal"),
+        description: t("Муниципальные облигации: сравнение доходности и срока погашения.", "Municipal bonds: yield and maturity comparison."),
+        bonds: allBonds.filter(isMunicipalBond),
+      },
+      {
+        key: "currency",
+        label: t("Валютные", "FX"),
+        description: t("Облигации в валютах кроме RUB.", "Bonds denominated in currencies other than RUB."),
+        bonds: allBonds.filter(isCurrencyBond),
+      },
+    ],
+    [allBonds, t],
+  );
+  const riskGroups = useMemo<BondChartGroup[]>(
+    () =>
+      [0, 1, 2, 3].map((level) => ({
+        key: `risk-${level}`,
+        label: `${riskLabel(level, t)} (${level})`,
+        description: t(
+          `Облигации с уровнем риска ${level}: доходность относительно срока до погашения.`,
+          `Bonds with risk level ${level}: yield versus maturity.`,
+        ),
+        bonds: allBonds.filter((bond) => Math.round(bond.riskLevel) === level),
+      })),
+    [allBonds, t],
+  );
+  const activeTypeGroup = bondTypeGroups[Math.min(typeChartPage, Math.max(bondTypeGroups.length - 1, 0))];
+  const activeRiskGroup = riskGroups[Math.min(riskChartPage, Math.max(riskGroups.length - 1, 0))];
 
   useEffect(() => {
     if (currentPage > totalPages) {
       setCurrentPage(totalPages);
     }
   }, [currentPage, totalPages]);
+
+  useEffect(() => {
+    if (typeChartPage >= bondTypeGroups.length) {
+      setTypeChartPage(Math.max(bondTypeGroups.length - 1, 0));
+    }
+  }, [bondTypeGroups.length, typeChartPage]);
+
+  useEffect(() => {
+    if (riskChartPage >= riskGroups.length) {
+      setRiskChartPage(Math.max(riskGroups.length - 1, 0));
+    }
+  }, [riskChartPage, riskGroups.length]);
+
+  const selectedRiskLabel =
+    analysisPreferences.targetRiskLevel === "mixed"
+      ? t("Смешанный риск", "Mixed risk")
+      : t(`Риск ${analysisPreferences.targetRiskLevel}`, `Risk ${analysisPreferences.targetRiskLevel}`);
+
+  const selectedRiskDescription =
+    analysisPreferences.targetRiskLevel === "mixed"
+      ? t("смешанный риск", "mixed risk")
+      : t(`риск до ${analysisPreferences.targetRiskLevel}`, `risk up to ${analysisPreferences.targetRiskLevel}`);
 
   const exportMetrics = useMemo<ExportMetric[]>(
     () =>
@@ -147,8 +373,13 @@ export function BondsAnalysisPage() {
             { label: t("Целевая доходность", "Target yield"), value: `${analysisPreferences.targetYield}%` },
             { label: t("Целевая дюрация", "Target duration"), value: analysisPreferences.targetDuration },
             {
+              label: t("Метод подбора", "Selection method"),
+              value: analysisPreferences.selectionMethod === "immunization" ? t("Иммунизация", "Immunization") : t("Мэтчинг", "Matching"),
+            },
+            { label: t("Количество облигаций", "Bond count"), value: analysisPreferences.portfolioBondsCount },
+            {
               label: t("Уровень риска", "Risk level"),
-              value: analysisPreferences.targetRiskLevel,
+              value: selectedRiskLabel,
             },
             {
               label: t("Платежи", "Payments"),
@@ -156,7 +387,7 @@ export function BondsAnalysisPage() {
             },
           ]
         : [],
-    [analysisPreferences, summary, t],
+    [analysisPreferences, selectedRiskLabel, summary, t],
   );
 
   const portfolioColumns = useMemo<ExportColumn<BondPortfolioPosition>[]>(
@@ -369,7 +600,36 @@ export function BondsAnalysisPage() {
               </label>
 
               <label className="block text-xs text-slate-600 dark:text-slate-400">
-                {t("Максимальный уровень риска", "Maximum risk level")}
+                {t("Метод подбора", "Selection method")}
+                <select
+                  className="ui-input mt-1"
+                  value={analysisPreferences.selectionMethod}
+                  onChange={(event) =>
+                    setAnalysisPreferences((current) => ({
+                      ...current,
+                      selectionMethod: normalizeSelectionMethod(event.target.value),
+                    }))
+                  }
+                >
+                  <option value="matching">{t("Мэтчинг по параметрам", "Parameter matching")}</option>
+                  <option value="immunization">{t("Иммунизация по дюрации", "Duration immunization")}</option>
+                </select>
+              </label>
+
+              <label className="block text-xs text-slate-600 dark:text-slate-400">
+                {t("Количество облигаций", "Bond count")}
+                <input
+                  type="number"
+                  min="20"
+                  step="1"
+                  className="ui-input mt-1"
+                  value={analysisPreferences.portfolioBondsCount}
+                  onChange={(event) => setAnalysisPreferences((current) => ({ ...current, portfolioBondsCount: event.target.value }))}
+                />
+              </label>
+
+              <label className="block text-xs text-slate-600 dark:text-slate-400">
+                {t("Риск портфеля", "Portfolio risk")}
                 <select
                   className="ui-input mt-1"
                   value={analysisPreferences.targetRiskLevel}
@@ -382,7 +642,7 @@ export function BondsAnalysisPage() {
                 >
                   {RISK_LEVEL_OPTIONS.map((level) => (
                     <option key={level} value={level}>
-                      {t(`Риск ${level}`, `Risk ${level}`)}
+                      {level === "mixed" ? t("Смешанный риск", "Mixed risk") : t(`Риск ${level}`, `Risk ${level}`)}
                     </option>
                   ))}
                 </select>
@@ -390,39 +650,27 @@ export function BondsAnalysisPage() {
 
               {!canRunAnalysis ? (
                 <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs leading-5 text-amber-700 dark:border-amber-900/50 dark:bg-amber-950/40 dark:text-amber-300">
-                  {t("Укажите положительные значения для целевой доходности и дюрации.", "Enter positive values for the target yield and duration.")}
+                  {t(
+                    "Укажите положительные значения для целевой доходности и дюрации, а количество облигаций не меньше 20.",
+                    "Enter positive target yield and duration values, and set bond count to at least 20.",
+                  )}
                 </div>
               ) : null}
 
               <button
                 type="button"
-                onClick={handleRefresh}
-                disabled={isBusy || !canRunAnalysis}
-                className="ui-primary-button w-full bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-700 hover:to-orange-700"
-              >
-                <RefreshCw className={`h-4 w-4 ${isLoadingSource ? "animate-spin" : ""}`} />
-                {isLoadingSource ? t("Загружаем...", "Loading...") : t("Загрузить облигации", "Load bonds")}
-              </button>
-
-              <button
-                type="button"
                 onClick={handleRecalculate}
                 disabled={isBusy || !canRunAnalysis || !sourceRows.length}
-                className="ui-secondary-button w-full"
+                className="ui-secondary-button w-full justify-center px-3 py-2 text-xs"
               >
                 <RefreshCw className={`h-4 w-4 ${isRecalculating ? "animate-spin" : ""}`} />
-                {isRecalculating ? t("Пересчитываем...", "Recalculating...") : t("Пересчитать по параметрам", "Recalculate with parameters")}
-              </button>
-
-              <button type="button" onClick={handleClear} disabled={isBusy || (!sourceRows.length && !summary)} className="ui-secondary-button w-full">
-                <Trash2 className="h-4 w-4" />
-                {t("Очистить", "Clear")}
+                {isRecalculating ? t("Считаем...", "Calculating...") : t("Рассчитать", "Calculate")}
               </button>
 
               <div className="ui-surface-muted text-sm leading-6 text-slate-600 dark:text-slate-300">
                 {t(
-                  "После изменения параметров используйте «Пересчитать по параметрам», чтобы пересобрать портфель без повторной загрузки данных.",
-                  "After changing the parameters, use \"Recalculate with parameters\" to rebuild the portfolio without loading data again.",
+                  "Данные загружаются из клиентского источника, а параметры выше управляют портфелем и фильтрацией риска.",
+                  "Data is loaded from the client-side source; the parameters above control portfolio construction and risk filtering.",
                 )}
               </div>
             </div>
@@ -439,6 +687,78 @@ export function BondsAnalysisPage() {
             accentClassName="text-amber-600"
           />
         ) : null}
+
+        <SectionCard
+          title={t("Данные и просмотр", "Data and View")}
+          description={t(
+            "Загрузите облигации, затем переключайтесь между пузырьковыми диаграммами и табличным списком.",
+            "Load bonds, then switch between bubble charts and the tabular list.",
+          )}
+          action={(
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={handleRefresh}
+                disabled={isBusy || !canRunAnalysis}
+                className="ui-primary-button bg-gradient-to-r from-amber-600 to-orange-600 px-3 py-2 text-xs hover:from-amber-700 hover:to-orange-700"
+              >
+                <RefreshCw className={`h-4 w-4 ${isLoadingSource ? "animate-spin" : ""}`} />
+                {isLoadingSource ? t("Загружаем...", "Loading...") : t("Загрузить облигации", "Load bonds")}
+              </button>
+              <button
+                type="button"
+                onClick={handleClear}
+                disabled={isBusy || (!sourceRows.length && !summary)}
+                className="ui-secondary-button px-3 py-2 text-xs"
+              >
+                <Trash2 className="h-4 w-4" />
+                {t("Очистить", "Clear")}
+              </button>
+            </div>
+          )}
+        >
+          <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+            <div className="grid gap-2 text-sm text-slate-600 dark:text-slate-300 sm:grid-cols-3">
+              <div className="ui-surface-muted">
+                <div className="text-xs text-slate-500 dark:text-slate-400">{t("Загружено", "Loaded")}</div>
+                <div className="text-lg font-semibold text-slate-900 dark:text-slate-100">{sourceRows.length}</div>
+              </div>
+              <div className="ui-surface-muted">
+                <div className="text-xs text-slate-500 dark:text-slate-400">{t("После анализа", "Analyzed")}</div>
+                <div className="text-lg font-semibold text-slate-900 dark:text-slate-100">{allBonds.length}</div>
+              </div>
+              <div className="ui-surface-muted">
+                <div className="text-xs text-slate-500 dark:text-slate-400">{t("В портфеле", "Portfolio")}</div>
+                <div className="text-lg font-semibold text-slate-900 dark:text-slate-100">{positions.length}</div>
+              </div>
+            </div>
+
+            <div className="inline-flex rounded-lg border border-slate-200 bg-white p-1 dark:border-slate-700 dark:bg-slate-900">
+              {([
+                { key: "charts" as const, label: t("Диаграммы", "Charts"), icon: ScatterIcon },
+                { key: "list" as const, label: t("Список", "List"), icon: List },
+              ]).map((item) => {
+                const Icon = item.icon;
+                const isActive = viewMode === item.key;
+                return (
+                  <button
+                    key={item.key}
+                    type="button"
+                    onClick={() => setViewMode(item.key)}
+                    className={`inline-flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium ${
+                      isActive
+                        ? "bg-amber-500 text-white"
+                        : "text-slate-600 hover:bg-slate-50 dark:text-slate-300 dark:hover:bg-slate-800"
+                    }`}
+                  >
+                    <Icon className="h-4 w-4" />
+                    {item.label}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        </SectionCard>
 
         {isBusy && !allBonds.length && !summary ? (
           <SectionCard
@@ -469,7 +789,77 @@ export function BondsAnalysisPage() {
           </SectionCard>
         ) : null}
 
-        {allBonds.length ? (
+        {allBonds.length && viewMode === "charts" && activeTypeGroup ? (
+          <SectionCard
+            title={t("Пузырьковые диаграммы по типам облигаций", "Bubble Charts by Bond Type")}
+            description={activeTypeGroup.description}
+            action={(
+              <div className="flex flex-wrap items-center gap-2">
+                {bondTypeGroups.map((group, index) => (
+                  <button
+                    key={group.key}
+                    type="button"
+                    onClick={() => setTypeChartPage(index)}
+                    className={`inline-flex items-center rounded-md border px-3 py-2 text-xs font-medium ${
+                      typeChartPage === index
+                        ? "border-amber-500 bg-amber-500 text-white"
+                        : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
+                    }`}
+                  >
+                    {group.label}
+                    <span className="ml-2 rounded bg-black/10 px-1.5 py-0.5 text-[10px]">{group.bonds.length}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+          >
+            <div className="mb-3 flex flex-wrap gap-2 text-xs text-slate-500 dark:text-slate-400">
+              {[0, 1, 2, 3].map((level) => (
+                <span key={level} className="inline-flex items-center gap-2 rounded-full border border-slate-200 px-3 py-1 dark:border-slate-700">
+                  <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: riskPalette[level] }} />
+                  {riskLabel(level, t)}
+                </span>
+              ))}
+            </div>
+            <BondBubbleChart
+              bonds={activeTypeGroup.bonds}
+              emptyLabel={t("В этой группе пока нет облигаций.", "There are no bonds in this group yet.")}
+            />
+          </SectionCard>
+        ) : null}
+
+        {allBonds.length && viewMode === "charts" && activeRiskGroup ? (
+          <SectionCard
+            title={t("Пузырьковые диаграммы по уровню риска", "Bubble Charts by Risk Level")}
+            description={activeRiskGroup.description}
+            action={(
+              <div className="flex flex-wrap items-center gap-2">
+                {riskGroups.map((group, index) => (
+                  <button
+                    key={group.key}
+                    type="button"
+                    onClick={() => setRiskChartPage(index)}
+                    className={`inline-flex items-center rounded-md border px-3 py-2 text-xs font-medium ${
+                      riskChartPage === index
+                        ? "border-amber-500 bg-amber-500 text-white"
+                        : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
+                    }`}
+                  >
+                    {group.label}
+                    <span className="ml-2 rounded bg-black/10 px-1.5 py-0.5 text-[10px]">{group.bonds.length}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+          >
+            <BondBubbleChart
+              bonds={activeRiskGroup.bonds}
+              emptyLabel={t("Для выбранного уровня риска нет облигаций.", "There are no bonds for the selected risk level.")}
+            />
+          </SectionCard>
+        ) : null}
+
+        {allBonds.length && viewMode === "list" ? (
           <SectionCard
             title={t("Список облигаций", "Bond list")}
             description={t(
@@ -587,8 +977,8 @@ export function BondsAnalysisPage() {
           <SectionCard
             title={t("Оптимальный портфель облигаций", "Optimal bond portfolio")}
             description={t(
-              `Портфель собран под доходность ${analysisPreferences.targetYield}%, дюрацию ${analysisPreferences.targetDuration} и риск до ${analysisPreferences.targetRiskLevel}.`,
-              `The portfolio is built for a ${analysisPreferences.targetYield}% target yield, ${analysisPreferences.targetDuration} duration, and risk up to ${analysisPreferences.targetRiskLevel}.`,
+              `Портфель собран методом ${analysisPreferences.selectionMethod === "immunization" ? "иммунизации" : "мэтчинга"} под доходность ${analysisPreferences.targetYield}%, дюрацию ${analysisPreferences.targetDuration}, ${selectedRiskDescription} и количество ${analysisPreferences.portfolioBondsCount}.`,
+              `The portfolio is built with ${analysisPreferences.selectionMethod === "immunization" ? "immunization" : "matching"} for a ${analysisPreferences.targetYield}% target yield, ${analysisPreferences.targetDuration} duration, ${selectedRiskDescription}, and ${analysisPreferences.portfolioBondsCount} bonds.`,
             )}
             action={(
               <div className="flex items-center gap-2">

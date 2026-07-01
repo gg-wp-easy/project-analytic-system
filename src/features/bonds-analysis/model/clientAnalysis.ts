@@ -13,7 +13,7 @@ import type {
 const BASE_RISK_FREE_RATE = 0.155;
 const INFLATION_RATE = 0.075;
 const TAX_RATE = 0.13;
-const MIN_BONDS = 15;
+const MIN_BONDS = 20;
 const MAX_BONDS = 50;
 const MAX_WEIGHT_PER_BOND = 0.15;
 const DEFAULT_TARGET_DURATION = 3.5;
@@ -72,7 +72,9 @@ type ResolvedBondAnalysisPreferences = {
   targetDuration: number;
   paymentFrequency: BondAnalysisPreferences["paymentFrequency"];
   desiredPaymentsPerYear: number;
-  targetRiskLevel: number;
+  targetRiskLevel: number | "mixed";
+  selectionMethod: BondAnalysisPreferences["selectionMethod"];
+  portfolioBondsCount: number;
 };
 
 function clamp(value: number, min: number, max: number): number {
@@ -84,15 +86,24 @@ function parsePositiveNumber(value: string, fallback: number): number {
   return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
 }
 
+function parseBondCount(value: string | undefined): number {
+  const parsed = Math.trunc(Number(String(value ?? "").replace(",", ".")));
+  return Number.isFinite(parsed) ? clamp(parsed, MIN_BONDS, MAX_BONDS) : MIN_BONDS;
+}
+
 function resolvePreferences(preferences?: BondAnalysisPreferences): ResolvedBondAnalysisPreferences {
   const paymentFrequency = preferences?.paymentFrequency === "monthly" ? "monthly" : "quarterly";
-  const parsedRiskLevel = Number(preferences?.targetRiskLevel ?? "3");
+  const rawRiskLevel = preferences?.targetRiskLevel ?? "3";
+  const parsedRiskLevel = Number(rawRiskLevel);
+  const selectionMethod = preferences?.selectionMethod === "immunization" ? "immunization" : "matching";
   return {
     targetYield: parsePositiveNumber(preferences?.targetYield ?? "", DEFAULT_TARGET_YIELD * 100) / 100,
     targetDuration: parsePositiveNumber(preferences?.targetDuration ?? "", DEFAULT_TARGET_DURATION),
     paymentFrequency,
     desiredPaymentsPerYear: paymentFrequency === "monthly" ? 12 : 4,
-    targetRiskLevel: Number.isFinite(parsedRiskLevel) ? clamp(parsedRiskLevel, 0, 3) : 3,
+    targetRiskLevel: rawRiskLevel === "mixed" ? "mixed" : Number.isFinite(parsedRiskLevel) ? clamp(parsedRiskLevel, 0, 3) : 3,
+    selectionMethod,
+    portfolioBondsCount: parseBondCount(preferences?.portfolioBondsCount),
   };
 }
 
@@ -178,6 +189,9 @@ function toDateOnly(value: string): Date | null {
 function normalizeRow(row: BondSourceRow): InternalBond | null {
   const maturity = toDateOnly(row.maturity_date);
   if (!maturity || !row.ticker) {
+    return null;
+  }
+  if (row.floating_coupon_flag || !Number.isFinite(row.coupon_rate) || row.coupon_rate <= 0) {
     return null;
   }
 
@@ -348,7 +362,14 @@ function buildPortfolioPositions(bonds: InternalBond[], weights: number[]): Bond
     .sort((left, right) => right.weight - left.weight);
 }
 
-function buildPortfolio(
+function desiredPortfolioCount(poolLength: number, preferences: ResolvedBondAnalysisPreferences): number {
+  if (poolLength <= 0) {
+    return 0;
+  }
+  return Math.min(Math.max(MIN_BONDS, preferences.portfolioBondsCount), poolLength, MAX_BONDS);
+}
+
+function buildMatchingPortfolio(
   candidates: InternalBond[],
   preferences: ResolvedBondAnalysisPreferences,
 ): { positions: BondPortfolioPosition[]; statistics: BondPortfolioStatistics } {
@@ -360,10 +381,7 @@ function buildPortfolio(
   const preferredPool =
     highYield.length >= Math.min(MIN_BONDS, frequencyPool.length) ? highYield : frequencyPool;
 
-  const desiredCount =
-    preferredPool.length <= MIN_BONDS
-      ? preferredPool.length
-      : Math.min(Math.max(MIN_BONDS, Math.round(preferredPool.length * 0.4)), 22, preferredPool.length, MAX_BONDS);
+  const desiredCount = desiredPortfolioCount(preferredPool.length, preferences);
 
   const selected = pickDiversifiedBonds(preferredPool, desiredCount);
   const rawWeights = selected.map((bond, index) => {
@@ -384,6 +402,125 @@ function buildPortfolio(
     positions: buildPortfolioPositions(selected, weights),
     statistics: stats,
   };
+}
+
+function buildImmunizedPortfolio(
+  candidates: InternalBond[],
+  preferences: ResolvedBondAnalysisPreferences,
+): { positions: BondPortfolioPosition[]; statistics: BondPortfolioStatistics } {
+  const sorted = [...candidates].sort((left, right) => right.totalScore - left.totalScore);
+  const preferredFrequency = sorted.filter((bond) => matchesPreferredFrequency(bond, preferences));
+  const pool = preferredFrequency.length >= Math.min(MIN_BONDS, sorted.length) ? preferredFrequency : sorted;
+  const scored = pool
+    .map((bond) => {
+      const durationGap = Math.abs(bond.modifiedDuration - preferences.targetDuration);
+      const durationMatch = 1 / (1 + durationGap);
+      const yieldMatch = clamp(bond.currentYield / Math.max(preferences.targetYield, 0.0001), 0, 1.25);
+      const riskScore = 1 - bond.riskLevel / 3;
+      const frequencyScore = getFrequencyScore(bond, preferences);
+      return {
+        bond,
+        immunizationScore:
+          durationMatch * 0.42 +
+          bond.totalScore * 0.25 +
+          yieldMatch * 0.16 +
+          riskScore * 0.10 +
+          frequencyScore * 0.07,
+      };
+    })
+    .sort((left, right) => right.immunizationScore - left.immunizationScore);
+
+  const desiredCount = desiredPortfolioCount(scored.length, preferences);
+  const belowTarget = scored
+    .filter(({ bond }) => bond.modifiedDuration <= preferences.targetDuration)
+    .sort((left, right) => right.immunizationScore - left.immunizationScore);
+  const aboveTarget = scored
+    .filter(({ bond }) => bond.modifiedDuration > preferences.targetDuration)
+    .sort((left, right) => right.immunizationScore - left.immunizationScore);
+
+  const selected: InternalBond[] = [];
+  const addUnique = (bond: InternalBond) => {
+    if (selected.length < desiredCount && !selected.includes(bond)) {
+      selected.push(bond);
+    }
+  };
+
+  const pairedCount = Math.max(belowTarget.length, aboveTarget.length);
+  for (let index = 0; index < pairedCount && selected.length < desiredCount; index += 1) {
+    if (index < belowTarget.length) addUnique(belowTarget[index].bond);
+    if (index < aboveTarget.length) addUnique(aboveTarget[index].bond);
+  }
+  for (const item of scored) {
+    addUnique(item.bond);
+    if (selected.length >= desiredCount) break;
+  }
+
+  const scoreByTicker = new Map(scored.map((item) => [item.bond.ticker, item.immunizationScore]));
+  let weights = capWeights(
+    selected.map((bond) => {
+      const durationGap = Math.abs(bond.modifiedDuration - preferences.targetDuration);
+      const score = scoreByTicker.get(bond.ticker) ?? bond.totalScore;
+      return Math.max(0.0001, score * (1 + bond.currentYield * 3) / (0.25 + durationGap));
+    }),
+    MAX_WEIGHT_PER_BOND,
+  );
+
+  for (let iteration = 0; iteration < 12; iteration += 1) {
+    const stats = computePortfolioStatistics(selected, weights);
+    const durationDiff = preferences.targetDuration - stats.duration;
+    if (Math.abs(durationDiff) < 0.03) {
+      break;
+    }
+    const adjustment = Math.min(Math.abs(durationDiff) / Math.max(preferences.targetDuration, 0.1), 0.45);
+    const tilted = weights.map((weight, index) => {
+      const bond = selected[index];
+      const direction =
+        durationDiff > 0
+          ? Math.max(0, bond.modifiedDuration - preferences.targetDuration)
+          : Math.max(0, preferences.targetDuration - bond.modifiedDuration);
+      const multiplier = 1 + adjustment * direction / Math.max(preferences.targetDuration, 0.1);
+      return weight * multiplier;
+    });
+    weights = capWeights(tilted, MAX_WEIGHT_PER_BOND);
+  }
+
+  return {
+    positions: buildPortfolioPositions(selected, weights),
+    statistics: computePortfolioStatistics(selected, weights),
+  };
+}
+
+function buildPortfolio(
+  candidates: InternalBond[],
+  preferences: ResolvedBondAnalysisPreferences,
+): { positions: BondPortfolioPosition[]; statistics: BondPortfolioStatistics } {
+  if (preferences.selectionMethod === "immunization") {
+    return buildImmunizedPortfolio(candidates, preferences);
+  }
+  return buildMatchingPortfolio(candidates, preferences);
+}
+
+function pickMixedRiskCandidates(bonds: InternalBond[], targetCount: number): InternalBond[] {
+  const candidateLimit = Math.max(30, targetCount * 4);
+  const selected = new Map<string, InternalBond>();
+  const sorted = [...bonds].sort((left, right) => right.totalScore - left.totalScore);
+  const perRiskBucket = Math.max(1, Math.ceil(candidateLimit / 4));
+
+  for (const riskLevel of [0, 1, 2, 3]) {
+    sorted
+      .filter((bond) => Math.round(bond.riskLevel) === riskLevel)
+      .slice(0, perRiskBucket)
+      .forEach((bond) => selected.set(bond.ticker, bond));
+  }
+
+  for (const bond of sorted) {
+    if (selected.size >= candidateLimit) {
+      break;
+    }
+    selected.set(bond.ticker, bond);
+  }
+
+  return [...selected.values()];
 }
 
 function buildAllBonds(bonds: InternalBond[]): BondAnalysisBond[] {
@@ -466,7 +603,7 @@ export function analyzeBondSource(rows: BondSourceRow[], preferences?: BondAnaly
       const candidates = scored
         .filter((bond) => bond.riskLevel <= riskLevel)
         .sort((left, right) => right.totalScore - left.totalScore)
-        .slice(0, 30);
+        .slice(0, Math.max(30, resolvedPreferences.portfolioBondsCount * 3));
 
       if (!candidates.length) {
         return null;
@@ -482,23 +619,29 @@ export function analyzeBondSource(rows: BondSourceRow[], preferences?: BondAnaly
       } satisfies BondRiskPortfolio;
     })
     .filter((portfolio): portfolio is BondRiskPortfolio => Boolean(portfolio));
-  const selectedRiskPortfolio = riskPortfolios.find((portfolio) => portfolio.riskLevel === resolvedPreferences.targetRiskLevel);
-  const selectedPortfolio = selectedRiskPortfolio
-    ? {
-        positions: selectedRiskPortfolio.portfolio,
-        statistics: selectedRiskPortfolio.statistics,
-      }
-    : {
-        positions: [],
-        statistics: {
-          yield: 0,
-          duration: 0,
-          riskScore: 0,
-          convexity: 0,
-          diversification: 0,
-          bondsCount: 0,
-        },
-      };
+  const selectedRiskPortfolio =
+    typeof resolvedPreferences.targetRiskLevel === "number"
+      ? riskPortfolios.find((portfolio) => portfolio.riskLevel === resolvedPreferences.targetRiskLevel)
+      : null;
+  const selectedPortfolio =
+    resolvedPreferences.targetRiskLevel === "mixed"
+      ? buildPortfolio(pickMixedRiskCandidates(scored, resolvedPreferences.portfolioBondsCount), resolvedPreferences)
+      : selectedRiskPortfolio
+        ? {
+            positions: selectedRiskPortfolio.portfolio,
+            statistics: selectedRiskPortfolio.statistics,
+          }
+        : {
+            positions: [],
+            statistics: {
+              yield: 0,
+              duration: 0,
+              riskScore: 0,
+              convexity: 0,
+              diversification: 0,
+              bondsCount: 0,
+            },
+          };
 
   return {
     positions: selectedPortfolio.positions,

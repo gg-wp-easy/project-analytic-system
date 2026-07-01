@@ -100,7 +100,9 @@ export type BondAnalysisPreferences = {
   targetYield: string;
   targetDuration: string;
   paymentFrequency: "monthly" | "quarterly";
-  targetRiskLevel: "0" | "1" | "2" | "3";
+  targetRiskLevel: "mixed" | "0" | "1" | "2" | "3";
+  selectionMethod: "matching" | "immunization";
+  portfolioBondsCount: string;
 };
 
 export type BondsAnalysisPersistedState = {
