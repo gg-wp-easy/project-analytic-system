@@ -970,7 +970,7 @@ export function DecisionTreeAnalysis() {
                   </label>
                   <label className="block space-y-1.5">
                     <span className="text-xs font-medium text-slate-600 dark:text-slate-300">
-                      {t("Бюджет", "Budget")}
+                      {t("Режим подбора", "Tuning mode")}
                     </span>
                     <Select
                       value={treeSettings.tuningBudget}

@@ -114,8 +114,11 @@ function loadCacheFromStorage(): FundamentalsCache {
     if (!Array.isArray(parsed.shares) || !parsed.fundamentalsByFigi) {
       return emptyCache;
     }
+    const fundamentalsByFigi = parsed.fundamentalsByFigi ?? {};
     return {
       ...parsed,
+      shares: sortSharesByMarketCap(parsed.shares, fundamentalsByFigi),
+      fundamentalsByFigi,
       closePricesByFigi: parsed.closePricesByFigi ?? {},
       closePricesMetaByFigi: parsed.closePricesMetaByFigi ?? {},
       source: {
@@ -127,6 +130,29 @@ function loadCacheFromStorage(): FundamentalsCache {
   } catch {
     return emptyCache;
   }
+}
+
+function sortSharesByMarketCap(
+  shares: ShareRecord[],
+  fundamentalsByFigi: Record<string, AssetFundamentalRecord>,
+): ShareRecord[] {
+  return [...shares].sort((left, right) => {
+    const leftValue = fundamentalsByFigi[left.figi]?.marketCapBn;
+    const rightValue = fundamentalsByFigi[right.figi]?.marketCapBn;
+    const leftValid = typeof leftValue === "number" && Number.isFinite(leftValue);
+    const rightValid = typeof rightValue === "number" && Number.isFinite(rightValue);
+
+    if (!leftValid && !rightValid) {
+      return left.ticker.localeCompare(right.ticker);
+    }
+    if (!leftValid) {
+      return 1;
+    }
+    if (!rightValid) {
+      return -1;
+    }
+    return rightValue - leftValue || left.ticker.localeCompare(right.ticker);
+  });
 }
 
 function saveCacheToStorage(cache: FundamentalsCache): void {
@@ -159,9 +185,10 @@ export function FundamentalsProvider({ children }: { children: ReactNode }) {
       const shares = await api.fetchShares();
       const fundamentalsByFigi = await api.fetchAssetFundamentals(shares);
       const closePricesByFigi = await api.fetchClosePrices(shares);
+      const sortedShares = sortSharesByMarketCap(shares, fundamentalsByFigi);
 
       const nextCache: FundamentalsCache = {
-        shares,
+        shares: sortedShares,
         fundamentalsByFigi,
         closePricesByFigi,
         closePricesMetaByFigi: {},

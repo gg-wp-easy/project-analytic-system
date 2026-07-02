@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { FileSpreadsheet, Play, RefreshCw } from "lucide-react";
 import {
   CartesianGrid,
@@ -65,6 +65,14 @@ type PortfolioSimulationPanelProps = {
 };
 
 const chartColors = ["#2563eb", "#059669", "#f59e0b", "#dc2626", "#7c3aed", "#0891b2"];
+const SIMULATION_CACHE_KEY = "portfolio-simulation-cache-v1";
+const SIMULATION_CACHE_LIMIT = 40;
+
+type SimulationCacheEntry = {
+  key: string;
+  savedAt: string;
+  result: SimulationResult;
+};
 
 function defaultFormationDate(): string {
   const date = new Date();
@@ -82,6 +90,51 @@ function formatPercent(value: number, digits = 2): string {
 
 function formatNumber(value: number, digits = 2): string {
   return Number.isFinite(value) ? value.toFixed(digits) : "-";
+}
+
+function hashString(value: string): string {
+  let hash = 2166136261;
+  for (let index = 0; index < value.length; index += 1) {
+    hash ^= value.charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
+  }
+  return (hash >>> 0).toString(36);
+}
+
+function loadSimulationCache(): Record<string, SimulationCacheEntry> {
+  if (typeof window === "undefined") {
+    return {};
+  }
+  try {
+    const parsed = JSON.parse(window.localStorage.getItem(SIMULATION_CACHE_KEY) ?? "{}") as Record<string, SimulationCacheEntry>;
+    return parsed && typeof parsed === "object" ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+function readCachedSimulation(key: string): SimulationCacheEntry | null {
+  return loadSimulationCache()[key] ?? null;
+}
+
+function saveCachedSimulation(key: string, result: SimulationResult): void {
+  if (typeof window === "undefined") {
+    return;
+  }
+  const cache = loadSimulationCache();
+  cache[key] = {
+    key,
+    savedAt: new Date().toISOString(),
+    result,
+  };
+
+  const entries = Object.values(cache)
+    .sort((left, right) => new Date(right.savedAt).getTime() - new Date(left.savedAt).getTime())
+    .slice(0, SIMULATION_CACHE_LIMIT);
+  window.localStorage.setItem(
+    SIMULATION_CACHE_KEY,
+    JSON.stringify(Object.fromEntries(entries.map((entry) => [entry.key, entry]))),
+  );
 }
 
 function normalizeAnnualDividendYield(value: unknown): number {
@@ -226,6 +279,7 @@ export function PortfolioSimulationPanel({
   const [riskFreeRate, setRiskFreeRate] = useState("0");
   const [includeDividendGap, setIncludeDividendGap] = useState(true);
   const [result, setResult] = useState<SimulationResult | null>(null);
+  const [cachedAt, setCachedAt] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -259,6 +313,47 @@ export function PortfolioSimulationPanel({
       normalizedWeight: weightSum > 0 ? holding.weight / weightSum : 0,
     }));
   }, [fundamentalsByFigi, holdings, tickerToShare]);
+
+  const simulationCacheKey = useMemo(() => {
+    if (!normalizedHoldings.length) {
+      return "";
+    }
+    const payload = {
+      analysisName,
+      filenamePrefix,
+      formationDate,
+      riskFreeRate: String(numberOr(riskFreeRate, 0)),
+      includeDividendGap,
+      holdings: normalizedHoldings
+        .map((holding) => ({
+          figi: holding.figi,
+          ticker: holding.ticker,
+          weight: Number(holding.normalizedWeight.toFixed(8)),
+          dividendYield: Number(holding.annualDividendYield.toFixed(8)),
+        }))
+        .sort((left, right) => left.ticker.localeCompare(right.ticker)),
+    };
+    return `${filenamePrefix}-${hashString(JSON.stringify(payload))}`;
+  }, [analysisName, filenamePrefix, formationDate, includeDividendGap, normalizedHoldings, riskFreeRate]);
+
+  useEffect(() => {
+    if (!simulationCacheKey) {
+      setResult(null);
+      setCachedAt(null);
+      return;
+    }
+
+    const cached = readCachedSimulation(simulationCacheKey);
+    if (cached) {
+      setResult(cached.result);
+      setCachedAt(cached.savedAt);
+      setError(null);
+      return;
+    }
+
+    setResult(null);
+    setCachedAt(null);
+  }, [simulationCacheKey]);
 
   const chartRows = useMemo(() => {
     if (!result) {
@@ -369,13 +464,19 @@ export function PortfolioSimulationPanel({
       if (!nextResult.portfolioRows.length) {
         setError(t("За выбранный период нет дневных свечей по акциям портфеля.", "No daily candles for the selected period."));
         setResult(null);
+        setCachedAt(null);
         return;
       }
 
       setResult(nextResult);
+      setCachedAt(null);
+      if (simulationCacheKey) {
+        saveCachedSimulation(simulationCacheKey, nextResult);
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : t("Не удалось рассчитать динамику.", "Failed to calculate performance."));
       setResult(null);
+      setCachedAt(null);
     } finally {
       setIsLoading(false);
     }
@@ -488,6 +589,12 @@ export function PortfolioSimulationPanel({
       {error && (
         <p className="mb-4 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-200">
           {error}
+        </p>
+      )}
+
+      {cachedAt && !error && (
+        <p className="mb-4 rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-200">
+          {t("Результат моделирования загружен из кэша.", "Simulation result loaded from cache.")}
         </p>
       )}
 

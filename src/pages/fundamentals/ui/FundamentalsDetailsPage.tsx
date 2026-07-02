@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { ArrowLeft, BarChart3, Calendar, RefreshCw, TrendingUp } from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { ArrowLeft, BarChart3, RefreshCw, TrendingUp } from "lucide-react";
 import { Link, useParams } from "react-router-dom";
 import { useAppSettings } from "../../../app/context/AppSettingsContext";
 import { useFundamentals, type AssetFundamentalRecord, type ShareRecord } from "../../../entities/fundamentals";
@@ -203,7 +203,21 @@ function formatShortDate(value: string, locale: "ru" | "en"): string {
 }
 
 function formatFactorFundLabel(source: { ticker: string; query: string }): string {
-  return source.query && source.query.toUpperCase() !== source.ticker.toUpperCase()
+  const normalizedQuery = source.query.toUpperCase();
+  const descriptions: Record<string, string> = {
+    RU000A109KS6: "Компании второго эшелона",
+    TMOS: "Крупнейшие компании РФ",
+    TDIV: "Дивидендные акции",
+    TITR: "Акции роста",
+  };
+  const description = descriptions[normalizedQuery];
+  if (description) {
+    return source.ticker.toUpperCase() !== normalizedQuery
+      ? `${source.query} — ${description} (${source.ticker})`
+      : `${source.query} — ${description}`;
+  }
+
+  return source.query && normalizedQuery !== source.ticker.toUpperCase()
     ? `${source.ticker} (${source.query})`
     : source.ticker;
 }
@@ -1120,52 +1134,6 @@ function CandlestickChart({
   );
 }
 
-function buildHeroAside(
-  content: {
-    currentPrice: string;
-    change: string;
-    changePercent: string;
-    updatedAt: string;
-    rangeLabel: string;
-    isPositive: boolean;
-  } | null,
-  isEn: boolean,
-): ReactNode {
-  if (!content) {
-    return (
-      <div className="min-w-[220px] space-y-2">
-        <div className="text-xs font-semibold uppercase tracking-[0.16em] text-white/60">
-          {isEn ? "Price" : "Цена"}
-        </div>
-        <div className="text-2xl font-semibold text-white">{isEn ? "Loading..." : "Загрузка..."}</div>
-        <div className="text-sm text-white/72">
-          {isEn ? "Fetching fresh market candles" : "Загружаем свежие рыночные свечи"}
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <div className="min-w-[220px] space-y-3">
-      <div className="text-xs font-semibold uppercase tracking-[0.16em] text-white/60">
-        {isEn ? "Price" : "Цена"}
-      </div>
-      <div className="text-3xl font-semibold tracking-tight text-white">{content.currentPrice}</div>
-      <div
-        className={`inline-flex rounded-full px-3 py-1.5 text-sm font-semibold ${
-          content.isPositive ? "bg-emerald-400/18 text-emerald-50" : "bg-rose-400/18 text-rose-50"
-        }`}
-      >
-        {content.change} • {content.changePercent}
-      </div>
-      <div className="space-y-1 text-sm text-white/75">
-        <div>{content.rangeLabel}</div>
-        <div>{content.updatedAt}</div>
-      </div>
-    </div>
-  );
-}
-
 export function FundamentalsDetailsPage() {
   const { figi = "" } = useParams();
   const { cache, isLoading, error, loadFundamentals } = useFundamentals();
@@ -1192,7 +1160,6 @@ export function FundamentalsDetailsPage() {
     () => aggregateCandles(selectedHistory, RANGE_CONFIG[selectedRange].candleBucket),
     [selectedHistory, selectedRange],
   );
-  const displayedHistory = chartMode === "candles" ? candleHistory : selectedHistory;
   const selectedSummary = useMemo(() => computePriceSummary(selectedHistory), [selectedHistory]);
 
   const fallbackClosePrice = useMemo(() => {
@@ -1308,42 +1275,19 @@ export function FundamentalsDetailsPage() {
     };
   }, [isEn, share?.figi]);
 
-  const heroAside = useMemo(() => {
-    const current = selectedSummary?.current ?? fallbackClosePrice;
-    if (current === null) {
-      return buildHeroAside(null, isEn);
-    }
-
-    return buildHeroAside(
-      {
-        currentPrice: formatPriceValue(current, share?.currency ?? "RUB", locale),
-        change: formatSignedPriceValue(selectedSummary?.absoluteChange ?? 0, share?.currency ?? "RUB", locale),
-        changePercent: formatPercent(selectedSummary?.percentChange ?? 0, locale, true),
-        updatedAt: selectedSummary?.updatedAt
-          ? `${t("Обновлено", "Updated")}: ${formatDateTime(selectedSummary.updatedAt, locale)}`
-          : t("Обновлённая цена пока недоступна", "Updated price is not available yet"),
-        rangeLabel: `${t("Период", "Range")}: ${getRangeLabel(selectedRange, isEn)}`,
-        isPositive: (selectedSummary?.absoluteChange ?? 0) >= 0,
-      },
-      isEn,
-    );
-  }, [fallbackClosePrice, isEn, locale, selectedRange, selectedSummary, share?.currency]);
-
   const chartHeadline = useMemo(() => {
     if (!selectedSummary) {
       return {
         title: t("История цены", "Price history"),
-        description: t("Выберите период, чтобы загрузить свежий срез цен из API рыночных данных.", "Select a period to load a fresh price slice from the market data API."),
+        description: t("Выберите период и формат графика.", "Select the period and chart format."),
       };
     }
 
     return {
       title: t("История цены", "Price history"),
-      description: `${getRangeLabel(selectedRange, isEn)} • ${selectedHistory.length} ${
-        t("точек загружено", "points loaded")
-      }`,
+      description: `${t("Период", "Period")}: ${getRangeLabel(selectedRange, isEn)}`,
     };
-  }, [isEn, selectedHistory.length, selectedRange, selectedSummary]);
+  }, [isEn, selectedRange, selectedSummary]);
 
   const capmAdequacy = useMemo(
     () => (capmAnalysis ? getCapmAdequacyCopy(capmAnalysis.adequacyLevel, isEn) : null),
@@ -1405,35 +1349,31 @@ export function FundamentalsDetailsPage() {
 
   return (
     <div className="space-y-6">
-      <PageHero
-        icon={TrendingUp}
-        title={
-          <div className="flex items-center gap-3">
-            <StockAvatar ticker={share.ticker} name={share.name} size="lg" className="ring-white/40" />
-            <div className="space-y-2">
-              <div className="text-sm font-semibold uppercase tracking-[0.18em] text-white/72">{share.ticker}</div>
-              <div>{share.name}</div>
+      <div className="rounded-2xl border border-slate-200/80 bg-white/90 px-5 py-4 shadow-sm dark:border-slate-800 dark:bg-slate-950/70">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex min-w-0 items-center gap-3">
+            <StockAvatar ticker={share.ticker} name={share.name} size="lg" />
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-2">
+                <h1 className="truncate text-xl font-semibold text-slate-950 dark:text-slate-50">{share.name}</h1>
+                <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-600 dark:bg-slate-900 dark:text-slate-300">
+                  {share.ticker}
+                </span>
+              </div>
+              <div className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+                {mapExchangeLabel(share.exchange, isEn)} · {share.currency || "RUB"}
+              </div>
             </div>
           </div>
-        }
-        badge={mapExchangeLabel(share.exchange, isEn)}
-        accent="blue"
-        aside={heroAside}
-        footer={
-          <>
-            <Link
-              to="/fundamentals"
-              className="ui-secondary-button border-white/20 bg-white/10 text-white hover:bg-white/16 dark:border-white/20 dark:bg-white/10 dark:text-white"
-            >
-              <ArrowLeft className="h-4 w-4" />
-              {t("Назад к акциям", "Back to shares")}
-            </Link>
-            <span className="ui-page-hero-badge">{share.currency || "RUB"}</span>
-            <span className="ui-page-hero-badge">{t(`Лот ${share.lot}`, `Lot ${share.lot}`)}</span>
-            <span className="ui-page-hero-badge">FIGI: {share.figi}</span>
-          </>
-        }
-      />
+          <Link
+            to="/fundamentals"
+            className="ui-secondary-button w-fit"
+          >
+            <ArrowLeft className="h-4 w-4" />
+            {t("Назад к акциям", "Back to shares")}
+          </Link>
+        </div>
+      </div>
 
       <SectionCard
         title={chartHeadline.title}
@@ -1499,19 +1439,6 @@ export function FundamentalsDetailsPage() {
               </button>
             </div>
           </div>
-          <div className="ui-surface-muted flex flex-wrap items-center gap-3 text-sm text-slate-600 dark:text-slate-300">
-            <span className="inline-flex items-center gap-2">
-              <Calendar className="h-4 w-4" />
-              {t("Период", "Period")}: {getRangeLabel(selectedRange, isEn)}
-            </span>
-            <span>
-              {t("Режим", "Mode")}: {chartMode === "line" ? t("Линия", "Line") : t("Свечи", "Candlesticks")}
-            </span>
-            <span>
-              {chartMode === "candles" ? t("Свечей", "Candles") : t("Точек", "Points")}: {displayedHistory.length}
-            </span>
-          </div>
-
           {isHistoryLoading && selectedHistory.length === 0 ? (
             <ChartSkeleton className="min-h-[22rem]" />
           ) : selectedHistory.length > 0 ? (
@@ -1528,7 +1455,7 @@ export function FundamentalsDetailsPage() {
         </div>
       </SectionCard>
 
-      <MetricGrid className="xl:grid-cols-4">
+      <MetricGrid className="xl:grid-cols-3">
         <MetricCard
           label={t("Текущая цена", "Current price")}
           value={selectedSummary ? formatPriceValue(selectedSummary.current, share.currency, locale) : formatPriceValue(fallbackClosePrice, share.currency, locale)}
@@ -1552,15 +1479,6 @@ export function FundamentalsDetailsPage() {
               : "-"
           }
           helper={getRangeLabel(selectedRange, isEn)}
-        />
-        <MetricCard
-          label={t("Суммарный объём", "Aggregated volume")}
-          value={
-            selectedSummary
-              ? new Intl.NumberFormat(getLocaleCode(locale), { maximumFractionDigits: 0 }).format(selectedSummary.volume)
-              : "-"
-          }
-          helper={selectedHistory.length ? `${selectedHistory.length} ${t("свечей", "candles")}` : undefined}
         />
       </MetricGrid>
 
@@ -1708,10 +1626,10 @@ export function FundamentalsDetailsPage() {
       </SectionCard>
 
       <SectionCard
-        title={t("Модель Fama-French", "Fama-French model")}
+        title={t("Модель Фамы-Френча", "Fama-French model")}
         description={
           t(
-            "Многофакторная модель использует рыночный фактор, SMB = RU000A109KS6 - TMOS и HML = TDIV - TITR. На графиках фактическая избыточная доходность сравнивается с расчётной доходностью модели.",
+            "Многофакторная модель использует рыночный фактор, SMB = компании второго эшелона минус крупнейшие компании РФ и HML = дивидендные акции минус акции роста. На графиках фактическая избыточная доходность сравнивается с расчётной доходностью модели.",
             "The multifactor model uses the market factor, SMB = RU000A109KS6 - TMOS, and HML = TDIV - TITR. The charts compare actual excess return with model-fitted return.",
           )
         }
@@ -1719,7 +1637,7 @@ export function FundamentalsDetailsPage() {
         {isCapmLoading ? (
           <div className="space-y-4">
             <PageLoadingState
-              title={t("Строим Fama-French", "Building Fama-French")}
+              title={t("Строим модель Фамы-Френча", "Building Fama-French")}
               subtitle={t("Загружаем фондовые факторы и считаем многофакторную регрессию.", "Loading fund factors and fitting the multifactor regression.")}
               accentClassName="text-teal-600"
             />
@@ -1728,7 +1646,7 @@ export function FundamentalsDetailsPage() {
         ) : capmAnalysis?.famaFrench ? (
           <div className="space-y-5">
             <MetricGrid className="xl:grid-cols-4">
-              <MetricCard label="R^2 FF" value={formatPercentPoints(capmAnalysis.famaFrench.rSquared, locale)} />
+              <MetricCard label={t("R^2 модели", "FF R^2")} value={formatPercentPoints(capmAnalysis.famaFrench.rSquared, locale)} />
               <MetricCard label={t("Бета рынка", "Market beta")} value={formatCompactNumber(capmAnalysis.famaFrench.marketBeta, locale, 2)} />
               <MetricCard label="β SMB" value={formatCompactNumber(capmAnalysis.famaFrench.smbBeta, locale, 2)} />
               <MetricCard label="β HML" value={formatCompactNumber(capmAnalysis.famaFrench.hmlBeta, locale, 2)} />
@@ -1745,9 +1663,9 @@ export function FundamentalsDetailsPage() {
                   }))}
                 locale={locale}
                 isEn={isEn}
-                title={t("Fama-French: временной ряд", "Fama-French: time series")}
+                title={t("Модель Фамы-Френча: временной ряд", "Fama-French: time series")}
                 actualLabel={t("Факт", "Actual")}
-                predictedLabel={t("Fama-French", "Fama-French")}
+                predictedLabel={t("Расчёт модели", "Fama-French")}
                 predictedColor="#14b8a6"
               />
               <RegressionScatterChart
@@ -1760,8 +1678,8 @@ export function FundamentalsDetailsPage() {
                   }))}
                 locale={locale}
                 isEn={isEn}
-                title={t("Fama-French: расчёт против факта", "Fama-French: fitted versus actual")}
-                xLabel={t("Расчётная доходность FF", "FF fitted return")}
+                title={t("Модель Фамы-Френча: расчёт против факта", "Fama-French: fitted versus actual")}
+                xLabel={t("Расчётная доходность модели", "FF fitted return")}
                 yLabel={t("Фактическая доходность", "Actual return")}
                 lineLabel={t("Линия тренда", "Trend line")}
                 accent="#14b8a6"
@@ -1770,17 +1688,17 @@ export function FundamentalsDetailsPage() {
 
             <MetricGrid className="xl:grid-cols-4">
               <MetricCard
-                label={t("Ожидаемая доходность FF", "FF expected return")}
+                label={t("Ожидаемая доходность модели", "FF expected return")}
                 value={formatPercentPoints(capmAnalysis.famaFrench.expectedAnnualReturn, locale)}
-                helper={t("Годовая оценка с alpha, market, SMB и HML", "Annual estimate with alpha, market, SMB, and HML")}
+                helper={t("Годовая оценка с альфой, рыночным фактором, SMB и HML", "Annual estimate with alpha, market, SMB, and HML")}
               />
               <MetricCard
-                label={t("Альфа FF", "FF alpha")}
+                label={t("Альфа модели", "FF alpha")}
                 value={formatPercentPoints(capmAnalysis.famaFrench.alphaAnnual, locale)}
                 helper={t("Годовая альфа многофакторной модели", "Annual alpha of the multifactor model")}
               />
               <MetricCard
-                label={t("Наблюдений FF", "FF observations")}
+                label={t("Наблюдений", "FF observations")}
                 value={formatCompactNumber(capmAnalysis.famaFrench.sampleSize, locale, 0)}
                 helper={`${formatCalendarDate(capmAnalysis.famaFrench.periodStart, locale)} - ${formatCalendarDate(capmAnalysis.famaFrench.periodEnd, locale)}`}
               />
@@ -1805,13 +1723,13 @@ export function FundamentalsDetailsPage() {
         ) : capmAnalysis?.famaFrenchError ? (
           <div className="rounded-[1.75rem] border border-amber-200/80 bg-amber-50/75 px-5 py-4 text-sm leading-7 text-amber-800 dark:border-amber-500/20 dark:bg-amber-500/10 dark:text-amber-100">
             <div className="text-xs font-semibold uppercase tracking-[0.16em]">
-              {t("Fama-French не построена", "Fama-French was not built")}
+              {t("Модель Фамы-Френча не построена", "Fama-French was not built")}
             </div>
             <div className="mt-2">{capmAnalysis.famaFrenchError}</div>
           </div>
         ) : (
           <div className="rounded-[1.75rem] border border-dashed border-slate-300/80 bg-slate-50/70 px-5 py-6 text-sm text-slate-500 dark:border-slate-700 dark:bg-slate-950/40 dark:text-slate-400">
-            {t("Данные Fama-French пока недоступны.", "Fama-French data is not available yet.")}
+            {t("Данные модели Фамы-Френча пока недоступны.", "Fama-French data is not available yet.")}
           </div>
         )}
       </SectionCard>

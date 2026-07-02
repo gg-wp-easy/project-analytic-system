@@ -302,8 +302,8 @@ function extractMetrics(parsed: Record<string, unknown>, points: ClusterPoint[],
 
   const collected: MetricItem[] = [];
   const candidates: Array<{ key: string; label: string }> = [
-    { key: "silhouette", label: "Silhouette" },
-    { key: "silhouette_score", label: "Silhouette score" },
+    { key: "silhouette", label: "Качество кластеров" },
+    { key: "silhouette_score", label: "Качество кластеров" },
     { key: "davies_bouldin", label: "Davies-Bouldin" },
     { key: "calinski_harabasz", label: "Calinski-Harabasz" },
     { key: "inertia", label: "Inertia" },
@@ -962,7 +962,7 @@ export function ClusterAnalysis() {
                         </div>
                         <div>
                           <span className="font-semibold">{t("Автоподбор", "Auto-tune")}:</span>{" "}
-                          {t("сервер подбирает алгоритм, число кластеров и метрики в рамках выбранного бюджета.", "the server tunes algorithm, cluster count, and metrics within the selected budget.")}
+                          {t("сервер подбирает алгоритм, число кластеров и метрики в выбранном режиме.", "the server tunes algorithm, cluster count, and metrics in the selected mode.")}
                         </div>
                       </div>
                     </div>
@@ -1101,7 +1101,7 @@ export function ClusterAnalysis() {
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="silhouette">Silhouette</SelectItem>
+                        <SelectItem value="silhouette">{t("Качество разделения кластеров", "Cluster separation quality")}</SelectItem>
                         <SelectItem value="davies_bouldin">Davies-Bouldin</SelectItem>
                         <SelectItem value="calinski_harabasz">Calinski-Harabasz</SelectItem>
                       </SelectContent>
@@ -1109,7 +1109,7 @@ export function ClusterAnalysis() {
                   </label>
                   <label className="block space-y-1.5">
                     <span className="text-xs font-medium text-slate-600 dark:text-slate-300">
-                      {t("Бюджет", "Budget")}
+                      {t("Режим подбора", "Tuning mode")}
                     </span>
                     <Select
                       value={clusterSettings.tuningBudget}

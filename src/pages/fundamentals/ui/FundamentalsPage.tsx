@@ -75,7 +75,10 @@ export function FundamentalsPage() {
   const isEn = locale === "en";
   const [page, setPage] = useState(1);
   const [searchQuery, setSearchQuery] = useState("");
-  const [sortState, setSortState] = useState<{ metric: FundamentalMetricKey; direction: "asc" | "desc" } | null>(null);
+  const [sortState, setSortState] = useState<{ metric: FundamentalMetricKey; direction: "asc" | "desc" } | null>({
+    metric: "marketCapBn",
+    direction: "desc",
+  });
   const [errorDialogMessage, setErrorDialogMessage] = useState<string | null>(null);
   const prevErrorRef = useRef<string | null>(null);
   const pageSize = 20;
