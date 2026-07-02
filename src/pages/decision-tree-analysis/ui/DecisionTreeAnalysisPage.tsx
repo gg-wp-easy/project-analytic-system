@@ -4,7 +4,6 @@ import {
   FileSpreadsheet,
   FileText,
   GitBranch,
-  HelpCircle,
   ImageDown,
   ListFilter,
   Play,
@@ -62,6 +61,7 @@ import {
 } from "../../../shared/ui/analysis-shell";
 import { AppErrorDialog } from "../../../shared/ui/app-error-dialog";
 import { AnalysisRunningIndicator } from "../../../shared/ui/analysis/AnalysisRunningIndicator";
+import { InfoTooltip } from "../../../shared/ui/analysis/InfoTooltip";
 import { MetricTooltip } from "../../../shared/ui/analysis/MetricTooltip";
 import { PortfolioHoldingsPanel } from "../../../shared/ui/analysis/PortfolioHoldingsPanel";
 
@@ -771,8 +771,39 @@ export function DecisionTreeAnalysis() {
 
             <div className="space-y-3">
               <div className="flex items-center justify-between gap-3">
-                <div className="text-sm font-semibold text-slate-800 dark:text-slate-100">
-                  {t("Модель", "Model")}
+                <div className="flex items-center gap-2 text-sm font-semibold text-slate-800 dark:text-slate-100">
+                  <span>{t("Модель", "Model")}</span>
+                  <InfoTooltip label={t("Справка по дереву решений", "Decision tree help")} side="right">
+                    <div className="space-y-2">
+                      <p>
+                        <span className="font-semibold">{treeHelp.title}: </span>
+                        {treeHelp.text}
+                      </p>
+                      <p>{treeHelp.note}</p>
+                      <div className="grid gap-1.5">
+                        <div>
+                          <span className="font-semibold">{t("Критерий", "Criterion")}:</span>{" "}
+                          {t("выбирает, какой признак лучше разделяет акции на классы.", "chooses which feature best splits stocks into classes.")}
+                        </div>
+                        <div>
+                          <span className="font-semibold">Min split / leaf:</span>{" "}
+                          {t("ограничивают мелкие разбиения и помогают против переобучения.", "limit tiny splits and help against overfitting.")}
+                        </div>
+                        <div>
+                          <span className="font-semibold">g:</span>{" "}
+                          {t("темпы роста; в текущем кэше передаются через доступный ROE-показатель.", "growth rate; in the current cache it is sent through the available ROE metric.")}
+                        </div>
+                        <div>
+                          <span className="font-semibold">Test, %:</span>{" "}
+                          {t("доля данных для проверки качества модели.", "share of data reserved for model validation.")}
+                        </div>
+                        <div>
+                          <span className="font-semibold">{t("Автоподбор", "Auto-tune")}:</span>{" "}
+                          {t("сервер выбирает алгоритм и ограничения дерева по выбранному критерию качества.", "the server selects algorithm and tree constraints by the selected quality metric.")}
+                        </div>
+                      </div>
+                    </div>
+                  </InfoTooltip>
                 </div>
                 <button
                   type="button"
@@ -957,42 +988,6 @@ export function DecisionTreeAnalysis() {
                   </label>
                 </div>
               )}
-            </div>
-
-            <div className="rounded-md border border-emerald-200 bg-emerald-50/70 p-3 text-sm dark:border-emerald-900 dark:bg-emerald-950/20">
-              <div className="mb-2 flex items-center gap-2 font-semibold text-emerald-900 dark:text-emerald-200">
-                <HelpCircle className="h-4 w-4" />
-                <span>{t("Краткая справка", "Quick reference")}</span>
-              </div>
-              <div className="space-y-2 text-xs leading-5 text-slate-700 dark:text-slate-300">
-                <p>
-                  <span className="font-semibold text-slate-900 dark:text-slate-100">{treeHelp.title}: </span>
-                  {treeHelp.text}
-                </p>
-                <p>{treeHelp.note}</p>
-                <div className="grid gap-1.5">
-                  <div>
-                    <span className="font-semibold">{t("Критерий", "Criterion")}:</span>{" "}
-                    {t("выбирает, какой признак лучше разделяет акции на классы.", "chooses which feature best splits stocks into classes.")}
-                  </div>
-                  <div>
-                    <span className="font-semibold">Min split / leaf:</span>{" "}
-                    {t("ограничивают мелкие разбиения и помогают против переобучения.", "limit tiny splits and help against overfitting.")}
-                  </div>
-                  <div>
-                    <span className="font-semibold">g:</span>{" "}
-                    {t("темпы роста; в текущем кэше передаются через доступный ROE-показатель.", "growth rate; in the current cache it is sent through the available ROE metric.")}
-                  </div>
-                  <div>
-                    <span className="font-semibold">Test, %:</span>{" "}
-                    {t("доля данных для проверки качества модели.", "share of data reserved for model validation.")}
-                  </div>
-                  <div>
-                    <span className="font-semibold">{t("Автоподбор", "Auto-tune")}:</span>{" "}
-                    {t("сервер выбирает алгоритм и ограничения дерева по выбранному критерию качества.", "the server selects algorithm and tree constraints by the selected quality metric.")}
-                  </div>
-                </div>
-              </div>
             </div>
 
             <div className="space-y-3">

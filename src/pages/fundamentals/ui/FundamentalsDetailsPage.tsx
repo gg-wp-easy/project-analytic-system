@@ -195,6 +195,19 @@ function formatCalendarDate(value: string, locale: "ru" | "en"): string {
   }).format(new Date(value));
 }
 
+function formatShortDate(value: string, locale: "ru" | "en"): string {
+  return new Intl.DateTimeFormat(getLocaleCode(locale), {
+    day: "2-digit",
+    month: "short",
+  }).format(new Date(value));
+}
+
+function formatFactorFundLabel(source: { ticker: string; query: string }): string {
+  return source.query && source.query.toUpperCase() !== source.ticker.toUpperCase()
+    ? `${source.ticker} (${source.query})`
+    : source.ticker;
+}
+
 function getRangeLabel(range: ChartRange, isEn: boolean): string {
   switch (range) {
     case "1D":
@@ -416,6 +429,393 @@ function getCandleTone(candle: PriceCandle): { color: string; mutedColor: string
     mutedColor: isUp ? CHART_UP_MUTED_COLOR : CANDLE_DOWN_MUTED_COLOR,
     isUp,
   };
+}
+
+type RegressionScatterPoint = {
+  date: string;
+  x: number;
+  y: number;
+};
+
+type ModelTimeSeriesPoint = {
+  date: string;
+  actual: number;
+  predicted: number;
+};
+
+function getModelSeriesDomain(points: ModelTimeSeriesPoint[]) {
+  const values = points.flatMap((point) => [point.actual, point.predicted]);
+  const rawMin = values.reduce((acc, value) => Math.min(acc, value), values[0] ?? -0.01);
+  const rawMax = values.reduce((acc, value) => Math.max(acc, value), values[0] ?? 0.01);
+  const spread = rawMax - rawMin;
+  const padding = spread > 0 ? spread * 0.12 : 0.01;
+
+  return {
+    min: rawMin - padding,
+    max: rawMax + padding,
+  };
+}
+
+function buildLinePath<T>(
+  data: T[],
+  xToCoord: (index: number) => number,
+  yToCoord: (point: T) => number,
+) {
+  return data
+    .map((point, index) => `${index === 0 ? "M" : "L"} ${xToCoord(index).toFixed(2)} ${yToCoord(point).toFixed(2)}`)
+    .join(" ");
+}
+
+function ModelTimeSeriesChart({
+  points,
+  locale,
+  isEn,
+  title,
+  actualLabel,
+  predictedLabel,
+  predictedColor = "#0ea5e9",
+}: {
+  points: ModelTimeSeriesPoint[];
+  locale: "ru" | "en";
+  isEn: boolean;
+  title: string;
+  actualLabel: string;
+  predictedLabel: string;
+  predictedColor?: string;
+}) {
+  const { ref, width } = useElementWidth();
+  const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
+  const activeIndex = hoveredIndex ?? points.length - 1;
+  const activePoint = points[activeIndex] ?? null;
+  const height = 340;
+  const marginTop = 54;
+  const marginRight = 82;
+  const marginBottom = 42;
+  const marginLeft = 62;
+  const chartWidth = Math.max(width, marginLeft + marginRight + 220);
+  const plotWidth = Math.max(chartWidth - marginLeft - marginRight, 1);
+  const plotHeight = Math.max(height - marginTop - marginBottom, 1);
+  const { min, max } = useMemo(() => getModelSeriesDomain(points), [points]);
+  const actualColor = "#64748b";
+
+  const yToCoord = useCallback(
+    (value: number) => {
+      if (max === min) {
+        return marginTop + plotHeight / 2;
+      }
+      const ratio = (value - min) / (max - min);
+      return marginTop + plotHeight - ratio * plotHeight;
+    },
+    [max, min, plotHeight],
+  );
+
+  const xToCoord = useCallback(
+    (index: number) => {
+      if (points.length <= 1) {
+        return marginLeft + plotWidth / 2;
+      }
+      return marginLeft + (plotWidth / (points.length - 1)) * index;
+    },
+    [plotWidth, points.length],
+  );
+
+  const yAxisValues = Array.from({ length: 5 }, (_, index) => max - ((max - min) / 4) * index);
+  const labelIndices = [...new Set([0, Math.floor(points.length / 3), Math.floor((points.length * 2) / 3), points.length - 1])]
+    .filter((index) => index >= 0 && index < points.length);
+  const actualPath = buildLinePath(points, xToCoord, (point) => yToCoord(point.actual));
+  const predictedPath = buildLinePath(points, xToCoord, (point) => yToCoord(point.predicted));
+  const activeX = activePoint ? xToCoord(activeIndex) : 0;
+  const activeActualY = activePoint ? yToCoord(activePoint.actual) : 0;
+  const activePredictedY = activePoint ? yToCoord(activePoint.predicted) : 0;
+
+  return (
+    <div
+      ref={ref}
+      className="relative h-[21.25rem] w-full overflow-hidden rounded-xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-950"
+    >
+      <div className="pointer-events-none absolute left-4 top-3 z-10 flex flex-wrap items-center gap-x-4 gap-y-2 text-xs text-slate-500 dark:text-slate-400">
+        <span className="font-semibold text-slate-800 dark:text-slate-100">{title}</span>
+        <span className="inline-flex items-center gap-1.5">
+          <span className="h-2.5 w-6 rounded-full" style={{ backgroundColor: actualColor }} />
+          {actualLabel}
+        </span>
+        <span className="inline-flex items-center gap-1.5">
+          <span className="h-2.5 w-6 rounded-full" style={{ backgroundColor: predictedColor }} />
+          {predictedLabel}
+        </span>
+      </div>
+
+      {activePoint ? (
+        <div className="pointer-events-none absolute bottom-3 left-4 z-10 rounded-lg border border-slate-200 bg-white/90 px-3 py-2 text-xs leading-5 text-slate-600 shadow-sm backdrop-blur dark:border-slate-800 dark:bg-slate-950/86 dark:text-slate-300">
+          <div className="font-semibold text-slate-900 dark:text-slate-100">{formatCalendarDate(activePoint.date, locale)}</div>
+          <div>{actualLabel}: {formatPercentPoints(activePoint.actual, locale)}</div>
+          <div>{predictedLabel}: {formatPercentPoints(activePoint.predicted, locale)}</div>
+        </div>
+      ) : null}
+
+      {width > 0 ? (
+        <svg width={chartWidth} height={height} viewBox={`0 0 ${chartWidth} ${height}`} className="h-full w-full">
+          <rect x="0" y="0" width={chartWidth} height={height} fill="transparent" />
+          {yAxisValues.map((value) => {
+            const y = yToCoord(value);
+            return (
+              <g key={value}>
+                <line x1={marginLeft} x2={chartWidth - marginRight} y1={y} y2={y} stroke="rgba(148, 163, 184, 0.16)" />
+                <text x={marginLeft - 10} y={y + 4} textAnchor="end" fontSize="11" fill="rgb(100, 116, 139)">
+                  {formatPercentPoints(value, locale)}
+                </text>
+              </g>
+            );
+          })}
+          {labelIndices.map((index) => {
+            const x = xToCoord(index);
+            return (
+              <text key={points[index].date} x={x} y={height - 12} textAnchor="middle" fontSize="11" fill="rgb(100, 116, 139)">
+                {formatShortDate(points[index].date, locale)}
+              </text>
+            );
+          })}
+          <path d={actualPath} fill="none" stroke={actualColor} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" opacity="0.82" />
+          <path d={predictedPath} fill="none" stroke={predictedColor} strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" />
+          {activePoint ? (
+            <g pointerEvents="none">
+              <line x1={activeX} x2={activeX} y1={marginTop} y2={height - marginBottom} stroke="rgba(15, 23, 42, 0.18)" strokeDasharray="4 4" />
+              <circle cx={activeX} cy={activeActualY} r="4" fill={actualColor} />
+              <circle cx={activeX} cy={activePredictedY} r="4" fill={predictedColor} />
+            </g>
+          ) : null}
+          {points.map((point, index) => (
+            <rect
+              key={`${point.date}-hit`}
+              x={xToCoord(index) - Math.max(plotWidth / Math.max(points.length - 1, 1), 10) / 2}
+              y={marginTop}
+              width={Math.max(plotWidth / Math.max(points.length - 1, 1), 10)}
+              height={plotHeight}
+              fill="transparent"
+              onMouseEnter={() => setHoveredIndex(index)}
+              onMouseMove={() => setHoveredIndex(index)}
+              onMouseLeave={() => setHoveredIndex(null)}
+            />
+          ))}
+        </svg>
+      ) : null}
+
+      {!points.length ? (
+        <div className="flex h-full items-center justify-center text-sm text-slate-500 dark:text-slate-400">
+          {isEn ? "No model points available." : "Нет точек модели для отображения."}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function getRegressionScatterDomain(points: RegressionScatterPoint[], trend: { startY: number; endY: number } | null) {
+  const xValues = points.map((point) => point.x);
+  const yValues = points.flatMap((point) => [point.y]);
+  if (trend) {
+    yValues.push(trend.startY, trend.endY);
+  }
+
+  const rawMinX = xValues.reduce((acc, value) => Math.min(acc, value), xValues[0] ?? -0.01);
+  const rawMaxX = xValues.reduce((acc, value) => Math.max(acc, value), xValues[0] ?? 0.01);
+  const rawMinY = yValues.reduce((acc, value) => Math.min(acc, value), yValues[0] ?? -0.01);
+  const rawMaxY = yValues.reduce((acc, value) => Math.max(acc, value), yValues[0] ?? 0.01);
+  const spreadX = rawMaxX - rawMinX;
+  const spreadY = rawMaxY - rawMinY;
+
+  return {
+    minX: rawMinX - (spreadX > 0 ? spreadX * 0.12 : 0.01),
+    maxX: rawMaxX + (spreadX > 0 ? spreadX * 0.12 : 0.01),
+    minY: rawMinY - (spreadY > 0 ? spreadY * 0.12 : 0.01),
+    maxY: rawMaxY + (spreadY > 0 ? spreadY * 0.12 : 0.01),
+  };
+}
+
+function buildScatterTrend(points: RegressionScatterPoint[]): { slope: number; intercept: number; startX: number; endX: number; startY: number; endY: number } | null {
+  if (points.length < 2) {
+    return null;
+  }
+
+  const avgX = points.reduce((sum, point) => sum + point.x, 0) / points.length;
+  const avgY = points.reduce((sum, point) => sum + point.y, 0) / points.length;
+  const varianceX = points.reduce((sum, point) => sum + (point.x - avgX) ** 2, 0) / points.length;
+  if (!Number.isFinite(varianceX) || varianceX <= 0) {
+    return null;
+  }
+
+  const covarianceXY = points.reduce((sum, point) => sum + (point.x - avgX) * (point.y - avgY), 0) / points.length;
+  const slope = covarianceXY / varianceX;
+  const intercept = avgY - slope * avgX;
+  const startX = points.reduce((acc, point) => Math.min(acc, point.x), points[0].x);
+  const endX = points.reduce((acc, point) => Math.max(acc, point.x), points[0].x);
+
+  return {
+    slope,
+    intercept,
+    startX,
+    endX,
+    startY: intercept + slope * startX,
+    endY: intercept + slope * endX,
+  };
+}
+
+function RegressionScatterChart({
+  points,
+  locale,
+  isEn,
+  title,
+  xLabel,
+  yLabel,
+  lineLabel,
+  accent = "#0ea5e9",
+}: {
+  points: RegressionScatterPoint[];
+  locale: "ru" | "en";
+  isEn: boolean;
+  title: string;
+  xLabel: string;
+  yLabel: string;
+  lineLabel: string;
+  accent?: string;
+}) {
+  const { ref, width } = useElementWidth();
+  const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
+  const activeIndex = hoveredIndex ?? points.length - 1;
+  const activePoint = points[activeIndex] ?? null;
+  const height = 360;
+  const marginTop = 58;
+  const marginRight = 86;
+  const marginBottom = 54;
+  const marginLeft = 62;
+  const chartWidth = Math.max(width, marginLeft + marginRight + 220);
+  const plotWidth = Math.max(chartWidth - marginLeft - marginRight, 1);
+  const plotHeight = Math.max(height - marginTop - marginBottom, 1);
+  const trend = useMemo(() => buildScatterTrend(points), [points]);
+  const { minX, maxX, minY, maxY } = useMemo(() => getRegressionScatterDomain(points, trend), [points, trend]);
+
+  const yToCoord = useCallback(
+    (value: number) => {
+      if (maxY === minY) {
+        return marginTop + plotHeight / 2;
+      }
+      const ratio = (value - minY) / (maxY - minY);
+      return marginTop + plotHeight - ratio * plotHeight;
+    },
+    [maxY, minY, plotHeight],
+  );
+
+  const xToCoord = useCallback(
+    (value: number) => {
+      if (maxX === minX) {
+        return marginLeft + plotWidth / 2;
+      }
+      const ratio = (value - minX) / (maxX - minX);
+      return marginLeft + ratio * plotWidth;
+    },
+    [maxX, minX, plotWidth],
+  );
+
+  const yAxisValues = Array.from({ length: 5 }, (_, index) => maxY - ((maxY - minY) / 4) * index);
+  const xAxisValues = Array.from({ length: 5 }, (_, index) => minX + ((maxX - minX) / 4) * index);
+  const activeX = activePoint ? xToCoord(activePoint.x) : 0;
+  const activeY = activePoint ? yToCoord(activePoint.y) : 0;
+  const activeTrendY = activePoint && trend ? trend.intercept + trend.slope * activePoint.x : null;
+
+  return (
+    <div
+      ref={ref}
+      className="relative h-[22.5rem] w-full overflow-hidden rounded-xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-950"
+    >
+      <div className="pointer-events-none absolute left-4 top-3 z-10 flex flex-wrap items-center gap-x-4 gap-y-2 text-xs text-slate-500 dark:text-slate-400">
+        <span className="font-semibold text-slate-800 dark:text-slate-100">{title}</span>
+        <span className="inline-flex items-center gap-1.5">
+          <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: accent }} />
+          {isEn ? "Observations" : "Наблюдения"}
+        </span>
+        <span className="inline-flex items-center gap-1.5">
+          <span className="h-2.5 w-6 rounded-full" style={{ backgroundColor: accent }} />
+          {lineLabel}
+        </span>
+      </div>
+      {activePoint ? (
+        <div className="pointer-events-none absolute bottom-3 left-4 z-10 rounded-lg border border-slate-200 bg-white/90 px-3 py-2 text-xs leading-5 text-slate-600 shadow-sm backdrop-blur dark:border-slate-800 dark:bg-slate-950/86 dark:text-slate-300">
+          <div className="font-semibold text-slate-900 dark:text-slate-100">{formatCalendarDate(activePoint.date, locale)}</div>
+          <div>{xLabel}: {formatPercentPoints(activePoint.x, locale)}</div>
+          <div>{yLabel}: {formatPercentPoints(activePoint.y, locale)}</div>
+          {typeof activeTrendY === "number" ? (
+            <div>{lineLabel}: {formatPercentPoints(activeTrendY, locale)}</div>
+          ) : null}
+        </div>
+      ) : null}
+      {width > 0 ? (
+        <svg width={chartWidth} height={height} viewBox={`0 0 ${chartWidth} ${height}`} className="h-full w-full">
+          <rect x="0" y="0" width={chartWidth} height={height} fill="transparent" />
+          {yAxisValues.map((value) => {
+            const y = yToCoord(value);
+            return (
+              <g key={value}>
+                <line x1={marginLeft} x2={chartWidth - marginRight} y1={y} y2={y} stroke="rgba(148, 163, 184, 0.16)" />
+                <text x={marginLeft - 10} y={y + 4} textAnchor="end" fontSize="11" fill="rgb(100, 116, 139)">
+                  {formatPercentPoints(value, locale)}
+                </text>
+              </g>
+            );
+          })}
+          {xAxisValues.map((value) => {
+            const x = xToCoord(value);
+            return (
+              <g key={`${value}-x`}>
+                <line x1={x} x2={x} y1={marginTop} y2={height - marginBottom} stroke="rgba(148, 163, 184, 0.10)" />
+                <text x={x} y={height - 12} textAnchor="middle" fontSize="11" fill="rgb(100, 116, 139)">
+                  {formatPercentPoints(value, locale)}
+                </text>
+              </g>
+            );
+          })}
+          <text x={marginLeft + plotWidth / 2} y={height - 2} textAnchor="middle" fontSize="11" fill="rgb(100, 116, 139)">
+            {xLabel}
+          </text>
+          <text x="14" y={marginTop + plotHeight / 2} textAnchor="middle" fontSize="11" fill="rgb(100, 116, 139)" transform={`rotate(-90 14 ${marginTop + plotHeight / 2})`}>
+            {yLabel}
+          </text>
+          {trend ? (
+            <line
+              x1={xToCoord(trend.startX)}
+              y1={yToCoord(trend.startY)}
+              x2={xToCoord(trend.endX)}
+              y2={yToCoord(trend.endY)}
+              stroke={accent}
+              strokeWidth="2.4"
+              strokeLinecap="round"
+            />
+          ) : null}
+          {points.map((point, index) => {
+            const x = xToCoord(point.x);
+            const y = yToCoord(point.y);
+            return (
+              <circle
+                key={`${point.date}-hit`}
+                cx={x}
+                cy={y}
+                r={hoveredIndex === index ? 4.8 : 3.2}
+                fill={accent}
+                fillOpacity={hoveredIndex === index ? 0.95 : 0.55}
+                onMouseEnter={() => setHoveredIndex(index)}
+                onMouseMove={() => setHoveredIndex(index)}
+                onMouseLeave={() => setHoveredIndex(null)}
+              />
+            );
+          })}
+          {activePoint ? (
+            <g pointerEvents="none">
+              <line x1={activeX} x2={activeX} y1={marginTop} y2={height - marginBottom} stroke="rgba(15, 23, 42, 0.20)" strokeDasharray="4 4" />
+              <line x1={marginLeft} x2={chartWidth - marginRight} y1={activeY} y2={activeY} stroke="rgba(15, 23, 42, 0.16)" strokeDasharray="4 4" />
+            </g>
+          ) : null}
+        </svg>
+      ) : null}
+    </div>
+  );
 }
 
 function PriceLineChart({
@@ -1167,7 +1567,10 @@ export function FundamentalsDetailsPage() {
       <SectionCard
         title={t("Модель CAPM", "CAPM model")}
         description={
-          t("Построена по дневным доходностям за последний год относительно индекса Мосбиржи. Безрисковая ставка оценивается по ближайшей ликвидной фиксированной ОФЗ около двухлетнего горизонта.", "Built from daily returns for the last year against the MOEX index. The risk-free rate is estimated from the nearest liquid fixed-coupon OFZ around the 2-year horizon.")
+          t(
+            "CAPM строится по дневным доходностям за последний год относительно индекса Мосбиржи. На графике показаны наблюдения и регрессионная линия.",
+            "CAPM is built from daily returns for the last year against the MOEX index. The chart shows observations and the regression line.",
+          )
         }
       >
         {isCapmLoading ? (
@@ -1214,6 +1617,38 @@ export function FundamentalsDetailsPage() {
                 helper={`${formatCalendarDate(capmAnalysis.periodStart, locale)} - ${formatCalendarDate(capmAnalysis.periodEnd, locale)}`}
               />
             </MetricGrid>
+
+            {capmAnalysis.modelPoints.length ? (
+              <div className="grid gap-4 xl:grid-cols-2">
+                <ModelTimeSeriesChart
+                  points={capmAnalysis.modelPoints.map((point) => ({
+                    date: point.date,
+                    actual: point.actualExcessReturn,
+                    predicted: point.predictedCapmReturn,
+                  }))}
+                  locale={locale}
+                  isEn={isEn}
+                  title={t("CAPM: временной ряд", "CAPM: time series")}
+                  actualLabel={t("Факт", "Actual")}
+                  predictedLabel={t("CAPM", "CAPM")}
+                  predictedColor="#0ea5e9"
+                />
+                <RegressionScatterChart
+                  points={capmAnalysis.modelPoints.map((point) => ({
+                    date: point.date,
+                    x: point.marketExcessReturn,
+                    y: point.actualExcessReturn,
+                  }))}
+                  locale={locale}
+                  isEn={isEn}
+                  title={t("CAPM: акция против рынка", "CAPM: stock versus market")}
+                  xLabel={t("Избыточная доходность рынка", "Market excess return")}
+                  yLabel={t("Избыточная доходность акции", "Stock excess return")}
+                  lineLabel={t("Линия CAPM", "CAPM line")}
+                  accent="#0ea5e9"
+                />
+              </div>
+            ) : null}
 
             <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1.15fr)_minmax(0,0.85fr)]">
               <div className="rounded-[1.75rem] border border-slate-200/80 bg-slate-50/70 px-5 py-5 dark:border-slate-800 dark:bg-slate-950/40">
@@ -1268,6 +1703,115 @@ export function FundamentalsDetailsPage() {
         ) : (
           <div className="rounded-[1.75rem] border border-dashed border-slate-300/80 bg-slate-50/70 px-5 py-6 text-sm text-slate-500 dark:border-slate-700 dark:bg-slate-950/40 dark:text-slate-400">
             {t("Данные CAPM пока недоступны.", "CAPM data is not available yet.")}
+          </div>
+        )}
+      </SectionCard>
+
+      <SectionCard
+        title={t("Модель Fama-French", "Fama-French model")}
+        description={
+          t(
+            "Многофакторная модель использует рыночный фактор, SMB = RU000A109KS6 - TMOS и HML = TDIV - TITR. На графиках фактическая избыточная доходность сравнивается с расчётной доходностью модели.",
+            "The multifactor model uses the market factor, SMB = RU000A109KS6 - TMOS, and HML = TDIV - TITR. The charts compare actual excess return with model-fitted return.",
+          )
+        }
+      >
+        {isCapmLoading ? (
+          <div className="space-y-4">
+            <PageLoadingState
+              title={t("Строим Fama-French", "Building Fama-French")}
+              subtitle={t("Загружаем фондовые факторы и считаем многофакторную регрессию.", "Loading fund factors and fitting the multifactor regression.")}
+              accentClassName="text-teal-600"
+            />
+            <MetricSkeletonGrid count={4} />
+          </div>
+        ) : capmAnalysis?.famaFrench ? (
+          <div className="space-y-5">
+            <MetricGrid className="xl:grid-cols-4">
+              <MetricCard label="R^2 FF" value={formatPercentPoints(capmAnalysis.famaFrench.rSquared, locale)} />
+              <MetricCard label={t("Бета рынка", "Market beta")} value={formatCompactNumber(capmAnalysis.famaFrench.marketBeta, locale, 2)} />
+              <MetricCard label="β SMB" value={formatCompactNumber(capmAnalysis.famaFrench.smbBeta, locale, 2)} />
+              <MetricCard label="β HML" value={formatCompactNumber(capmAnalysis.famaFrench.hmlBeta, locale, 2)} />
+            </MetricGrid>
+
+            <div className="grid gap-4 xl:grid-cols-2">
+              <ModelTimeSeriesChart
+                points={capmAnalysis.modelPoints
+                  .filter((point) => typeof point.predictedFamaFrenchReturn === "number")
+                  .map((point) => ({
+                    date: point.date,
+                    actual: point.actualExcessReturn,
+                    predicted: point.predictedFamaFrenchReturn as number,
+                  }))}
+                locale={locale}
+                isEn={isEn}
+                title={t("Fama-French: временной ряд", "Fama-French: time series")}
+                actualLabel={t("Факт", "Actual")}
+                predictedLabel={t("Fama-French", "Fama-French")}
+                predictedColor="#14b8a6"
+              />
+              <RegressionScatterChart
+                points={capmAnalysis.modelPoints
+                  .filter((point) => typeof point.predictedFamaFrenchReturn === "number")
+                  .map((point) => ({
+                    date: point.date,
+                    x: point.predictedFamaFrenchReturn as number,
+                    y: point.actualExcessReturn,
+                  }))}
+                locale={locale}
+                isEn={isEn}
+                title={t("Fama-French: расчёт против факта", "Fama-French: fitted versus actual")}
+                xLabel={t("Расчётная доходность FF", "FF fitted return")}
+                yLabel={t("Фактическая доходность", "Actual return")}
+                lineLabel={t("Линия тренда", "Trend line")}
+                accent="#14b8a6"
+              />
+            </div>
+
+            <MetricGrid className="xl:grid-cols-4">
+              <MetricCard
+                label={t("Ожидаемая доходность FF", "FF expected return")}
+                value={formatPercentPoints(capmAnalysis.famaFrench.expectedAnnualReturn, locale)}
+                helper={t("Годовая оценка с alpha, market, SMB и HML", "Annual estimate with alpha, market, SMB, and HML")}
+              />
+              <MetricCard
+                label={t("Альфа FF", "FF alpha")}
+                value={formatPercentPoints(capmAnalysis.famaFrench.alphaAnnual, locale)}
+                helper={t("Годовая альфа многофакторной модели", "Annual alpha of the multifactor model")}
+              />
+              <MetricCard
+                label={t("Наблюдений FF", "FF observations")}
+                value={formatCompactNumber(capmAnalysis.famaFrench.sampleSize, locale, 0)}
+                helper={`${formatCalendarDate(capmAnalysis.famaFrench.periodStart, locale)} - ${formatCalendarDate(capmAnalysis.famaFrench.periodEnd, locale)}`}
+              />
+            </MetricGrid>
+
+            <div className="rounded-[1.75rem] border border-slate-200/80 bg-slate-50/70 px-5 py-5 text-sm leading-7 text-slate-600 dark:border-slate-800 dark:bg-slate-950/40 dark:text-slate-300">
+              <div className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">
+                {t("Факторные фонды", "Factor funds")}
+              </div>
+              <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                <div>
+                  <span className="font-semibold text-slate-900 dark:text-slate-100">SMB:</span>{" "}
+                  {formatFactorFundLabel(capmAnalysis.famaFrench.sources.smallCap)} - {formatFactorFundLabel(capmAnalysis.famaFrench.sources.largeCap)}
+                </div>
+                <div>
+                  <span className="font-semibold text-slate-900 dark:text-slate-100">HML:</span>{" "}
+                  {formatFactorFundLabel(capmAnalysis.famaFrench.sources.value)} - {formatFactorFundLabel(capmAnalysis.famaFrench.sources.growth)}
+                </div>
+              </div>
+            </div>
+          </div>
+        ) : capmAnalysis?.famaFrenchError ? (
+          <div className="rounded-[1.75rem] border border-amber-200/80 bg-amber-50/75 px-5 py-4 text-sm leading-7 text-amber-800 dark:border-amber-500/20 dark:bg-amber-500/10 dark:text-amber-100">
+            <div className="text-xs font-semibold uppercase tracking-[0.16em]">
+              {t("Fama-French не построена", "Fama-French was not built")}
+            </div>
+            <div className="mt-2">{capmAnalysis.famaFrenchError}</div>
+          </div>
+        ) : (
+          <div className="rounded-[1.75rem] border border-dashed border-slate-300/80 bg-slate-50/70 px-5 py-6 text-sm text-slate-500 dark:border-slate-700 dark:bg-slate-950/40 dark:text-slate-400">
+            {t("Данные Fama-French пока недоступны.", "Fama-French data is not available yet.")}
           </div>
         )}
       </SectionCard>

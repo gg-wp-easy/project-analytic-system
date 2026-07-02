@@ -4,7 +4,6 @@ import {
   CheckSquare,
   FileSpreadsheet,
   FileText,
-  HelpCircle,
   ImageDown,
   ListFilter,
   Play,
@@ -73,6 +72,7 @@ import {
 } from "../../../shared/ui/analysis-shell";
 import { AppErrorDialog } from "../../../shared/ui/app-error-dialog";
 import { AnalysisRunningIndicator } from "../../../shared/ui/analysis/AnalysisRunningIndicator";
+import { InfoTooltip } from "../../../shared/ui/analysis/InfoTooltip";
 import { MetricTooltip } from "../../../shared/ui/analysis/MetricTooltip";
 import { PortfolioHoldingsPanel } from "../../../shared/ui/analysis/PortfolioHoldingsPanel";
 
@@ -809,8 +809,39 @@ export function NeuralNetworkAnalysis() {
 
             <div className="space-y-3">
               <div className="flex items-center justify-between gap-3">
-                <div className="text-sm font-semibold text-slate-800 dark:text-slate-100">
-                  {t("Модель", "Model")}
+                <div className="flex items-center gap-2 text-sm font-semibold text-slate-800 dark:text-slate-100">
+                  <span>{t("Модель", "Model")}</span>
+                  <InfoTooltip label={t("Справка по нейросети", "Neural model help")} side="right">
+                    <div className="space-y-2">
+                      <p>
+                        <span className="font-semibold">{neuralHelp.title}: </span>
+                        {neuralHelp.text}
+                      </p>
+                      <p>{neuralHelp.note}</p>
+                      <div className="grid gap-1.5">
+                        <div>
+                          <span className="font-semibold">Learning rate:</span>{" "}
+                          {t("скорость обновления весов; слишком высокая может сделать обучение нестабильным.", "weight update speed; too high can make training unstable.")}
+                        </div>
+                        <div>
+                          <span className="font-semibold">Dropout:</span>{" "}
+                          {t("случайно отключает часть нейронов и снижает риск переобучения.", "randomly disables part of neurons and reduces overfitting risk.")}
+                        </div>
+                        <div>
+                          <span className="font-semibold">g:</span>{" "}
+                          {t("темпы роста; в текущем кэше передаются через доступный ROE-показатель.", "growth rate; in the current cache it is sent through the available ROE metric.")}
+                        </div>
+                        <div>
+                          <span className="font-semibold">Validation, %:</span>{" "}
+                          {t("доля данных для контроля качества во время обучения.", "share of data used to monitor quality during training.")}
+                        </div>
+                        <div>
+                          <span className="font-semibold">{t("Автоподбор", "Auto-tune")}:</span>{" "}
+                          {t("сервер подбирает архитектуру и параметры обучения по выбранному критерию.", "the server tunes architecture and training parameters by the selected metric.")}
+                        </div>
+                      </div>
+                    </div>
+                  </InfoTooltip>
                 </div>
                 <button
                   type="button"
@@ -1044,42 +1075,6 @@ export function NeuralNetworkAnalysis() {
                   </label>
                 </div>
               )}
-            </div>
-
-            <div className="rounded-md border border-orange-200 bg-orange-50/70 p-3 text-sm dark:border-orange-900 dark:bg-orange-950/20">
-              <div className="mb-2 flex items-center gap-2 font-semibold text-orange-900 dark:text-orange-200">
-                <HelpCircle className="h-4 w-4" />
-                <span>{t("Краткая справка", "Quick reference")}</span>
-              </div>
-              <div className="space-y-2 text-xs leading-5 text-slate-700 dark:text-slate-300">
-                <p>
-                  <span className="font-semibold text-slate-900 dark:text-slate-100">{neuralHelp.title}: </span>
-                  {neuralHelp.text}
-                </p>
-                <p>{neuralHelp.note}</p>
-                <div className="grid gap-1.5">
-                  <div>
-                    <span className="font-semibold">Learning rate:</span>{" "}
-                    {t("скорость обновления весов; слишком высокая может сделать обучение нестабильным.", "weight update speed; too high can make training unstable.")}
-                  </div>
-                  <div>
-                    <span className="font-semibold">Dropout:</span>{" "}
-                    {t("случайно отключает часть нейронов и снижает риск переобучения.", "randomly disables part of neurons and reduces overfitting risk.")}
-                  </div>
-                  <div>
-                    <span className="font-semibold">g:</span>{" "}
-                    {t("темпы роста; в текущем кэше передаются через доступный ROE-показатель.", "growth rate; in the current cache it is sent through the available ROE metric.")}
-                  </div>
-                  <div>
-                    <span className="font-semibold">Validation, %:</span>{" "}
-                    {t("доля данных для контроля качества во время обучения.", "share of data used to monitor quality during training.")}
-                  </div>
-                  <div>
-                    <span className="font-semibold">{t("Автоподбор", "Auto-tune")}:</span>{" "}
-                    {t("сервер подбирает архитектуру и параметры обучения по выбранному критерию.", "the server tunes architecture and training parameters by the selected metric.")}
-                  </div>
-                </div>
-              </div>
             </div>
 
             <div className="space-y-3">

@@ -39,6 +39,7 @@ import {
   SectionCard,
 } from "../../../shared/ui/analysis-shell";
 import { AnalysisRunningIndicator } from "../../../shared/ui/analysis/AnalysisRunningIndicator";
+import { InfoTooltip } from "../../../shared/ui/analysis/InfoTooltip";
 import { PortfolioHoldingsPanel } from "../../../shared/ui/analysis/PortfolioHoldingsPanel";
 import { AppErrorDialog } from "../../../shared/ui/app-error-dialog";
 import { TableSkeleton } from "../../../shared/ui/loading-state";
@@ -550,10 +551,34 @@ export function BondsAnalysisPage() {
         sidebar={(
           <AnalysisSidebarCard
             icon={Settings}
-            title={t("Параметры анализа", "Analysis Parameters")}
-            description={t(
-              "Параметры пользователя влияют на скоринг и сбор клиентского портфеля.",
-              "User-defined parameters affect scoring and client-side portfolio construction.",
+            title={(
+              <span className="inline-flex items-center gap-2">
+                {t("Параметры анализа", "Analysis Parameters")}
+                <InfoTooltip label={t("Справка по анализу облигаций", "Bond analysis help")} side="right">
+                  <div className="space-y-2">
+                    <p>
+                      {t(
+                        "Параметры управляют скорингом и сборкой клиентского портфеля: целевая доходность, дюрация, периодичность выплат, метод подбора, количество бумаг и риск.",
+                        "Parameters control scoring and client-side portfolio construction: target yield, duration, payment frequency, selection method, bond count, and risk.",
+                      )}
+                    </p>
+                    <div className="grid gap-1.5">
+                      <div>
+                        <span className="font-semibold">{t("Мэтчинг", "Matching")}:</span>{" "}
+                        {t("выбирает бумаги, максимально близкие к заданным целям.", "selects bonds closest to the target parameters.")}
+                      </div>
+                      <div>
+                        <span className="font-semibold">{t("Иммунизация", "Immunization")}:</span>{" "}
+                        {t("подбирает веса так, чтобы портфель был ближе к целевой дюрации.", "tilts weights so the portfolio is closer to the target duration.")}
+                      </div>
+                      <div>
+                        <span className="font-semibold">{t("Смешанный риск", "Mixed risk")}:</span>{" "}
+                        {t("формирует пул кандидатов из разных уровней риска.", "builds the candidate pool across multiple risk levels.")}
+                      </div>
+                    </div>
+                  </div>
+                </InfoTooltip>
+              </span>
             )}
             accent="amber"
           >
@@ -667,12 +692,6 @@ export function BondsAnalysisPage() {
                 {isRecalculating ? t("Считаем...", "Calculating...") : t("Рассчитать", "Calculate")}
               </button>
 
-              <div className="ui-surface-muted text-sm leading-6 text-slate-600 dark:text-slate-300">
-                {t(
-                  "Данные загружаются из клиентского источника, а параметры выше управляют портфелем и фильтрацией риска.",
-                  "Data is loaded from the client-side source; the parameters above control portfolio construction and risk filtering.",
-                )}
-              </div>
             </div>
           </AnalysisSidebarCard>
         )}

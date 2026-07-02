@@ -5,34 +5,34 @@
   --font-sans: var(--app-font-sans);
   --font-display: var(--app-font-display);
   --font-mono: var(--app-font-mono);
-  --background: #f7f8fb;
-  --foreground: oklch(0.21 0.014 264.1);
+  --background: #f5f8f7;
+  --foreground: #172033;
   --card: #ffffff;
-  --card-foreground: oklch(0.21 0.014 264.1);
+  --card-foreground: #172033;
   --popover: #ffffff;
-  --popover-foreground: oklch(0.21 0.014 264.1);
-  --primary: #0f172a;
+  --popover-foreground: #172033;
+  --primary: #0f766e;
   --primary-foreground: oklch(1 0 0);
-  --secondary: oklch(0.96 0.007 255.2);
-  --secondary-foreground: #0f172a;
-  --muted: #eef2f7;
-  --muted-foreground: #64748b;
-  --accent: #e2e8f0;
-  --accent-foreground: #0f172a;
+  --secondary: #edf4f3;
+  --secondary-foreground: #172033;
+  --muted: #eaf1f1;
+  --muted-foreground: #667085;
+  --accent: #dbeafe;
+  --accent-foreground: #143153;
   --destructive: #d4183d;
   --destructive-foreground: #ffffff;
-  --border: rgba(15, 23, 42, 0.08);
+  --border: rgba(20, 49, 83, 0.1);
   --input: transparent;
   --input-background: #ffffff;
-  --switch-background: #cbd5e1;
+  --switch-background: #c9d6d6;
   --font-weight-medium: 600;
   --font-weight-normal: 400;
-  --ring: rgba(59, 130, 246, 0.35);
-  --chart-1: oklch(0.646 0.222 41.116);
-  --chart-2: oklch(0.6 0.118 184.704);
-  --chart-3: oklch(0.398 0.07 227.392);
-  --chart-4: oklch(0.828 0.189 84.429);
-  --chart-5: oklch(0.769 0.188 70.08);
+  --ring: rgba(20, 184, 166, 0.34);
+  --chart-1: #0ea5a4;
+  --chart-2: #2563eb;
+  --chart-3: #f59e0b;
+  --chart-4: #e11d48;
+  --chart-5: #8b5cf6;
   --radius: 0.875rem;
   --sidebar: oklch(0.985 0 0);
   --sidebar-foreground: oklch(0.145 0 0);
@@ -42,10 +42,10 @@
   --sidebar-accent-foreground: oklch(0.205 0 0);
   --sidebar-border: oklch(0.922 0 0);
   --sidebar-ring: oklch(0.708 0 0);
-  --page-highlight: rgba(37, 99, 235, 0.12);
-  --page-highlight-secondary: rgba(14, 165, 233, 0.08);
-  --surface-shadow: 0 24px 60px -32px rgba(15, 23, 42, 0.22);
-  --surface-shadow-strong: 0 32px 90px -42px rgba(15, 23, 42, 0.35);
+  --page-highlight: rgba(20, 184, 166, 0.12);
+  --page-highlight-secondary: rgba(37, 99, 235, 0.08);
+  --surface-shadow: 0 24px 58px -34px rgba(20, 49, 83, 0.22);
+  --surface-shadow-strong: 0 34px 90px -44px rgba(20, 49, 83, 0.34);
   --scrollbar-size: 12px;
   --scrollbar-track: rgba(226, 232, 240, 0.8);
   --scrollbar-track-strong: rgba(203, 213, 225, 0.9);
@@ -57,33 +57,33 @@
 }
 
 .dark {
-  --background: oklch(0.145 0 0);
-  --foreground: oklch(0.985 0 0);
-  --card: oklch(0.145 0 0);
-  --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.145 0 0);
-  --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.985 0 0);
-  --primary-foreground: oklch(0.205 0 0);
-  --secondary: oklch(0.269 0 0);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.269 0 0);
-  --muted-foreground: oklch(0.708 0 0);
-  --accent: oklch(0.269 0 0);
-  --accent-foreground: oklch(0.985 0 0);
+  --background: #0b1120;
+  --foreground: #e6edf5;
+  --card: #111827;
+  --card-foreground: #e6edf5;
+  --popover: #111827;
+  --popover-foreground: #e6edf5;
+  --primary: #5eead4;
+  --primary-foreground: #042f2e;
+  --secondary: #172033;
+  --secondary-foreground: #e6edf5;
+  --muted: #182235;
+  --muted-foreground: #9aa8ba;
+  --accent: #12324a;
+  --accent-foreground: #d9f6ff;
   --destructive: oklch(0.396 0.141 25.723);
   --destructive-foreground: oklch(0.637 0.237 25.331);
-  --border: rgba(148, 163, 184, 0.14);
-  --input: oklch(0.269 0 0);
-  --input-background: rgb(2 6 23 / 0.76);
-  --ring: rgba(96, 165, 250, 0.3);
+  --border: rgba(148, 163, 184, 0.16);
+  --input: #172033;
+  --input-background: rgb(12 18 32 / 0.82);
+  --ring: rgba(94, 234, 212, 0.28);
   --font-weight-medium: 600;
   --font-weight-normal: 400;
-  --chart-1: oklch(0.488 0.243 264.376);
-  --chart-2: oklch(0.696 0.17 162.48);
-  --chart-3: oklch(0.769 0.188 70.08);
-  --chart-4: oklch(0.627 0.265 303.9);
-  --chart-5: oklch(0.645 0.246 16.439);
+  --chart-1: #2dd4bf;
+  --chart-2: #60a5fa;
+  --chart-3: #fbbf24;
+  --chart-4: #fb7185;
+  --chart-5: #a78bfa;
   --sidebar: oklch(0.205 0 0);
   --sidebar-foreground: oklch(0.985 0 0);
   --sidebar-primary: oklch(0.488 0.243 264.376);
@@ -92,10 +92,10 @@
   --sidebar-accent-foreground: oklch(0.985 0 0);
   --sidebar-border: oklch(0.269 0 0);
   --sidebar-ring: oklch(0.439 0 0);
-  --page-highlight: rgba(59, 130, 246, 0.14);
-  --page-highlight-secondary: rgba(14, 165, 233, 0.08);
-  --surface-shadow: 0 28px 80px -42px rgba(2, 6, 23, 0.85);
-  --surface-shadow-strong: 0 36px 100px -46px rgba(2, 6, 23, 0.92);
+  --page-highlight: rgba(45, 212, 191, 0.14);
+  --page-highlight-secondary: rgba(96, 165, 250, 0.09);
+  --surface-shadow: 0 28px 80px -42px rgba(0, 0, 0, 0.78);
+  --surface-shadow-strong: 0 36px 100px -46px rgba(0, 0, 0, 0.86);
   --scrollbar-track: rgba(30, 41, 59, 0.9);
   --scrollbar-track-strong: rgba(51, 65, 85, 0.96);
   --scrollbar-thumb-color: rgba(148, 163, 184, 0.72);
@@ -164,10 +164,10 @@
     @apply bg-background text-foreground;
     min-height: 100vh;
     font-family: var(--font-sans);
-    letter-spacing: -0.012em;
+    letter-spacing: 0;
     background-image:
-      radial-gradient(circle at top, var(--page-highlight), transparent 32%),
-      radial-gradient(circle at top right, var(--page-highlight-secondary), transparent 28%);
+      linear-gradient(135deg, var(--page-highlight), transparent 34%),
+      linear-gradient(215deg, var(--page-highlight-secondary), transparent 38%);
     background-attachment: fixed;
   }
 
@@ -180,7 +180,7 @@
   h3,
   h4 {
     font-family: var(--font-display);
-    letter-spacing: -0.03em;
+    letter-spacing: 0;
   }
 
   h1 {
@@ -330,15 +330,7 @@
   }
 
   .ui-page-hero::before {
-    content: "";
-    position: absolute;
-    right: -3rem;
-    bottom: -8rem;
-    width: 16rem;
-    height: 16rem;
-    border-radius: 9999px;
-    background: rgba(255, 255, 255, 0.12);
-    filter: blur(8px);
+    content: none;
   }
 
   .ui-page-hero::after {
@@ -390,7 +382,7 @@
   }
 
   .ui-input {
-    @apply w-full rounded-xl border border-slate-300/90 bg-white/85 px-3.5 py-2.5 text-sm text-slate-900 shadow-sm outline-none placeholder:text-slate-400 focus:border-blue-400 focus:ring-4 focus:ring-blue-100 dark:border-slate-700 dark:bg-slate-950/80 dark:text-slate-100 dark:focus:border-blue-500 dark:focus:ring-blue-500/20;
+    @apply w-full rounded-xl border border-slate-300/90 bg-white/85 px-3.5 py-2.5 text-sm text-slate-900 shadow-sm outline-none placeholder:text-slate-400 focus:border-teal-500 focus:ring-4 focus:ring-teal-100 dark:border-slate-700 dark:bg-slate-950/80 dark:text-slate-100 dark:focus:border-teal-400 dark:focus:ring-teal-500/20;
   }
 
   .ui-table-shell {

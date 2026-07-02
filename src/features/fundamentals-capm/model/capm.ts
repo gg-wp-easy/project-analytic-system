@@ -10,6 +10,12 @@ const LOOKBACK_DAYS = 370;
 const TARGET_OFZ_YEARS = 2;
 const TRADING_DAYS_PER_YEAR = 252;
 const IMOEX_TICKER = "IMOEX";
+const FAMA_FRENCH_FACTORS = {
+  largeCap: { query: "TMOS" },
+  smallCap: { query: "RU000A109KS6" },
+  value: { query: "TDIV" },
+  growth: { query: "TITR" },
+} as const;
 
 type DailyReturnPoint = {
   date: string;
@@ -23,6 +29,11 @@ type AlignedReturnPoint = {
   marketReturn: number;
 };
 
+type FamaFrenchAlignedReturnPoint = AlignedReturnPoint & {
+  smbReturn: number;
+  hmlReturn: number;
+};
+
 export type CapmAdequacyLevel = "strong" | "moderate" | "weak" | "insufficient";
 
 export type CapmRiskFreeRateSource = {
@@ -33,6 +44,40 @@ export type CapmRiskFreeRateSource = {
   annualRate: number;
   closePricePercent: number;
   pricingMethod: "ytm_solver" | "coupon_proxy";
+};
+
+export type CapmModelPoint = {
+  date: string;
+  marketExcessReturn: number;
+  actualExcessReturn: number;
+  predictedCapmReturn: number;
+  predictedFamaFrenchReturn?: number;
+};
+
+export type FamaFrenchFactorSource = {
+  query: string;
+  ticker: string;
+  name: string;
+  figi: string;
+};
+
+export type FamaFrenchAnalysisResult = {
+  sampleSize: number;
+  marketBeta: number;
+  smbBeta: number;
+  hmlBeta: number;
+  alphaDaily: number;
+  alphaAnnual: number;
+  expectedAnnualReturn: number;
+  rSquared: number;
+  periodStart: string;
+  periodEnd: string;
+  sources: {
+    largeCap: FamaFrenchFactorSource;
+    smallCap: FamaFrenchFactorSource;
+    value: FamaFrenchFactorSource;
+    growth: FamaFrenchFactorSource;
+  };
 };
 
 export type CapmAnalysisResult = {
@@ -53,6 +98,9 @@ export type CapmAnalysisResult = {
   periodStart: string;
   periodEnd: string;
   riskFreeSource: CapmRiskFreeRateSource;
+  modelPoints: CapmModelPoint[];
+  famaFrench?: FamaFrenchAnalysisResult;
+  famaFrenchError?: string;
 };
 
 function toDateKey(value: string): string {
@@ -101,6 +149,49 @@ function alignReturnSeries(stock: DailyReturnPoint[], market: DailyReturnPoint[]
     .filter((point): point is AlignedReturnPoint => Boolean(point));
 }
 
+function alignFamaFrenchSeries(
+  stock: DailyReturnPoint[],
+  market: DailyReturnPoint[],
+  largeCap: DailyReturnPoint[],
+  smallCap: DailyReturnPoint[],
+  value: DailyReturnPoint[],
+  growth: DailyReturnPoint[],
+): FamaFrenchAlignedReturnPoint[] {
+  const marketByDate = new Map(market.map((point) => [point.date, point.value]));
+  const largeByDate = new Map(largeCap.map((point) => [point.date, point.value]));
+  const smallByDate = new Map(smallCap.map((point) => [point.date, point.value]));
+  const valueByDate = new Map(value.map((point) => [point.date, point.value]));
+  const growthByDate = new Map(growth.map((point) => [point.date, point.value]));
+
+  return stock
+    .map((point) => {
+      const marketReturn = marketByDate.get(point.date);
+      const largeReturn = largeByDate.get(point.date);
+      const smallReturn = smallByDate.get(point.date);
+      const valueReturn = valueByDate.get(point.date);
+      const growthReturn = growthByDate.get(point.date);
+
+      if (
+        !Number.isFinite(marketReturn) ||
+        !Number.isFinite(largeReturn) ||
+        !Number.isFinite(smallReturn) ||
+        !Number.isFinite(valueReturn) ||
+        !Number.isFinite(growthReturn)
+      ) {
+        return null;
+      }
+
+      return {
+        date: point.date,
+        stockReturn: point.value,
+        marketReturn: marketReturn as number,
+        smbReturn: (smallReturn as number) - (largeReturn as number),
+        hmlReturn: (valueReturn as number) - (growthReturn as number),
+      } satisfies FamaFrenchAlignedReturnPoint;
+    })
+    .filter((point): point is FamaFrenchAlignedReturnPoint => Boolean(point));
+}
+
 function mean(values: number[]): number {
   if (!values.length) {
     return 0;
@@ -120,6 +211,79 @@ function covariance(left: number[], right: number[], leftAvg: number, rightAvg: 
     return 0;
   }
   return left.reduce((sum, value, index) => sum + (value - leftAvg) * (right[index] - rightAvg), 0) / left.length;
+}
+
+function solveLinearSystem(matrix: number[][], vector: number[]): number[] | null {
+  const size = vector.length;
+  const augmented = matrix.map((row, index) => [...row, vector[index]]);
+
+  for (let column = 0; column < size; column += 1) {
+    let pivotRow = column;
+    for (let row = column + 1; row < size; row += 1) {
+      if (Math.abs(augmented[row][column]) > Math.abs(augmented[pivotRow][column])) {
+        pivotRow = row;
+      }
+    }
+
+    const pivot = augmented[pivotRow][column];
+    if (!Number.isFinite(pivot) || Math.abs(pivot) < 1e-12) {
+      return null;
+    }
+
+    if (pivotRow !== column) {
+      [augmented[column], augmented[pivotRow]] = [augmented[pivotRow], augmented[column]];
+    }
+
+    for (let cell = column; cell <= size; cell += 1) {
+      augmented[column][cell] /= pivot;
+    }
+
+    for (let row = 0; row < size; row += 1) {
+      if (row === column) {
+        continue;
+      }
+      const factor = augmented[row][column];
+      for (let cell = column; cell <= size; cell += 1) {
+        augmented[row][cell] -= factor * augmented[column][cell];
+      }
+    }
+  }
+
+  return augmented.map((row) => row[size]);
+}
+
+function ordinaryLeastSquares(y: number[], xRows: number[][]): { coefficients: number[]; predicted: number[]; rSquared: number } | null {
+  if (!y.length || y.length !== xRows.length) {
+    return null;
+  }
+
+  const columnsCount = (xRows[0]?.length ?? 0) + 1;
+  const design = xRows.map((row) => [1, ...row]);
+  const xtx = Array.from({ length: columnsCount }, () => Array.from({ length: columnsCount }, () => 0));
+  const xty = Array.from({ length: columnsCount }, () => 0);
+
+  for (let rowIndex = 0; rowIndex < design.length; rowIndex += 1) {
+    const row = design[rowIndex];
+    for (let left = 0; left < columnsCount; left += 1) {
+      xty[left] += row[left] * y[rowIndex];
+      for (let right = 0; right < columnsCount; right += 1) {
+        xtx[left][right] += row[left] * row[right];
+      }
+    }
+  }
+
+  const coefficients = solveLinearSystem(xtx, xty);
+  if (!coefficients) {
+    return null;
+  }
+
+  const predicted = design.map((row) => row.reduce((sum, value, index) => sum + value * coefficients[index], 0));
+  const avg = mean(y);
+  const sse = y.reduce((sum, value, index) => sum + (value - predicted[index]) ** 2, 0);
+  const sst = y.reduce((sum, value) => sum + (value - avg) ** 2, 0);
+  const rSquared = Math.min(Math.max(sst > 0 ? 1 - sse / sst : 0, 0), 1);
+
+  return { coefficients, predicted, rSquared };
 }
 
 function annualRateToDaily(rate: number): number {
@@ -333,6 +497,127 @@ async function resolveMoexIndex(): Promise<TBankIndicative> {
   throw new Error("Failed to find the MOEX index (IMOEX) in market data service indicatives.");
 }
 
+async function resolveFactorInstrument(query: string): Promise<FamaFrenchFactorSource> {
+  const api = createTBankInstrumentsApi();
+  const references = await api.findInstrumentReferences(query, { apiTradeAvailableFlag: true });
+  const normalizedQuery = query.trim().toUpperCase();
+  const candidates = references
+    .sort((left, right) => {
+      const leftTickerMatch = left.ticker.toUpperCase() === normalizedQuery ? 1 : 0;
+      const rightTickerMatch = right.ticker.toUpperCase() === normalizedQuery ? 1 : 0;
+      if (rightTickerMatch !== leftTickerMatch) {
+        return rightTickerMatch - leftTickerMatch;
+      }
+      const leftFigiMatch = left.figi.toUpperCase() === normalizedQuery ? 1 : 0;
+      const rightFigiMatch = right.figi.toUpperCase() === normalizedQuery ? 1 : 0;
+      if (rightFigiMatch !== leftFigiMatch) {
+        return rightFigiMatch - leftFigiMatch;
+      }
+      const leftIsEtf = left.instrumentType.toLowerCase().includes("etf") ? 1 : 0;
+      const rightIsEtf = right.instrumentType.toLowerCase().includes("etf") ? 1 : 0;
+      if (rightIsEtf !== leftIsEtf) {
+        return rightIsEtf - leftIsEtf;
+      }
+      return left.name.localeCompare(right.name, "ru");
+    });
+  const selected = candidates[0] ?? references[0];
+
+  if (!selected?.figi) {
+    throw new Error(`Failed to resolve factor fund ${query}.`);
+  }
+
+  return {
+    query,
+    ticker: selected.ticker,
+    name: selected.name,
+    figi: selected.figi,
+  };
+}
+
+async function buildFamaFrenchAnalysis(params: {
+  api: ReturnType<typeof createTBankInstrumentsApi>;
+  stockReturns: DailyReturnPoint[];
+  marketReturns: DailyReturnPoint[];
+  riskFreeDaily: number;
+  from: Date;
+  to: Date;
+}): Promise<{ analysis: FamaFrenchAnalysisResult; predictedByDate: Map<string, number> }> {
+  const { api, stockReturns, marketReturns, riskFreeDaily, from, to } = params;
+  const [largeCap, smallCap, value, growth] = await Promise.all([
+    resolveFactorInstrument(FAMA_FRENCH_FACTORS.largeCap.query),
+    resolveFactorInstrument(FAMA_FRENCH_FACTORS.smallCap.query),
+    resolveFactorInstrument(FAMA_FRENCH_FACTORS.value.query),
+    resolveFactorInstrument(FAMA_FRENCH_FACTORS.growth.query),
+  ]);
+
+  const [largeCandles, smallCandles, valueCandles, growthCandles] = await Promise.all(
+    [largeCap, smallCap, value, growth].map((source) =>
+      api.fetchCandles({
+        figi: source.figi,
+        from: from.toISOString(),
+        to: to.toISOString(),
+        interval: "CANDLE_INTERVAL_DAY",
+        limit: 420,
+      }),
+    ),
+  );
+
+  const aligned = alignFamaFrenchSeries(
+    stockReturns,
+    marketReturns,
+    computeDailyReturns(largeCandles),
+    computeDailyReturns(smallCandles),
+    computeDailyReturns(valueCandles),
+    computeDailyReturns(growthCandles),
+  );
+
+  if (aligned.length < 30) {
+    throw new Error("Not enough overlapping fund observations to build the Fama-French model.");
+  }
+
+  const stockExcess = aligned.map((point) => point.stockReturn - riskFreeDaily);
+  const xRows = aligned.map((point) => [
+    point.marketReturn - riskFreeDaily,
+    point.smbReturn,
+    point.hmlReturn,
+  ]);
+  const regression = ordinaryLeastSquares(stockExcess, xRows);
+  if (!regression) {
+    throw new Error("Failed to solve the Fama-French regression.");
+  }
+
+  const [alphaDaily, marketBeta, smbBeta, hmlBeta] = regression.coefficients;
+  const marketFactorMean = mean(xRows.map((row) => row[0]));
+  const smbMean = mean(xRows.map((row) => row[1]));
+  const hmlMean = mean(xRows.map((row) => row[2]));
+  const expectedAnnualReturn = dailyRateToAnnual(
+    riskFreeDaily + alphaDaily + marketBeta * marketFactorMean + smbBeta * smbMean + hmlBeta * hmlMean,
+  );
+  const predictedByDate = new Map(aligned.map((point, index) => [point.date, regression.predicted[index]]));
+
+  return {
+    analysis: {
+      sampleSize: aligned.length,
+      marketBeta,
+      smbBeta,
+      hmlBeta,
+      alphaDaily,
+      alphaAnnual: dailyRateToAnnual(alphaDaily),
+      expectedAnnualReturn,
+      rSquared: regression.rSquared,
+      periodStart: aligned[0]?.date ?? "",
+      periodEnd: aligned[aligned.length - 1]?.date ?? "",
+      sources: {
+        largeCap,
+        smallCap,
+        value,
+        growth,
+      },
+    },
+    predictedByDate,
+  };
+}
+
 export async function loadCapmAnalysis(stockFigi: string): Promise<CapmAnalysisResult> {
   if (!stockFigi) {
     throw new Error("Stock FIGI is required for CAPM analysis.");
@@ -403,6 +688,32 @@ export async function loadCapmAnalysis(stockFigi: string): Promise<CapmAnalysisR
   const expectedAnnualReturn = dailyRateToAnnual(
     riskFreeDaily + beta * (marketAverageDailyReturn - riskFreeDaily),
   );
+  let famaFrench: FamaFrenchAnalysisResult | undefined;
+  let famaFrenchError: string | undefined;
+  let famaFrenchPredictedByDate = new Map<string, number>();
+
+  try {
+    const result = await buildFamaFrenchAnalysis({
+      api,
+      stockReturns,
+      marketReturns,
+      riskFreeDaily,
+      from,
+      to: now,
+    });
+    famaFrench = result.analysis;
+    famaFrenchPredictedByDate = result.predictedByDate;
+  } catch (err) {
+    famaFrenchError = err instanceof Error ? err.message : "Failed to build the Fama-French model.";
+  }
+
+  const modelPoints = aligned.map((point, index) => ({
+    date: point.date,
+    marketExcessReturn: marketExcess[index],
+    actualExcessReturn: stockExcess[index],
+    predictedCapmReturn: predicted[index],
+    predictedFamaFrenchReturn: famaFrenchPredictedByDate.get(point.date),
+  }));
 
   return {
     stockFigi,
@@ -422,5 +733,8 @@ export async function loadCapmAnalysis(stockFigi: string): Promise<CapmAnalysisR
     periodStart: aligned[0]?.date ?? "",
     periodEnd: aligned[aligned.length - 1]?.date ?? "",
     riskFreeSource,
+    modelPoints,
+    famaFrench,
+    famaFrenchError,
   };
 }

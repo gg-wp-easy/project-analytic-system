@@ -3,7 +3,6 @@ import {
   CheckSquare,
   FileSpreadsheet,
   FileText,
-  HelpCircle,
   ImageDown,
   ListFilter,
   Network,
@@ -72,6 +71,7 @@ import {
 } from "../../../shared/ui/analysis-shell";
 import { AppErrorDialog } from "../../../shared/ui/app-error-dialog";
 import { AnalysisRunningIndicator } from "../../../shared/ui/analysis/AnalysisRunningIndicator";
+import { InfoTooltip } from "../../../shared/ui/analysis/InfoTooltip";
 import { MetricTooltip } from "../../../shared/ui/analysis/MetricTooltip";
 import { PortfolioHoldingsPanel } from "../../../shared/ui/analysis/PortfolioHoldingsPanel";
 
@@ -934,8 +934,39 @@ export function ClusterAnalysis() {
 
             <div className="space-y-3">
               <div className="flex items-center justify-between gap-3">
-                <div className="text-sm font-semibold text-slate-800 dark:text-slate-100">
-                  {t("Модель", "Model")}
+                <div className="flex items-center gap-2 text-sm font-semibold text-slate-800 dark:text-slate-100">
+                  <span>{t("Модель", "Model")}</span>
+                  <InfoTooltip label={t("Справка по кластеризации", "Clustering help")} side="right">
+                    <div className="space-y-2">
+                      <p>
+                        <span className="font-semibold">{algorithmHelp.title}: </span>
+                        {algorithmHelp.text}
+                      </p>
+                      <p>{algorithmHelp.note}</p>
+                      <div className="grid gap-1.5">
+                        <div>
+                          <span className="font-semibold">{t("Расстояние", "Distance")}:</span>{" "}
+                          {t("определяет, какие акции считаются похожими.", "defines which stocks are considered similar.")}
+                        </div>
+                        <div>
+                          <span className="font-semibold">{t("Масштабирование", "Scaling")}:</span>{" "}
+                          {t("выравнивает размерности метрик перед расчетом.", "aligns metric scales before calculation.")}
+                        </div>
+                        <div>
+                          <span className="font-semibold">g:</span>{" "}
+                          {t("темпы роста; в текущем кэше передаются через доступный ROE-показатель.", "growth rate; in the current cache it is sent through the available ROE metric.")}
+                        </div>
+                        <div>
+                          <span className="font-semibold">Random state:</span>{" "}
+                          {t("фиксирует повторяемость результата для алгоритмов со случайным стартом.", "keeps results reproducible for algorithms with random starts.")}
+                        </div>
+                        <div>
+                          <span className="font-semibold">{t("Автоподбор", "Auto-tune")}:</span>{" "}
+                          {t("сервер подбирает алгоритм, число кластеров и метрики в рамках выбранного бюджета.", "the server tunes algorithm, cluster count, and metrics within the selected budget.")}
+                        </div>
+                      </div>
+                    </div>
+                  </InfoTooltip>
                 </div>
                 <button
                   type="button"
@@ -1096,42 +1127,6 @@ export function ClusterAnalysis() {
                   </label>
                 </div>
               )}
-            </div>
-
-            <div className="rounded-md border border-violet-200 bg-violet-50/70 p-3 text-sm dark:border-violet-900 dark:bg-violet-950/20">
-              <div className="mb-2 flex items-center gap-2 font-semibold text-violet-900 dark:text-violet-200">
-                <HelpCircle className="h-4 w-4" />
-                <span>{t("Краткая справка", "Quick reference")}</span>
-              </div>
-              <div className="space-y-2 text-xs leading-5 text-slate-700 dark:text-slate-300">
-                <p>
-                  <span className="font-semibold text-slate-900 dark:text-slate-100">{algorithmHelp.title}: </span>
-                  {algorithmHelp.text}
-                </p>
-                <p>{algorithmHelp.note}</p>
-                <div className="grid gap-1.5">
-                  <div>
-                    <span className="font-semibold">{t("Расстояние", "Distance")}:</span>{" "}
-                    {t("определяет, какие акции считаются похожими.", "defines which stocks are considered similar.")}
-                  </div>
-                  <div>
-                    <span className="font-semibold">{t("Масштабирование", "Scaling")}:</span>{" "}
-                    {t("выравнивает размерности метрик перед расчетом.", "aligns metric scales before calculation.")}
-                  </div>
-                  <div>
-                    <span className="font-semibold">g:</span>{" "}
-                    {t("темпы роста; в текущем кэше передаются через доступный ROE-показатель.", "growth rate; in the current cache it is sent through the available ROE metric.")}
-                  </div>
-                  <div>
-                    <span className="font-semibold">Random state:</span>{" "}
-                    {t("фиксирует повторяемость результата для алгоритмов со случайным стартом.", "keeps results reproducible for algorithms with random starts.")}
-                  </div>
-                  <div>
-                    <span className="font-semibold">{t("Автоподбор", "Auto-tune")}:</span>{" "}
-                    {t("сервер подбирает алгоритм, число кластеров и метрики в рамках выбранного бюджета.", "the server tunes algorithm, cluster count, and metrics within the selected budget.")}
-                  </div>
-                </div>
-              </div>
             </div>
 
             <div className="space-y-3">

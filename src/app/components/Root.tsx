@@ -55,24 +55,24 @@ export function Root() {
   const desktopLinkClass = (isActive: boolean) =>
     `inline-flex items-center gap-2 rounded-xl px-3 py-2 text-sm transition-colors ${
       isActive
-        ? "bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300"
-        : "text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800"
+        ? "bg-teal-50 text-teal-800 dark:bg-teal-500/10 dark:text-teal-200"
+        : "text-slate-600 dark:text-slate-300 hover:bg-slate-100/80 dark:hover:bg-slate-800/70"
     }`;
 
   const mobileLinkClass = (isActive: boolean) =>
     `flex items-center gap-3 rounded-xl px-4 py-3 transition-all ${
       isActive
-        ? "bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300"
-        : "text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800"
+        ? "bg-teal-50 text-teal-800 dark:bg-teal-500/10 dark:text-teal-200"
+        : "text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800/70"
     }`;
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-950 dark:to-slate-900">
-      <header className="sticky top-0 z-50 border-b border-slate-200 bg-white/95 shadow-sm backdrop-blur-sm dark:border-slate-800 dark:bg-slate-900/95">
+    <div className="min-h-screen bg-[var(--background)]">
+      <header className="sticky top-0 z-50 border-b border-slate-200/80 bg-white/90 shadow-sm backdrop-blur-md dark:border-slate-800/80 dark:bg-slate-950/85">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
           <div className="flex min-h-[4.5rem] items-center justify-between gap-3 py-3">
             <div className="flex items-center gap-3 sm:gap-4">
-              <div className="rounded-lg bg-gradient-to-br from-blue-600 to-cyan-600 p-2">
+              <div className="rounded-lg bg-gradient-to-br from-teal-600 to-sky-600 p-2 shadow-sm">
                 <TrendingUp className="h-6 w-6 text-white" />
               </div>
               <div>
@@ -84,7 +84,7 @@ export function Root() {
             <button
               type="button"
               onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-              className="rounded-md p-2 text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800 lg:hidden"
+              className="rounded-md p-2 text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800/70 lg:hidden"
             >
               {mobileMenuOpen ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
             </button>
@@ -106,7 +106,7 @@ export function Root() {
         </div>
 
         {mobileMenuOpen ? (
-          <div className="border-t border-slate-200 bg-white/95 dark:border-slate-800 dark:bg-slate-900/95 lg:hidden">
+          <div className="border-t border-slate-200/80 bg-white/90 dark:border-slate-800/80 dark:bg-slate-950/90 lg:hidden">
             <nav className="space-y-1 px-4 py-5">
               {primaryNavigation.map((item) => {
                 const Icon = item.icon;

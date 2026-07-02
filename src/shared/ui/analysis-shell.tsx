@@ -52,13 +52,13 @@ function cn(...parts: Array<string | false | null | undefined>): string {
 }
 
 const heroAccentClasses: Record<Accent, string> = {
-  violet: "bg-gradient-to-br from-violet-700 via-purple-600 to-fuchsia-600",
-  emerald: "bg-gradient-to-br from-emerald-700 via-green-600 to-teal-500",
-  orange: "bg-gradient-to-br from-orange-600 via-red-500 to-rose-500",
-  cyan: "bg-gradient-to-br from-cyan-700 via-sky-600 to-blue-700",
+  violet: "bg-gradient-to-br from-indigo-700 via-violet-600 to-purple-500",
+  emerald: "bg-gradient-to-br from-teal-700 via-emerald-600 to-green-500",
+  orange: "bg-gradient-to-br from-amber-600 via-orange-500 to-rose-500",
+  cyan: "bg-gradient-to-br from-teal-700 via-cyan-600 to-sky-600",
   slate: "bg-gradient-to-br from-slate-800 via-slate-700 to-slate-600",
-  blue: "bg-gradient-to-br from-blue-700 via-blue-600 to-cyan-600",
-  amber: "bg-gradient-to-br from-amber-600 via-orange-500 to-rose-500",
+  blue: "bg-gradient-to-br from-sky-700 via-blue-600 to-teal-500",
+  amber: "bg-gradient-to-br from-amber-600 via-yellow-500 to-orange-500",
 };
 
 const iconAccentClasses: Record<Accent, string> = {
@@ -77,7 +77,7 @@ const sidebarAccentClasses: Record<Accent, string> = {
   orange: "bg-orange-500/10 text-orange-700 ring-orange-200 dark:bg-orange-500/15 dark:text-orange-300 dark:ring-orange-500/20",
   cyan: "bg-cyan-500/10 text-cyan-700 ring-cyan-200 dark:bg-cyan-500/15 dark:text-cyan-300 dark:ring-cyan-500/20",
   slate: "bg-slate-500/10 text-slate-700 ring-slate-200 dark:bg-slate-500/15 dark:text-slate-300 dark:ring-slate-500/20",
-  blue: "bg-blue-500/10 text-blue-700 ring-blue-200 dark:bg-blue-500/15 dark:text-blue-300 dark:ring-blue-500/20",
+  blue: "bg-sky-500/10 text-sky-700 ring-sky-200 dark:bg-sky-500/15 dark:text-sky-300 dark:ring-sky-500/20",
   amber: "bg-amber-500/10 text-amber-700 ring-amber-200 dark:bg-amber-500/15 dark:text-amber-300 dark:ring-amber-500/20",
 };
 
