@@ -65,7 +65,7 @@ async function protectAsarFile(asarPath) {
     const metadata = {
       checksum,
       timestamp: Date.now(),
-      version: '1.0.0',
+      version: process.env.ELECTRON_APP_VERSION || '0.0.0-local.0',
       protected: true
     };
     

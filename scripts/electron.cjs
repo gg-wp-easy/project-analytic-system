@@ -2,7 +2,7 @@
 
 const fs = require("fs");
 const path = require("path");
-const { spawn } = require("child_process");
+const { execFileSync, spawn } = require("child_process");
 
 const electronBinary = require("electron");
 
@@ -63,7 +63,9 @@ function parseArgs(argv) {
     viteHost: "127.0.0.1",
     outputDir: null,
     appVersion: null,
-    versionMode: "timestamp",
+    versionMode: "branch",
+    buildBranch: null,
+    buildNumber: null,
     arch: null,
   };
 
@@ -94,6 +96,10 @@ function parseArgs(argv) {
       options.appVersion = arg.slice("--app-version=".length);
     } else if (arg.startsWith("--version-mode=")) {
       options.versionMode = arg.slice("--version-mode=".length);
+    } else if (arg.startsWith("--build-branch=")) {
+      options.buildBranch = arg.slice("--build-branch=".length);
+    } else if (arg.startsWith("--build-number=")) {
+      options.buildNumber = arg.slice("--build-number=".length);
     } else if (arg.startsWith("--arch=")) {
       options.arch = arg.slice("--arch=".length);
     } else {
@@ -101,7 +107,7 @@ function parseArgs(argv) {
     }
   }
 
-  if (!["package", "timestamp"].includes(options.versionMode)) {
+  if (!["branch", "package", "timestamp"].includes(options.versionMode)) {
     throw new Error(`Unsupported version mode: ${options.versionMode}`);
   }
 
@@ -119,12 +125,14 @@ Usage:
   node scripts/electron.cjs dev [--skip-server-install] [--vite-port=5173]
   node scripts/electron.cjs build [--platform=current|win|linux|mac] [--profile=standard|msi|store]
                                 [--skip-icons] [--skip-server-build] [--skip-builder] [--skip-protect-asar]
-                                [--version-mode=timestamp|package] [--app-version=x.y.z] [--arch=x64|ia32|arm64|armv7l]
+                                [--version-mode=branch|timestamp|package] [--app-version=x.y.z]
+                                [--build-branch=name] [--build-number=n] [--arch=x64|ia32|arm64|armv7l]
 
 Examples:
   node scripts/electron.cjs dev
   node scripts/electron.cjs build
   node scripts/electron.cjs build --platform=win --profile=msi
+  node scripts/electron.cjs build --build-branch=main --build-number=42
   node scripts/electron.cjs build --app-version=2026.111.44113
 `);
 }
@@ -193,6 +201,7 @@ async function runBuild(options) {
   const builderEnv = {
     ...process.env,
     ELECTRON_OUTPUT_DIR: outputDir,
+    ELECTRON_APP_VERSION: buildVersion.value,
   };
 
   console.log(`Electron build output directory: ${outputDir}`);
@@ -251,7 +260,7 @@ async function runBuild(options) {
     logStep("Protecting ASAR bundle");
     await runCommand(nodeBinary, [protectAsarScript], {
       cwd: repoRoot,
-      env: process.env,
+      env: builderEnv,
     });
   } else {
     console.log("Skipping ASAR protection.");
@@ -352,10 +361,133 @@ function resolveBuildVersion(options) {
     };
   }
 
+  if (options.versionMode === "branch") {
+    const buildBranch = resolveBuildBranch(options);
+    const buildNumber = resolveBuildNumber(options);
+    const branchVersion = createBranchBuildSemver(packageVersion, buildBranch, buildNumber);
+
+    return {
+      value: branchVersion,
+      source: `branch "${buildBranch}" build ${buildNumber}`,
+    };
+  }
+
   return {
     value: createTimestampSemver(new Date()),
     source: "generated UTC timestamp",
   };
+}
+
+
+function resolveBuildBranch(options) {
+  return (
+    options.buildBranch ||
+    process.env.ELECTRON_BUILD_BRANCH ||
+    process.env.BUILD_BRANCH ||
+    process.env.GITHUB_REF_NAME ||
+    process.env.CI_COMMIT_REF_NAME ||
+    process.env.BRANCH_NAME ||
+    normalizeGitBranch(process.env.GIT_BRANCH) ||
+    readGitValue(["rev-parse", "--abbrev-ref", "HEAD"]) ||
+    "local"
+  );
+}
+
+
+function resolveBuildNumber(options) {
+  const rawBuildNumber = (
+    options.buildNumber ||
+    process.env.ELECTRON_BUILD_NUMBER ||
+    process.env.APP_BUILD_NUMBER ||
+    process.env.BUILD_NUMBER ||
+    process.env.GITHUB_RUN_NUMBER ||
+    process.env.CI_PIPELINE_IID ||
+    process.env.CI_PIPELINE_ID ||
+    process.env.CI_BUILD_ID ||
+    readGitValue(["rev-list", "--count", "HEAD"]) ||
+    createFallbackBuildNumber(new Date())
+  );
+
+  return normalizeBuildNumber(rawBuildNumber);
+}
+
+
+function normalizeGitBranch(value) {
+  if (!value) {
+    return "";
+  }
+
+  return String(value).replace(/^origin\//, "");
+}
+
+
+function readGitValue(args) {
+  try {
+    return execFileSync("git", args, {
+      cwd: repoRoot,
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "ignore"],
+    }).trim();
+  } catch {
+    return "";
+  }
+}
+
+
+function createFallbackBuildNumber(now) {
+  const year = now.getUTCFullYear();
+  const startOfYearUtcMs = Date.UTC(year, 0, 1);
+  const nowUtcMs = Date.UTC(
+    year,
+    now.getUTCMonth(),
+    now.getUTCDate(),
+    now.getUTCHours(),
+    now.getUTCMinutes(),
+    now.getUTCSeconds(),
+  );
+  const dayOfYear = Math.floor((nowUtcMs - startOfYearUtcMs) / 86400000) + 1;
+  const secondsSinceMidnight = (
+    now.getUTCHours() * 3600
+    + now.getUTCMinutes() * 60
+    + now.getUTCSeconds()
+  );
+
+  return `${dayOfYear}${String(secondsSinceMidnight).padStart(5, "0")}`;
+}
+
+
+function normalizeBuildNumber(value) {
+  const digits = String(value ?? "").match(/\d+/g)?.join("") ?? "";
+  const normalized = digits.replace(/^0+(?=\d)/, "");
+  return normalized || "0";
+}
+
+
+function createBranchBuildSemver(packageVersion, branch, buildNumber) {
+  const branchId = sanitizePrereleaseIdentifier(branch);
+  const value = `${packageVersion}-${branchId}.${buildNumber}`;
+
+  if (!isValidSemver(value)) {
+    throw new Error(`Generated branch build version is not a valid semver value: ${value}`);
+  }
+
+  return value;
+}
+
+
+function sanitizePrereleaseIdentifier(value) {
+  const raw = String(value || "local").trim().toLowerCase();
+  const normalized = raw
+    .replace(/[^0-9a-z-]+/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^-+|-+$/g, "");
+  const fallback = normalized || "local";
+
+  return fallback
+    .split("-")
+    .filter(Boolean)
+    .map((part) => (/^\d+$/.test(part) ? `b${part}` : part))
+    .join("-") || "local";
 }
 
 
