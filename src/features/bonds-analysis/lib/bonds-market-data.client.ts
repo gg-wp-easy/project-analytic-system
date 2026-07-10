@@ -1,12 +1,11 @@
-import type { BondSourceRow, BondSourceSummary } from "./types";
-
-const BONDS_ENDPOINT =
-  "https://invest-public-api.tbank.ru/rest/tinkoff.public.invest.api.contract.v1.InstrumentsService/Bonds";
-const BOND_COUPONS_ENDPOINT =
-  "https://invest-public-api.tbank.ru/rest/tinkoff.public.invest.api.contract.v1.InstrumentsService/GetBondCoupons";
-const TOKEN_STORAGE_KEY = "tbank_api_token";
-const DEFAULT_BONDS_LIMIT: number | null = null;
-const SUPPORTED_CURRENCIES = new Set(["rub", "cny", "usd", "eur"]);
+import type { BondSourceRow, BondSourceSummary } from "../model/bonds-analysis.types";
+import {
+  DEFAULT_BONDS_LIMIT,
+  SUPPORTED_BOND_CURRENCIES,
+  TBANK_BOND_COUPONS_ENDPOINT,
+  TBANK_BONDS_ENDPOINT,
+  TBANK_BONDS_TOKEN_STORAGE_KEY,
+} from "../model/bonds-analysis.consts";
 
 type AnyRecord = Record<string, unknown>;
 
@@ -249,7 +248,7 @@ function resolveRuntimeToken(): string | undefined {
   if (typeof window === "undefined") {
     return undefined;
   }
-  const fromStorage = window.localStorage.getItem(TOKEN_STORAGE_KEY);
+  const fromStorage = window.localStorage.getItem(TBANK_BONDS_TOKEN_STORAGE_KEY);
   if (fromStorage && fromStorage.trim()) {
     return fromStorage.trim();
   }
@@ -294,7 +293,7 @@ async function deriveCouponRate(
   const to = new Date(from);
   to.setDate(to.getDate() + 400);
 
-  const payload = await requestJson<AnyRecord>(BOND_COUPONS_ENDPOINT, token, {
+  const payload = await requestJson<AnyRecord>(TBANK_BOND_COUPONS_ENDPOINT, token, {
     instrumentId,
     from: from.toISOString(),
     to: to.toISOString(),
@@ -348,7 +347,7 @@ async function buildSourceRow(token: string, rawBond: AnyRecord): Promise<BondSo
   const maturity = parseTimestamp(rawBond.maturityDate ?? rawBond.maturity_date);
   const currency = resolveBondCurrency(rawBond);
 
-  if (!ticker || !maturity || !currency || !SUPPORTED_CURRENCIES.has(currency)) {
+  if (!ticker || !maturity || !currency || !SUPPORTED_BOND_CURRENCIES.has(currency)) {
     return null;
   }
   if (maturity.getTime() <= Date.now()) {
@@ -398,7 +397,7 @@ export async function loadBondSourceFromClient(
   token?: string,
 ): Promise<{ data: BondSourceRow[]; summary: BondSourceSummary }> {
   const authToken = ensureToken(token);
-  const payload = await requestJson<AnyRecord>(BONDS_ENDPOINT, authToken, {
+  const payload = await requestJson<AnyRecord>(TBANK_BONDS_ENDPOINT, authToken, {
     instrumentStatus: "INSTRUMENT_STATUS_BASE",
   });
 
@@ -413,7 +412,7 @@ export async function loadBondSourceFromClient(
       const currency = resolveBondCurrency(bond);
       const maturity = parseTimestamp(bond.maturityDate ?? bond.maturity_date);
       return (
-        SUPPORTED_CURRENCIES.has(currency) &&
+        SUPPORTED_BOND_CURRENCIES.has(currency) &&
         Boolean(maturity) &&
         (maturity?.getTime() ?? 0) > Date.now() &&
         pickBool(bond, ["apiTradeAvailableFlag", "api_trade_available_flag"]) &&

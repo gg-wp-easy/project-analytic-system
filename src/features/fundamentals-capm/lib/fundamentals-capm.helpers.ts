@@ -5,103 +5,23 @@ import {
   type TBankCandle,
   type TBankIndicative,
 } from "../../../shared/api/tbank";
-
-const LOOKBACK_DAYS = 370;
-const TARGET_OFZ_YEARS = 2;
-const TRADING_DAYS_PER_YEAR = 252;
-const IMOEX_TICKER = "IMOEX";
-const FAMA_FRENCH_FACTORS = {
-  largeCap: { query: "TMOS" },
-  smallCap: { query: "RU000A109KS6" },
-  value: { query: "TDIV" },
-  growth: { query: "TITR" },
-} as const;
-
-type DailyReturnPoint = {
-  date: string;
-  close: number;
-  value: number;
-};
-
-type AlignedReturnPoint = {
-  date: string;
-  stockReturn: number;
-  marketReturn: number;
-};
-
-type FamaFrenchAlignedReturnPoint = AlignedReturnPoint & {
-  smbReturn: number;
-  hmlReturn: number;
-};
-
-export type CapmAdequacyLevel = "strong" | "moderate" | "weak" | "insufficient";
-
-export type CapmRiskFreeRateSource = {
-  bondTicker: string;
-  bondName: string;
-  bondFigi: string;
-  maturityDate: string;
-  annualRate: number;
-  closePricePercent: number;
-  pricingMethod: "ytm_solver" | "coupon_proxy";
-};
-
-export type CapmModelPoint = {
-  date: string;
-  marketExcessReturn: number;
-  actualExcessReturn: number;
-  predictedCapmReturn: number;
-  predictedFamaFrenchReturn?: number;
-};
-
-export type FamaFrenchFactorSource = {
-  query: string;
-  ticker: string;
-  name: string;
-  figi: string;
-};
-
-export type FamaFrenchAnalysisResult = {
-  sampleSize: number;
-  marketBeta: number;
-  smbBeta: number;
-  hmlBeta: number;
-  alphaDaily: number;
-  alphaAnnual: number;
-  expectedAnnualReturn: number;
-  rSquared: number;
-  periodStart: string;
-  periodEnd: string;
-  sources: {
-    largeCap: FamaFrenchFactorSource;
-    smallCap: FamaFrenchFactorSource;
-    value: FamaFrenchFactorSource;
-    growth: FamaFrenchFactorSource;
-  };
-};
-
-export type CapmAnalysisResult = {
-  stockFigi: string;
-  marketFigi: string;
-  marketTicker: string;
-  marketName: string;
-  sampleSize: number;
-  beta: number;
-  alphaDaily: number;
-  alphaAnnual: number;
-  expectedAnnualReturn: number;
-  marketAnnualReturn: number;
-  riskFreeAnnualRate: number;
-  rSquared: number;
-  correlation: number;
-  adequacyLevel: CapmAdequacyLevel;
-  periodStart: string;
-  periodEnd: string;
-  riskFreeSource: CapmRiskFreeRateSource;
-  modelPoints: CapmModelPoint[];
-  famaFrench?: FamaFrenchAnalysisResult;
-  famaFrenchError?: string;
-};
+import {
+  CAPM_LOOKBACK_DAYS,
+  CAPM_TARGET_OFZ_YEARS,
+  FAMA_FRENCH_FACTORS,
+  IMOEX_TICKER,
+  TRADING_DAYS_PER_YEAR,
+} from "../model/fundamentals-capm.consts";
+import type {
+  AlignedReturnPoint,
+  CapmAdequacyLevel,
+  CapmAnalysisResult,
+  CapmRiskFreeRateSource,
+  DailyReturnPoint,
+  FamaFrenchAlignedReturnPoint,
+  FamaFrenchAnalysisResult,
+  FamaFrenchFactorSource,
+} from "../model/fundamentals-capm.types";
 
 function toDateKey(value: string): string {
   return value.slice(0, 10);
@@ -319,7 +239,7 @@ function yearsBetween(from: Date, to: Date): number {
 
 function pickClosestTwoYearOfz(bonds: TBankBond[], asOf: Date): TBankBond | null {
   const target = new Date(asOf);
-  target.setFullYear(target.getFullYear() + TARGET_OFZ_YEARS);
+  target.setFullYear(target.getFullYear() + CAPM_TARGET_OFZ_YEARS);
 
   const candidates = bonds.filter((bond) => {
     const maturity = new Date(bond.maturityDate);
@@ -626,7 +546,7 @@ export async function loadCapmAnalysis(stockFigi: string): Promise<CapmAnalysisR
   const api = createTBankInstrumentsApi();
   const now = new Date();
   const from = new Date(now);
-  from.setDate(from.getDate() - LOOKBACK_DAYS);
+  from.setDate(from.getDate() - CAPM_LOOKBACK_DAYS);
 
   const [marketIndex, riskFreeSource] = await Promise.all([
     resolveMoexIndex(),

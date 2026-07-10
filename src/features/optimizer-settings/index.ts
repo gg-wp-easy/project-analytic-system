@@ -1,3 +1,4 @@
 export { OptimizerSettingsFields } from "./ui/OptimizerSettingsFields";
-export type { OptimizerSettings } from "./model/optimizerSettings";
-export { submitOptimizerSettings, useOptimizerSettings } from "./model/optimizerSettings";
+export { submitOptimizerSettings } from "./lib/optimizer-settings.api";
+export { useOptimizerSettings } from "./lib/useOptimizerSettings";
+export type { OptimizationObjective, OptimizerSettings } from "./model/optimizer-settings.types";

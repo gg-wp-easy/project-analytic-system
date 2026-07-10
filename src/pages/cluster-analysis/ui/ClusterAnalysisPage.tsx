@@ -36,9 +36,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "../../../app/components/ui/select";
-import { OptimizerSettingsFields } from "../../../features/optimizer-settings/ui/OptimizerSettingsFields";
-import { submitOptimizerSettings, useOptimizerSettings } from "../../../features/optimizer-settings/model/optimizerSettings";
-import { PortfolioSimulationPanel } from "../../../features/portfolio-simulation/ui/PortfolioSimulationPanel";
+import { OptimizerSettingsFields, submitOptimizerSettings, useOptimizerSettings } from "../../../features/optimizer-settings";
+import { PortfolioSimulationPanel } from "../../../features/portfolio-simulation";
 import { API_BASE_URL } from "../../../config/api";
 import type {
   ClusterAnalysisSummary as AnalysisSummary,
@@ -47,7 +46,7 @@ import type {
   ClusterPoint,
   ClusterPortfolioRow as PortfolioRow,
   ClusterStrategyPortfolio as StrategyPortfolio,
-} from "../../../features/cluster-analysis/model/types";
+} from "../../../features/cluster-analysis";
 import {
   formatMetricDisplay,
   getMetricTooltip,

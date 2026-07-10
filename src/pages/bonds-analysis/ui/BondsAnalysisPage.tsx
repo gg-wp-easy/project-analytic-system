@@ -12,8 +12,7 @@ import {
   ZAxis,
 } from "recharts";
 import { useAppSettings } from "../../../app/context/AppSettingsContext";
-import { analyzeBondSource } from "../../../features/bonds-analysis/model/clientAnalysis";
-import { loadBondSourceFromClient } from "../../../features/bonds-analysis/model/marketDataClient";
+import { analyzeBondSource, loadBondSourceFromClient } from "../../../features/bonds-analysis";
 import type {
   BondAnalysisBond,
   BondAnalysisPreferences,
@@ -21,7 +20,7 @@ import type {
   BondPortfolioPosition,
   BondsAnalysisPersistedState,
   BondSourceRow,
-} from "../../../features/bonds-analysis/model/types";
+} from "../../../features/bonds-analysis";
 import type { ExportColumn, ExportMetric } from "../../../shared/lib/export/download";
 import {
   downloadAnalysisResultsAsPdf,

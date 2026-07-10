@@ -37,9 +37,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "../../../app/components/ui/select";
-import { OptimizerSettingsFields } from "../../../features/optimizer-settings/ui/OptimizerSettingsFields";
-import { submitOptimizerSettings, useOptimizerSettings } from "../../../features/optimizer-settings/model/optimizerSettings";
-import { PortfolioSimulationPanel } from "../../../features/portfolio-simulation/ui/PortfolioSimulationPanel";
+import { OptimizerSettingsFields, submitOptimizerSettings, useOptimizerSettings } from "../../../features/optimizer-settings";
+import { PortfolioSimulationPanel } from "../../../features/portfolio-simulation";
 import { API_BASE_URL } from "../../../config/api";
 import type {
   NeuralFeatureImportanceItem as FeatureImportanceItem,
@@ -47,7 +46,7 @@ import type {
   NeuralPortfolioPosition as PortfolioPosition,
   NeuralPortfolioStrategy as PortfolioStrategy,
   NeuralTrainingPoint as TrainingPoint,
-} from "../../../features/neural-analysis/model/types";
+} from "../../../features/neural-analysis";
 import {
   formatMetricDisplay,
   getMetricTooltip,

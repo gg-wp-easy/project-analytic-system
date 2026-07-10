@@ -16,9 +16,8 @@ import {
 import { useFundamentals } from "../../../entities/fundamentals";
 import { useAppSettings } from "../../../app/context/AppSettingsContext";
 import { Checkbox } from "../../../app/components/ui/checkbox";
-import { OptimizerSettingsFields } from "../../../features/optimizer-settings/ui/OptimizerSettingsFields";
-import { submitOptimizerSettings, useOptimizerSettings } from "../../../features/optimizer-settings/model/optimizerSettings";
-import { PortfolioSimulationPanel } from "../../../features/portfolio-simulation/ui/PortfolioSimulationPanel";
+import { OptimizerSettingsFields, submitOptimizerSettings, useOptimizerSettings } from "../../../features/optimizer-settings";
+import { PortfolioSimulationPanel } from "../../../features/portfolio-simulation";
 import { API_BASE_URL } from "../../../config/api";
 import type {
   HybridMetricItem as MetricItem,
@@ -26,7 +25,7 @@ import type {
   HybridPortfolioPosition as PortfolioPosition,
   HybridStrategyPortfolio as StrategyPortfolio,
   HybridTrainingPoint as TrainingPoint,
-} from "../../../features/hybrid-analysis/model/types";
+} from "../../../features/hybrid-analysis";
 import {
   formatMetricDisplay,
   getMetricTooltip,

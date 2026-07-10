@@ -8,7 +8,7 @@ import {
   loadCapmAnalysis,
   type CapmAdequacyLevel,
   type CapmAnalysisResult,
-} from "../../../features/fundamentals-capm/model/capm";
+} from "../../../features/fundamentals-capm";
 import { formatFundamentalMetricValue } from "../../../shared/lib/format/fundamentals";
 import { AppErrorDialog } from "../../../shared/ui/app-error-dialog";
 import { MetricCard, MetricGrid, PageHero, SectionCard } from "../../../shared/ui/analysis-shell";

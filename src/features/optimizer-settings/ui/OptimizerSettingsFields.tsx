@@ -1,5 +1,5 @@
 import { useAppSettings } from "../../../app/context/AppSettingsContext";
-import type { OptimizerSettings } from "../model/optimizerSettings";
+import type { OptimizerSettings } from "../model/optimizer-settings.types";
 
 type OptimizerSettingsFieldsProps = {
   settings: OptimizerSettings;

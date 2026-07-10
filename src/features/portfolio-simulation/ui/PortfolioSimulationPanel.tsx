@@ -11,261 +11,28 @@ import {
   YAxis,
 } from "recharts";
 import * as XLSX from "xlsx";
-import type { AssetFundamentalRecord, ShareRecord } from "../../../entities/fundamentals";
 import { useAppSettings } from "../../../app/context/AppSettingsContext";
-import { createTBankInstrumentsApi, type TBankCandle } from "../../../shared/api/tbank";
+import { createTBankInstrumentsApi } from "../../../shared/api/tbank";
 import { numberOr } from "../../../shared/lib/number/numberOr";
 import { MetricCard, MetricGrid, SectionCard } from "../../../shared/ui/analysis-shell";
-
-type PortfolioSimulationHolding = {
-  figi?: string;
-  ticker: string;
-  name?: string | null;
-  weight: number;
-};
-
-type NormalizedHolding = PortfolioSimulationHolding & {
-  figi: string;
-  normalizedWeight: number;
-  annualDividendYield: number;
-};
-
-type AssetMonthlyRow = {
-  month: string;
-  ticker: string;
-  monthlyReturn: number;
-  cumulativeReturn: number;
-};
-
-type PortfolioMonthlyRow = {
-  month: string;
-  monthlyReturn: number;
-  cumulativeReturn: number;
-};
-
-type SimulationResult = {
-  portfolioRows: PortfolioMonthlyRow[];
-  assetRows: AssetMonthlyRow[];
-  metrics: {
-    totalReturn: number;
-    annualizedReturn: number;
-    volatility: number;
-    sharpe: number;
-    sortino: number;
-    months: number;
-  };
-};
-
-type PortfolioSimulationPanelProps = {
-  holdings: PortfolioSimulationHolding[];
-  shares: ShareRecord[];
-  fundamentalsByFigi: Record<string, AssetFundamentalRecord>;
-  analysisName: string;
-  filenamePrefix: string;
-};
-
-const chartColors = ["#2563eb", "#059669", "#f59e0b", "#dc2626", "#7c3aed", "#0891b2"];
-const SIMULATION_CACHE_KEY = "portfolio-simulation-cache-v1";
-const SIMULATION_CACHE_LIMIT = 40;
-
-type SimulationCacheEntry = {
-  key: string;
-  savedAt: string;
-  result: SimulationResult;
-};
-
-function defaultFormationDate(): string {
-  const date = new Date();
-  date.setFullYear(date.getFullYear() - 1);
-  return date.toISOString().slice(0, 10);
-}
-
-function monthKey(value: string): string {
-  return value.slice(0, 7);
-}
-
-function formatPercent(value: number, digits = 2): string {
-  return Number.isFinite(value) ? `${(value * 100).toFixed(digits)}%` : "-";
-}
-
-function formatNumber(value: number, digits = 2): string {
-  return Number.isFinite(value) ? value.toFixed(digits) : "-";
-}
-
-function hashString(value: string): string {
-  let hash = 2166136261;
-  for (let index = 0; index < value.length; index += 1) {
-    hash ^= value.charCodeAt(index);
-    hash = Math.imul(hash, 16777619);
-  }
-  return (hash >>> 0).toString(36);
-}
-
-function loadSimulationCache(): Record<string, SimulationCacheEntry> {
-  if (typeof window === "undefined") {
-    return {};
-  }
-  try {
-    const parsed = JSON.parse(window.localStorage.getItem(SIMULATION_CACHE_KEY) ?? "{}") as Record<string, SimulationCacheEntry>;
-    return parsed && typeof parsed === "object" ? parsed : {};
-  } catch {
-    return {};
-  }
-}
-
-function readCachedSimulation(key: string): SimulationCacheEntry | null {
-  return loadSimulationCache()[key] ?? null;
-}
-
-function saveCachedSimulation(key: string, result: SimulationResult): void {
-  if (typeof window === "undefined") {
-    return;
-  }
-  const cache = loadSimulationCache();
-  cache[key] = {
-    key,
-    savedAt: new Date().toISOString(),
-    result,
-  };
-
-  const entries = Object.values(cache)
-    .sort((left, right) => new Date(right.savedAt).getTime() - new Date(left.savedAt).getTime())
-    .slice(0, SIMULATION_CACHE_LIMIT);
-  window.localStorage.setItem(
-    SIMULATION_CACHE_KEY,
-    JSON.stringify(Object.fromEntries(entries.map((entry) => [entry.key, entry]))),
-  );
-}
-
-function normalizeAnnualDividendYield(value: unknown): number {
-  const raw = numberOr(value, 0);
-  if (!Number.isFinite(raw) || raw <= 0) {
-    return 0;
-  }
-  return raw > 1 ? raw / 100 : raw;
-}
-
-function stdev(values: number[]): number {
-  if (values.length < 2) {
-    return 0;
-  }
-  const mean = values.reduce((sum, value) => sum + value, 0) / values.length;
-  const variance = values.reduce((sum, value) => sum + (value - mean) ** 2, 0) / (values.length - 1);
-  return Math.sqrt(Math.max(variance, 0));
-}
-
-function buildMonthlyReturns(candles: TBankCandle[], monthlyDividendAdjustment: number): Map<string, number> {
-  const ordered = [...candles]
-    .filter((row) => Number.isFinite(row.close) && row.close > 0)
-    .sort((left, right) => new Date(left.time).getTime() - new Date(right.time).getTime());
-  const grouped = new Map<string, TBankCandle[]>();
-
-  ordered.forEach((row) => {
-    const key = monthKey(row.time);
-    grouped.set(key, [...(grouped.get(key) ?? []), row]);
-  });
-
-  const returns = new Map<string, number>();
-  grouped.forEach((items, key) => {
-    const first = items[0]?.close;
-    const last = items[items.length - 1]?.close;
-    if (Number.isFinite(first) && Number.isFinite(last) && first > 0) {
-      returns.set(key, last / first - 1 + monthlyDividendAdjustment);
-    }
-  });
-
-  return returns;
-}
-
-function calculateMetrics(returns: number[], riskFreeRate: number): SimulationResult["metrics"] {
-  if (!returns.length) {
-    return {
-      totalReturn: 0,
-      annualizedReturn: 0,
-      volatility: 0,
-      sharpe: 0,
-      sortino: 0,
-      months: 0,
-    };
-  }
-
-  const cumulative = returns.reduce((value, item) => value * (1 + item), 1) - 1;
-  const years = returns.length / 12;
-  const annualizedReturn = years > 0 ? (1 + cumulative) ** (1 / years) - 1 : cumulative;
-  const monthlyMean = returns.reduce((sum, value) => sum + value, 0) / returns.length;
-  const monthlyVolatility = stdev(returns);
-  const volatility = monthlyVolatility * Math.sqrt(12);
-  const monthlyRiskFree = riskFreeRate / 12;
-  const excessMean = monthlyMean - monthlyRiskFree;
-  const downside = returns.map((value) => Math.min(value - monthlyRiskFree, 0)).filter((value) => value < 0);
-  const downsideDeviation = stdev(downside) * Math.sqrt(12);
-  const sharpe = monthlyVolatility > 0 ? (excessMean / monthlyVolatility) * Math.sqrt(12) : 0;
-  const sortino = downsideDeviation > 0 ? (annualizedReturn - riskFreeRate) / downsideDeviation : 0;
-
-  return {
-    totalReturn: cumulative,
-    annualizedReturn,
-    volatility,
-    sharpe: Math.abs(sharpe),
-    sortino: Math.abs(sortino),
-    months: returns.length,
-  };
-}
-
-function buildSimulation(
-  monthlyReturnsByTicker: Map<string, Map<string, number>>,
-  weightsByTicker: Map<string, number>,
-  riskFreeRate: number,
-): SimulationResult {
-  const months = [...new Set([...monthlyReturnsByTicker.values()].flatMap((values) => [...values.keys()]))].sort();
-  const assetCumulative = new Map<string, number>();
-  const assetRows: AssetMonthlyRow[] = [];
-  let portfolioCumulative = 1;
-  const portfolioRows: PortfolioMonthlyRow[] = [];
-
-  months.forEach((month) => {
-    let portfolioReturn = 0;
-    monthlyReturnsByTicker.forEach((returns, ticker) => {
-      const monthlyReturn = returns.get(month) ?? 0;
-      const nextCumulative = (assetCumulative.get(ticker) ?? 1) * (1 + monthlyReturn);
-      assetCumulative.set(ticker, nextCumulative);
-      assetRows.push({
-        month,
-        ticker,
-        monthlyReturn,
-        cumulativeReturn: nextCumulative - 1,
-      });
-      portfolioReturn += monthlyReturn * (weightsByTicker.get(ticker) ?? 0);
-    });
-
-    portfolioCumulative *= 1 + portfolioReturn;
-    portfolioRows.push({
-      month,
-      monthlyReturn: portfolioReturn,
-      cumulativeReturn: portfolioCumulative - 1,
-    });
-  });
-
-  return {
-    portfolioRows,
-    assetRows,
-    metrics: calculateMetrics(portfolioRows.map((row) => row.monthlyReturn), riskFreeRate),
-  };
-}
-
-function estimateSheetWidths(table: Array<Array<string | number>>): XLSX.ColInfo[] {
-  const count = Math.max(...table.map((row) => row.length), 0);
-  return Array.from({ length: count }, (_, colIndex) => {
-    const width = table.reduce((max, row) => Math.max(max, String(row[colIndex] ?? "").length), 10);
-    return { wch: Math.min(Math.max(width + 2, 10), 42) };
-  });
-}
-
-function appendSheet(workbook: XLSX.WorkBook, name: string, rows: Array<Array<string | number>>): void {
-  const sheet = XLSX.utils.aoa_to_sheet(rows);
-  sheet["!cols"] = estimateSheetWidths(rows);
-  XLSX.utils.book_append_sheet(workbook, sheet, name);
-}
+import {
+  appendSheet,
+  buildMonthlyReturns,
+  buildSimulation,
+  defaultFormationDate,
+  formatNumber,
+  formatPercent,
+  hashString,
+  normalizeAnnualDividendYield,
+  readCachedSimulation,
+  saveCachedSimulation,
+} from "../lib/portfolio-simulation.helpers";
+import { PORTFOLIO_SIMULATION_CHART_COLORS } from "../model/portfolio-simulation.consts";
+import type {
+  NormalizedHolding,
+  PortfolioSimulationPanelProps,
+  SimulationResult,
+} from "../model/portfolio-simulation.types";
 
 export function PortfolioSimulationPanel({
   holdings,
@@ -284,7 +51,7 @@ export function PortfolioSimulationPanel({
   const [error, setError] = useState<string | null>(null);
 
   const tickerToShare = useMemo(() => {
-    const map = new Map<string, ShareRecord>();
+    const map = new Map<string, (typeof shares)[number]>();
     shares.forEach((share) => map.set(share.ticker.toUpperCase(), share));
     return map;
   }, [shares]);
@@ -649,7 +416,7 @@ export function PortfolioSimulationPanel({
                   key={holding.ticker}
                   type="monotone"
                   dataKey={holding.ticker}
-                  stroke={chartColors[index % chartColors.length]}
+                  stroke={PORTFOLIO_SIMULATION_CHART_COLORS[index % PORTFOLIO_SIMULATION_CHART_COLORS.length]}
                   strokeWidth={1.8}
                   dot={false}
                   connectNulls

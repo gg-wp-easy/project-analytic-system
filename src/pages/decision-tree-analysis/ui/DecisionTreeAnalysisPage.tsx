@@ -25,9 +25,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "../../../app/components/ui/select";
-import { OptimizerSettingsFields } from "../../../features/optimizer-settings/ui/OptimizerSettingsFields";
-import { submitOptimizerSettings, useOptimizerSettings } from "../../../features/optimizer-settings/model/optimizerSettings";
-import { PortfolioSimulationPanel } from "../../../features/portfolio-simulation/ui/PortfolioSimulationPanel";
+import { OptimizerSettingsFields, submitOptimizerSettings, useOptimizerSettings } from "../../../features/optimizer-settings";
+import { PortfolioSimulationPanel } from "../../../features/portfolio-simulation";
 import { API_BASE_URL } from "../../../config/api";
 import type {
   DecisionTreeConfusionMatrixData as ConfusionMatrixData,
@@ -36,7 +35,7 @@ import type {
   DecisionTreeNumericSummaryItem as NumericSummaryItem,
   DecisionTreePortfolioPosition as PortfolioPosition,
   DecisionTreeSectorAllocationItem as SectorAllocationItem,
-} from "../../../features/decision-tree-analysis/model/types";
+} from "../../../features/decision-tree-analysis";
 import {
   formatMetricDisplay,
   getMetricTooltip,

@@ -8,39 +8,19 @@ import type {
   BondRiskPortfolio,
   BondRiskStatRow,
   BondSourceRow,
-} from "./types";
-
-const BASE_RISK_FREE_RATE = 0.155;
-const INFLATION_RATE = 0.075;
-const TAX_RATE = 0.13;
-const MIN_BONDS = 20;
-const MAX_BONDS = 50;
-const MAX_WEIGHT_PER_BOND = 0.15;
-const DEFAULT_TARGET_DURATION = 3.5;
-const DEFAULT_TARGET_YIELD = 0.12;
-
-const CURRENCY_PARAMS = {
-  rub: { riskFreeRate: 0.155, minYield: 0.12 },
-  cny: { riskFreeRate: 0.03, minYield: 0.04 },
-  usd: { riskFreeRate: 0.045, minYield: 0.05 },
-  eur: { riskFreeRate: 0.03, minYield: 0.035 },
-} as const;
-
-const SECTOR_MAX_WEIGHTS: Record<string, number> = {
-  government: 0.4,
-  municipal: 0.25,
-  financial: 0.3,
-  energy: 0.25,
-  materials: 0.25,
-  industrials: 0.2,
-  consumer: 0.2,
-  telecom: 0.15,
-  it: 0.1,
-  utilities: 0.15,
-  real_estate: 0.15,
-  health_care: 0.1,
-  other: 0.1,
-};
+} from "../model/bonds-analysis.types";
+import {
+  BASE_BOND_RISK_FREE_RATE,
+  BOND_CURRENCY_PARAMS,
+  BOND_INFLATION_RATE,
+  BOND_SECTOR_MAX_WEIGHTS,
+  BOND_TAX_RATE,
+  DEFAULT_TARGET_DURATION,
+  DEFAULT_TARGET_YIELD,
+  MAX_BONDS_IN_PORTFOLIO,
+  MAX_WEIGHT_PER_BOND,
+  MIN_BONDS_IN_PORTFOLIO,
+} from "../model/bonds-analysis.consts";
 
 type InternalBond = BondAnalysisBond & {
   nominal: number;
@@ -88,7 +68,7 @@ function parsePositiveNumber(value: string, fallback: number): number {
 
 function parseBondCount(value: string | undefined): number {
   const parsed = Math.trunc(Number(String(value ?? "").replace(",", ".")));
-  return Number.isFinite(parsed) ? clamp(parsed, MIN_BONDS, MAX_BONDS) : MIN_BONDS;
+  return Number.isFinite(parsed) ? clamp(parsed, MIN_BONDS_IN_PORTFOLIO, MAX_BONDS_IN_PORTFOLIO) : MIN_BONDS_IN_PORTFOLIO;
 }
 
 function resolvePreferences(preferences?: BondAnalysisPreferences): ResolvedBondAnalysisPreferences {
@@ -207,9 +187,9 @@ function normalizeRow(row: BondSourceRow): InternalBond | null {
 
   const yearsToMaturity = Math.max(daysToMaturity / 365, 0.1);
   const currency = (row.currency || "rub").toLowerCase();
-  const currencyParams = CURRENCY_PARAMS[currency as keyof typeof CURRENCY_PARAMS] ?? CURRENCY_PARAMS.rub;
+  const currencyParams = BOND_CURRENCY_PARAMS[currency as keyof typeof BOND_CURRENCY_PARAMS] ?? BOND_CURRENCY_PARAMS.rub;
   const currentYield = row.nominal > 0 ? row.coupon_rate / 100 : 0;
-  const yieldToMaturity = row.floating_coupon_flag ? BASE_RISK_FREE_RATE + currentYield : currentYield;
+  const yieldToMaturity = row.floating_coupon_flag ? BASE_BOND_RISK_FREE_RATE + currentYield : currentYield;
   const modifiedDuration = row.floating_coupon_flag ? 0.1 : yearsToMaturity / (1 + yieldToMaturity);
   const convexity = (yearsToMaturity ** 2) / 100;
   const liquidityScore = clamp(Math.min(row.nominal / 1000, 1) * (1 - clamp(row.risk_level, 0, 3) * 0.2), 0, 1);
@@ -230,8 +210,8 @@ function normalizeRow(row: BondSourceRow): InternalBond | null {
     couponPaymentsPerYear: Math.max(0, row.coupon_payments_per_year ?? 0),
     convexity,
     creditSpread: yieldToMaturity - currencyParams.riskFreeRate,
-    realYield: currentYield - INFLATION_RATE,
-    taxEquivalentYield: currentYield / (1 - TAX_RATE),
+    realYield: currentYield - BOND_INFLATION_RATE,
+    taxEquivalentYield: currentYield / (1 - BOND_TAX_RATE),
     liquidityScore,
     durationScore: 0,
     sectorScore: 0,
@@ -252,9 +232,9 @@ function scoreBonds(bonds: InternalBond[], preferences: ResolvedBondAnalysisPref
   const yieldRange = maxYield > minYield ? maxYield - minYield : 1;
 
   return bonds.map((bond) => {
-    const sectorWeight = SECTOR_MAX_WEIGHTS[bond.sector] ?? SECTOR_MAX_WEIGHTS.other;
-    const currencyKey = bond.currency.toLowerCase() as keyof typeof CURRENCY_PARAMS;
-    const currencyParams = CURRENCY_PARAMS[currencyKey] ?? CURRENCY_PARAMS.rub;
+    const sectorWeight = BOND_SECTOR_MAX_WEIGHTS[bond.sector] ?? BOND_SECTOR_MAX_WEIGHTS.other;
+    const currencyKey = bond.currency.toLowerCase() as keyof typeof BOND_CURRENCY_PARAMS;
+    const currencyParams = BOND_CURRENCY_PARAMS[currencyKey] ?? BOND_CURRENCY_PARAMS.rub;
     const yieldScore = (bond.currentYield - minYield) / yieldRange;
     const riskScore = 1 - bond.riskLevel / 3;
     const durationScore = 1 - Math.min(Math.abs(bond.modifiedDuration - preferences.targetDuration) / preferences.targetDuration, 1);
@@ -366,7 +346,7 @@ function desiredPortfolioCount(poolLength: number, preferences: ResolvedBondAnal
   if (poolLength <= 0) {
     return 0;
   }
-  return Math.min(Math.max(MIN_BONDS, preferences.portfolioBondsCount), poolLength, MAX_BONDS);
+  return Math.min(Math.max(MIN_BONDS_IN_PORTFOLIO, preferences.portfolioBondsCount), poolLength, MAX_BONDS_IN_PORTFOLIO);
 }
 
 function buildMatchingPortfolio(
@@ -376,10 +356,10 @@ function buildMatchingPortfolio(
   const sorted = [...candidates].sort((left, right) => right.totalScore - left.totalScore);
   const preferredFrequency = sorted.filter((bond) => matchesPreferredFrequency(bond, preferences));
   const frequencyPool =
-    preferredFrequency.length >= Math.min(MIN_BONDS, sorted.length) ? preferredFrequency : sorted;
+    preferredFrequency.length >= Math.min(MIN_BONDS_IN_PORTFOLIO, sorted.length) ? preferredFrequency : sorted;
   const highYield = frequencyPool.filter((bond) => bond.currentYield >= preferences.targetYield);
   const preferredPool =
-    highYield.length >= Math.min(MIN_BONDS, frequencyPool.length) ? highYield : frequencyPool;
+    highYield.length >= Math.min(MIN_BONDS_IN_PORTFOLIO, frequencyPool.length) ? highYield : frequencyPool;
 
   const desiredCount = desiredPortfolioCount(preferredPool.length, preferences);
 
@@ -410,7 +390,7 @@ function buildImmunizedPortfolio(
 ): { positions: BondPortfolioPosition[]; statistics: BondPortfolioStatistics } {
   const sorted = [...candidates].sort((left, right) => right.totalScore - left.totalScore);
   const preferredFrequency = sorted.filter((bond) => matchesPreferredFrequency(bond, preferences));
-  const pool = preferredFrequency.length >= Math.min(MIN_BONDS, sorted.length) ? preferredFrequency : sorted;
+  const pool = preferredFrequency.length >= Math.min(MIN_BONDS_IN_PORTFOLIO, sorted.length) ? preferredFrequency : sorted;
   const scored = pool
     .map((bond) => {
       const durationGap = Math.abs(bond.modifiedDuration - preferences.targetDuration);
