@@ -7,4 +7,5 @@ export type {
   AssetFundamentalRecord,
   ClosePricePoint,
   FundamentalsCache,
-} from "./model/fundamentals-context";
+  FundamentalsContextValue,
+} from "./model/fundamentals.types";
