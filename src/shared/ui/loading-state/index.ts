@@ -5,7 +5,7 @@ export {
   MetricSkeletonGrid,
   PageLoadingState,
   TableSkeleton,
-} from "./loading-state/index";
+} from "./ui";
 export type {
   CardGridSkeletonProps,
   ChartSkeletonProps,
@@ -13,4 +13,4 @@ export type {
   MetricSkeletonGridProps,
   PageLoadingStateProps,
   TableSkeletonProps,
-} from "./loading-state/index";
+} from "./model";

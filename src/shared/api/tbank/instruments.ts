@@ -1,278 +1,53 @@
-const SHARES_ENDPOINT =
-  "https://invest-public-api.tbank.ru/rest/tinkoff.public.invest.api.contract.v1.InstrumentsService/Shares";
-const INDICATIVES_ENDPOINT =
-  "https://invest-public-api.tbank.ru/rest/tinkoff.public.invest.api.contract.v1.InstrumentsService/Indicatives";
-const CURRENCIES_ENDPOINT =
-  "https://invest-public-api.tbank.ru/rest/tinkoff.public.invest.api.contract.v1.InstrumentsService/Currencies";
-const BONDS_ENDPOINT =
-  "https://invest-public-api.tbank.ru/rest/tinkoff.public.invest.api.contract.v1.InstrumentsService/Bonds";
-const FUTURES_ENDPOINT =
-  "https://invest-public-api.tbank.ru/rest/tinkoff.public.invest.api.contract.v1.InstrumentsService/Futures";
-const OPTIONS_ENDPOINT =
-  "https://invest-public-api.tbank.ru/rest/tinkoff.public.invest.api.contract.v1.InstrumentsService/Options";
-const OPTIONS_BY_ENDPOINT =
-  "https://invest-public-api.tbank.ru/rest/tinkoff.public.invest.api.contract.v1.InstrumentsService/OptionsBy";
-const OPTION_BY_ENDPOINT =
-  "https://invest-public-api.tbank.ru/rest/tinkoff.public.invest.api.contract.v1.InstrumentsService/OptionBy";
-const FIND_INSTRUMENT_ENDPOINT =
-  "https://invest-public-api.tbank.ru/rest/tinkoff.public.invest.api.contract.v1.InstrumentsService/FindInstrument";
-const ASSETS_ENDPOINT =
-  "https://invest-public-api.tbank.ru/rest/tinkoff.public.invest.api.contract.v1.InstrumentsService/GetAssets";
-const BOND_COUPONS_ENDPOINT =
-  "https://invest-public-api.tbank.ru/rest/tinkoff.public.invest.api.contract.v1.InstrumentsService/GetBondCoupons";
-const ASSET_FUNDAMENTALS_ENDPOINT =
-  "https://invest-public-api.tbank.ru/rest/tinkoff.public.invest.api.contract.v1.InstrumentsService/GetAssetFundamentals";
-const CLOSE_PRICES_ENDPOINT =
-  "https://invest-public-api.tbank.ru/rest/tinkoff.public.invest.api.contract.v1.MarketDataService/GetClosePrices";
-const LAST_PRICES_ENDPOINT =
-  "https://invest-public-api.tbank.ru/rest/tinkoff.public.invest.api.contract.v1.MarketDataService/GetLastPrices";
-const CANDLES_ENDPOINT =
-  "https://invest-public-api.tbank.ru/rest/tinkoff.public.invest.api.contract.v1.MarketDataService/GetCandles";
-const MAX_ASSETS_PER_REQUEST = 30;
-
-export const TBANK_TOKEN_STORAGE_KEY = "tbank_api_token";
-const LEGACY_OPTIONS_CACHE_STORAGE_KEY = "tbank_options_cache_v1";
-const OPTIONS_CACHE_STORAGE_KEY = "tbank_options_cache_v2";
-const OPTIONS_CACHE_TTL_MS = 5 * 60 * 1000;
-const OPTIONS_CACHE_STORAGE_LIMIT_CHARS = 4_000_000;
-const OPTIONS_DISCOVERY_PARALLEL_LIMIT = 6;
-const DEFAULT_REQUEST_TIMEOUT_MS = 20_000;
-const OPTIONS_REQUEST_TIMEOUT_MS = 35_000;
-const OPTIONS_DISCOVERY_ASSET_TYPES = [
-  "INSTRUMENT_TYPE_BOND",
-  "INSTRUMENT_TYPE_SHARE",
-  "INSTRUMENT_TYPE_CURRENCY",
-  "INSTRUMENT_TYPE_ETF",
-  "INSTRUMENT_TYPE_SP",
-  "INSTRUMENT_TYPE_COMMODITY",
-  "INSTRUMENT_TYPE_INDEX",
-  "INSTRUMENT_TYPE_CLEARING_CERTIFICATE",
-] as const;
-const OPTIONS_DISCOVERY_ERROR_PREVIEW_LIMIT = 6;
-
-export function normalizeTBankToken(value: string | null | undefined): string {
-  if (!value) {
-    return "";
-  }
-
-  return value
-    .trim()
-    .replace(/^bearer\s+/i, "")
-    .replace(/^["']|["']$/g, "")
-    .trim();
-}
-
-type AnyRecord = Record<string, unknown>;
-type TBankOptionsCachePayload = {
-  savedAt: string;
-  items: CachedTBankOption[];
-};
-type TBankOptionsLoadTarget = {
-  key: string;
-  payload: Record<string, string>;
-};
-type CachedTBankOption = Pick<
+import { normalizeTBankToken } from "./lib";
+import {
+  ASSET_FUNDAMENTALS_ENDPOINT,
+  ASSETS_ENDPOINT,
+  BOND_COUPONS_ENDPOINT,
+  BONDS_ENDPOINT,
+  CANDLES_ENDPOINT,
+  CLOSE_PRICES_ENDPOINT,
+  CURRENCIES_ENDPOINT,
+  DEFAULT_REQUEST_TIMEOUT_MS,
+  FIND_INSTRUMENT_ENDPOINT,
+  FUTURES_ENDPOINT,
+  INDICATIVES_ENDPOINT,
+  LAST_PRICES_ENDPOINT,
+  LEGACY_OPTIONS_CACHE_STORAGE_KEY,
+  MAX_ASSETS_PER_REQUEST,
+  OPTIONS_BY_ENDPOINT,
+  OPTIONS_CACHE_STORAGE_KEY,
+  OPTIONS_CACHE_STORAGE_LIMIT_CHARS,
+  OPTIONS_CACHE_TTL_MS,
+  OPTIONS_DISCOVERY_ASSET_TYPES,
+  OPTIONS_DISCOVERY_ERROR_PREVIEW_LIMIT,
+  OPTIONS_DISCOVERY_PARALLEL_LIMIT,
+  OPTIONS_ENDPOINT,
+  OPTIONS_REQUEST_TIMEOUT_MS,
+  OPTION_BY_ENDPOINT,
+  SHARES_ENDPOINT,
+  TBANK_TOKEN_STORAGE_KEY,
+} from "./model";
+import type {
+  AnyRecord,
+  TBankAssetInstrumentReference,
+  TBankBond,
+  TBankBondCoupon,
+  TBankCandle,
+  TBankClosePrice,
+  TBankCurrency,
+  TBankFundamental,
+  TBankIndicative,
+  TBankInstrumentReference,
+  TBankLastPrice,
   TBankOption,
-  | "uid"
-  | "figi"
-  | "positionUid"
-  | "assetUid"
-  | "basicAssetUid"
-  | "basicAssetPositionUid"
-  | "ticker"
-  | "classCode"
-  | "name"
-  | "currency"
-  | "settlementCurrency"
-  | "assetType"
-  | "basicAsset"
-  | "exchange"
-  | "lot"
-  | "strikePrice"
-  | "expirationDate"
-  | "direction"
-  | "style"
-  | "realExchange"
-  | "apiTradeAvailableFlag"
->;
+  TBankOptionsByResult,
+  TBankOptionsCachePayload,
+  TBankOptionsLoadTarget,
+  TBankShare,
+} from "./model";
 
 let optionsCacheMemory: { savedAtMs: number; items: TBankOption[] } | null = null;
 let optionsCacheInFlight: Promise<TBankOption[]> | null = null;
-
-export type TBankShare = {
-  figi: string;
-  assetUid: string;
-  ticker: string;
-  name: string;
-  lot: number;
-  currency: string;
-  exchange: string;
-  sector?: string;
-  liquidityFlag?: boolean;
-  apiTradeAvailableFlag?: boolean;
-  buyAvailableFlag?: boolean;
-  sellAvailableFlag?: boolean;
-  otcFlag?: boolean;
-};
-
-export type TBankIndicative = {
-  figi: string;
-  uid: string;
-  ticker: string;
-  name: string;
-  exchange: string;
-  classCode: string;
-  instrumentKind: string;
-  buyAvailableFlag: boolean;
-  sellAvailableFlag: boolean;
-};
-
-export type TBankCurrency = {
-  figi: string;
-  uid: string;
-  ticker: string;
-  name: string;
-  currency: string;
-  isoCurrencyName: string;
-  exchange: string;
-  classCode: string;
-  lot: number;
-  nominal: number;
-  buyAvailableFlag: boolean;
-  sellAvailableFlag: boolean;
-  apiTradeAvailableFlag?: boolean;
-  otcFlag?: boolean;
-};
-
-export type TBankBond = {
-  figi: string;
-  uid: string;
-  ticker: string;
-  name: string;
-  currency: string;
-  sector: string;
-  maturityDate: string;
-  nominal: number;
-  aciValue: number;
-  couponQuantityPerYear: number;
-  floatingCouponFlag: boolean;
-  amortizationFlag: boolean;
-  liquidityFlag: boolean;
-};
-
-export type TBankOption = {
-  figi: string;
-  uid: string;
-  positionUid: string;
-  assetUid: string;
-  basicAssetUid: string;
-  basicAssetPositionUid: string;
-  ticker: string;
-  classCode: string;
-  name: string;
-  currency: string;
-  settlementCurrency: string;
-  assetType: string;
-  basicAsset: string;
-  exchange: string;
-  lot: number;
-  strikePrice: number;
-  expirationDate: string;
-  firstTradeDate: string;
-  lastTradeDate: string;
-  direction: string;
-  paymentType: string;
-  style: string;
-  settlementType: string;
-  realExchange: string;
-  tradingStatus: string;
-  apiTradeAvailableFlag: boolean;
-  buyAvailableFlag: boolean;
-  sellAvailableFlag: boolean;
-  shortEnabledFlag: boolean;
-  forIisFlag: boolean;
-  forQualInvestorFlag: boolean;
-  weekendFlag: boolean;
-  blockedTcaFlag: boolean;
-  otcFlag: boolean;
-  requiredTests: string[];
-};
-
-export type TBankInstrumentReference = {
-  uid: string;
-  figi: string;
-  positionUid: string;
-  ticker: string;
-  classCode: string;
-  name: string;
-  instrumentType: string;
-};
-
-export type TBankAssetInstrumentReference = TBankInstrumentReference & {
-  assetUid: string;
-};
-
-export type TBankOptionsByResult = {
-  options: TBankOption[];
-  underlying: TBankInstrumentReference | null;
-  resolvedInstrumentId: string;
-  requestQuery: string;
-};
-
-export type TBankFundamental = {
-  figi: string;
-  peRatio: number;
-  pbRatio: number;
-  psRatio: number;
-  evToEbitda: number;
-  roe: number;
-  roa: number;
-  netMargin: number;
-  netDebtToEbitda: number;
-  totalDebt: number;
-  dividendYield: number;
-  marketCapBn: number;
-  beta: number;
-  updatedAt: string;
-};
-
-export type TBankClosePrice = {
-  figi: string;
-  instrumentUid: string;
-  ticker: string;
-  classCode: string;
-  price: number;
-  time: string;
-};
-
-export type TBankLastPrice = {
-  figi: string;
-  instrumentUid: string;
-  instrumentId: string;
-  price: number;
-  time: string;
-};
-
-export type TBankCandle = {
-  figi: string;
-  time: string;
-  close: number;
-  open: number;
-  high: number;
-  low: number;
-  volume: number;
-};
-
-export type TBankBondCoupon = {
-  figi: string;
-  couponDate: string;
-  couponNumber: number;
-  payOneBond: number;
-  couponType: string;
-  couponStartDate: string;
-  couponEndDate: string;
-  couponPeriod: number;
-};
 
 function pickString(source: AnyRecord, keys: string[]): string {
   for (const key of keys) {

@@ -1,4 +1,4 @@
-import { API_BASE_URL } from "../../../config/api";
+import { API_BASE_URL } from "../../../config";
 import type { OptimizerSettings } from "../model/optimizer-settings.types";
 import { buildOptimizerSettingsPayload } from "./optimizer-settings.helpers";
 

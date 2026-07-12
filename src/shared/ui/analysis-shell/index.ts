@@ -5,7 +5,7 @@ export {
   MetricGrid,
   PageHero,
   SectionCard,
-} from "./analysis-shell/index";
+} from "./ui";
 export type {
   AnalysisPageFrameProps,
   AnalysisShellAccent,
@@ -14,4 +14,4 @@ export type {
   MetricGridProps,
   PageHeroProps,
   SectionCardProps,
-} from "./analysis-shell/index";
+} from "./model";

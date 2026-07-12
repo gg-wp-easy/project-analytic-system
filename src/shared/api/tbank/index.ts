@@ -1,16 +1,18 @@
-export { createTBankInstrumentsApi, normalizeTBankToken, TBANK_TOKEN_STORAGE_KEY } from "./instruments";
+export { createTBankInstrumentsApi } from "./instruments";
+export { normalizeTBankToken } from "./lib";
+export { TBANK_TOKEN_STORAGE_KEY } from "./model";
 export type {
-  TBankShare,
-  TBankIndicative,
-  TBankCurrency,
-  TBankBond,
-  TBankOption,
-  TBankInstrumentReference,
   TBankAssetInstrumentReference,
-  TBankOptionsByResult,
+  TBankBond,
   TBankBondCoupon,
-  TBankFundamental,
-  TBankClosePrice,
-  TBankLastPrice,
   TBankCandle,
-} from "./instruments";
+  TBankClosePrice,
+  TBankCurrency,
+  TBankFundamental,
+  TBankIndicative,
+  TBankInstrumentReference,
+  TBankLastPrice,
+  TBankOption,
+  TBankOptionsByResult,
+  TBankShare,
+} from "./model";

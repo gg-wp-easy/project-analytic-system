@@ -12,45 +12,23 @@ import {
   X,
 } from "lucide-react";
 import { useAppSettings } from "../context/AppSettingsContext";
+import { isNavItemActive } from "../lib";
+import { APP_ABSOLUTE_ROUTE_PATHS, APP_NAVIGATION_ITEMS, type AppNavigationIconKey } from "../model";
 import { MarketIndicativesTicker } from "../../features/market-indicatives";
 
-type NavItem = {
-  name: string;
-  path: string;
-  icon: LucideIcon;
-  activePaths?: string[];
+const appNavigationIcons: Record<AppNavigationIconKey, LucideIcon> = {
+  activity: Activity,
+  database: Database,
+  landmark: Landmark,
+  layers: Layers,
+  settings: Settings,
+  trendingUp: TrendingUp,
 };
-
-function isActivePath(currentPath: string, targetPath: string): boolean {
-  if (targetPath === "/") {
-    return currentPath === "/";
-  }
-
-  return currentPath === targetPath || currentPath.startsWith(`${targetPath}/`);
-}
-
-function isNavItemActive(currentPath: string, item: NavItem): boolean {
-  return isActivePath(currentPath, item.path) || Boolean(item.activePaths?.some((path) => isActivePath(currentPath, path)));
-}
 
 export function Root() {
   const location = useLocation();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const { t } = useAppSettings();
-
-  const primaryNavigation: NavItem[] = [
-    { name: t({ ru: "Обзор", en: "Overview" }), path: "/", icon: TrendingUp },
-    { name: t({ ru: "Фундаментальные данные акций", en: "Stock Fundamentals" }), path: "/fundamentals", icon: Database },
-    {
-      name: t({ ru: "Анализ акций", en: "Stock Analysis" }),
-      path: "/stock-analysis",
-      icon: Layers,
-      activePaths: ["/cluster", "/decision-tree", "/neural-network", "/hybrid"],
-    },
-    { name: t({ ru: "Анализ облигаций", en: "Bond Analysis" }), path: "/bonds", icon: Landmark },
-    { name: t({ ru: "Анализ опционов", en: "Options Analysis" }), path: "/options", icon: Activity },
-    { name: t({ ru: "Настройки", en: "Settings" }), path: "/settings", icon: Settings },
-  ];
 
   const desktopLinkClass = (isActive: boolean) =>
     `inline-flex items-center gap-2 rounded-xl px-3 py-2 text-sm transition-colors ${
@@ -91,14 +69,14 @@ export function Root() {
           </div>
 
           <nav className="hidden flex-wrap items-center gap-2 pb-4 pt-1 lg:flex">
-            {primaryNavigation.map((item) => {
-              const Icon = item.icon;
+            {APP_NAVIGATION_ITEMS.map((item) => {
+              const Icon = appNavigationIcons[item.icon];
               const isActive = isNavItemActive(location.pathname, item);
 
               return (
                 <Link key={item.path} to={item.path} className={desktopLinkClass(isActive)}>
                   <Icon className="h-4 w-4" />
-                  <span className="whitespace-nowrap font-medium">{item.name}</span>
+                  <span className="whitespace-nowrap font-medium">{t(item.title)}</span>
                 </Link>
               );
             })}
@@ -108,8 +86,8 @@ export function Root() {
         {mobileMenuOpen ? (
           <div className="border-t border-slate-200/80 bg-white/90 dark:border-slate-800/80 dark:bg-slate-950/90 lg:hidden">
             <nav className="space-y-1 px-4 py-5">
-              {primaryNavigation.map((item) => {
-                const Icon = item.icon;
+              {APP_NAVIGATION_ITEMS.map((item) => {
+                const Icon = appNavigationIcons[item.icon];
                 const isActive = isNavItemActive(location.pathname, item);
 
                 return (
@@ -120,7 +98,7 @@ export function Root() {
                     className={mobileLinkClass(isActive)}
                   >
                     <Icon className="h-5 w-5" />
-                    <span className="font-medium">{item.name}</span>
+                    <span className="font-medium">{t(item.title)}</span>
                   </Link>
                 );
               })}
@@ -129,7 +107,7 @@ export function Root() {
         ) : null}
       </header>
 
-      {location.pathname !== "/settings" ? <MarketIndicativesTicker /> : null}
+      {location.pathname !== APP_ABSOLUTE_ROUTE_PATHS.settings ? <MarketIndicativesTicker /> : null}
 
       <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
         <Outlet />

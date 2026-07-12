@@ -1,5 +1,5 @@
 import { createElement } from "react";
-import { createBrowserRouter, createHashRouter, Navigate } from "react-router-dom";
+import { Navigate } from "react-router-dom";
 import { Root } from "./components/Root";
 import { Dashboard } from "../pages/dashboard";
 import { ClusterAnalysis } from "../pages/cluster-analysis";
@@ -14,35 +14,35 @@ import { OptionsPage, UnderlyingOptionsPage } from "../pages/options";
 import { SettingsPage } from "../pages/settings";
 import { NotFound } from "./components/NotFound";
 import { RouteError } from "./components/RouteError";
+import { createAppRouter } from "./lib";
+import { APP_ABSOLUTE_ROUTE_PATHS, APP_ROUTE_PATHS } from "./model";
 
 const routes = [
   {
-    path: "/",
+    path: APP_ROUTE_PATHS.root,
     Component: Root,
     errorElement: createElement(RouteError),
     children: [
       { index: true, Component: Dashboard },
-      { path: "fundamentals", Component: FundamentalsPage },
-      { path: "fundamentals/preprocessing", Component: DataPreprocessingPage },
-      { path: "fundamentals/:figi", Component: FundamentalsDetailsPage },
-      { path: "stock-analysis", Component: StockAnalysisPage },
-      { path: "preprocessing", element: createElement(Navigate, { to: "/fundamentals/preprocessing", replace: true }) },
-      { path: "cluster", Component: ClusterAnalysis },
-      { path: "decision-tree", Component: DecisionTreeAnalysis },
-      { path: "neural-network", Component: NeuralNetworkAnalysis },
-      { path: "hybrid", Component: HybridAnalysis },
-      { path: "bonds", Component: BondsAnalysis },
-      { path: "options", Component: OptionsPage },
-      { path: "options/asset/:underlyingKey", Component: UnderlyingOptionsPage },
-      { path: "settings", Component: SettingsPage },
-      { path: "*", Component: NotFound },
+      { path: APP_ROUTE_PATHS.fundamentals, Component: FundamentalsPage },
+      { path: APP_ROUTE_PATHS.fundamentalsPreprocessing, Component: DataPreprocessingPage },
+      { path: APP_ROUTE_PATHS.fundamentalsDetails, Component: FundamentalsDetailsPage },
+      { path: APP_ROUTE_PATHS.stockAnalysis, Component: StockAnalysisPage },
+      {
+        path: APP_ROUTE_PATHS.legacyPreprocessing,
+        element: createElement(Navigate, { to: APP_ABSOLUTE_ROUTE_PATHS.fundamentalsPreprocessing, replace: true }),
+      },
+      { path: APP_ROUTE_PATHS.cluster, Component: ClusterAnalysis },
+      { path: APP_ROUTE_PATHS.decisionTree, Component: DecisionTreeAnalysis },
+      { path: APP_ROUTE_PATHS.neuralNetwork, Component: NeuralNetworkAnalysis },
+      { path: APP_ROUTE_PATHS.hybrid, Component: HybridAnalysis },
+      { path: APP_ROUTE_PATHS.bonds, Component: BondsAnalysis },
+      { path: APP_ROUTE_PATHS.options, Component: OptionsPage },
+      { path: APP_ROUTE_PATHS.optionAssetDetails, Component: UnderlyingOptionsPage },
+      { path: APP_ROUTE_PATHS.settings, Component: SettingsPage },
+      { path: APP_ROUTE_PATHS.wildcard, Component: NotFound },
     ],
   },
 ];
 
-const useHashRouter =
-  typeof window !== "undefined" && window.location.protocol === "file:";
-
-export const router = useHashRouter
-  ? createHashRouter(routes)
-  : createBrowserRouter(routes);
+export const router = createAppRouter(routes);

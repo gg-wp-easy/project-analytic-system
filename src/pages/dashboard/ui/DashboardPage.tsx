@@ -1,52 +1,23 @@
 import { Link } from "react-router-dom";
 import { Activity, ArrowRight, Database, Landmark, Layers, TrendingUp } from "lucide-react";
 import { useAppSettings } from "../../../app/context/AppSettingsContext";
+import {
+  DASHBOARD_HERO,
+  DASHBOARD_OPEN_LABEL,
+  DASHBOARD_SECTIONS,
+  DASHBOARD_SECTIONS_TITLE,
+} from "../model/dashboard.consts";
+import type { DashboardIconKey } from "../model/dashboard.types";
+
+const dashboardIcons: Record<DashboardIconKey, typeof Activity> = {
+  activity: Activity,
+  database: Database,
+  landmark: Landmark,
+  layers: Layers,
+};
 
 export function Dashboard() {
   const { t } = useAppSettings();
-
-  const sections = [
-    {
-      title: t({ ru: "Фундаментальные данные акций", en: "Stock Fundamentals" }),
-      description: t({
-        ru: "Список акций, фундаментальные показатели, детали по эмитентам и первичная обработка данных.",
-        en: "Stock list, fundamentals, issuer details, and data preprocessing.",
-      }),
-      path: "/fundamentals",
-      icon: Database,
-      color: "from-slate-600 to-slate-800",
-    },
-    {
-      title: t({ ru: "Анализ акций", en: "Stock Analysis" }),
-      description: t({
-        ru: "Единая точка выбора: кластерный анализ, дерево решений, нейросеть и гибридный анализ.",
-        en: "One entry point for clustering, decision tree, neural network, and hybrid analysis.",
-      }),
-      path: "/stock-analysis",
-      icon: Layers,
-      color: "from-cyan-600 to-blue-700",
-    },
-    {
-      title: t({ ru: "Анализ облигаций", en: "Bond Analysis" }),
-      description: t({
-        ru: "Загрузка облигаций, расчёт локальных метрик, подбор и выгрузка портфеля.",
-        en: "Bond loading, local metrics, portfolio selection, and export.",
-      }),
-      path: "/bonds",
-      icon: Landmark,
-      color: "from-amber-500 to-orange-600",
-    },
-    {
-      title: t({ ru: "Анализ опционов", en: "Options Analysis" }),
-      description: t({
-        ru: "Общий список базовых активов, контракты, детали и конструктор опционных стратегий.",
-        en: "Underlying assets, contracts, details, and option strategy builder.",
-      }),
-      path: "/options",
-      icon: Activity,
-      color: "from-blue-500 to-cyan-600",
-    },
-  ];
 
   return (
     <div className="space-y-8">
@@ -55,15 +26,10 @@ export function Dashboard() {
           <div className="space-y-4">
             <div className="inline-flex items-center gap-2 rounded-full bg-white/20 px-4 py-2 backdrop-blur-sm">
               <Activity className="h-4 w-4" />
-              <span className="text-sm font-medium">{t({ ru: "Платформа аналитики", en: "Analytics Platform" })}</span>
+              <span className="text-sm font-medium">{t(DASHBOARD_HERO.badge)}</span>
             </div>
-            <h1 className="text-4xl font-bold text-white">{t({ ru: "Анализ фондового рынка", en: "Market Analysis" })}</h1>
-            <p className="max-w-2xl text-lg text-blue-50">
-              {t({
-                ru: "Разделы сгруппированы по рабочему процессу: данные акций, модели анализа, облигации и опционы.",
-                en: "Sections are grouped by workflow: stock data, analysis models, bonds, and options.",
-              })}
-            </p>
+            <h1 className="text-4xl font-bold text-white">{t(DASHBOARD_HERO.title)}</h1>
+            <p className="max-w-2xl text-lg text-blue-50">{t(DASHBOARD_HERO.description)}</p>
           </div>
           <TrendingUp className="h-24 w-24 shrink-0 opacity-20" />
         </div>
@@ -71,11 +37,11 @@ export function Dashboard() {
 
       <div>
         <h2 className="mb-6 text-2xl font-semibold text-slate-900 dark:text-slate-100">
-          {t({ ru: "Разделы", en: "Sections" })}
+          {t(DASHBOARD_SECTIONS_TITLE)}
         </h2>
         <div className="grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-4">
-          {sections.map((section) => {
-            const Icon = section.icon;
+          {DASHBOARD_SECTIONS.map((section) => {
+            const Icon = dashboardIcons[section.icon];
             return (
               <Link
                 key={section.path}
@@ -88,12 +54,12 @@ export function Dashboard() {
                   </div>
                   <div className="space-y-2">
                     <h3 className="font-semibold text-slate-900 transition-colors group-hover:text-blue-600 dark:text-slate-100">
-                      {section.title}
+                      {t(section.title)}
                     </h3>
-                    <p className="text-sm leading-relaxed text-slate-600 dark:text-slate-300">{section.description}</p>
+                    <p className="text-sm leading-relaxed text-slate-600 dark:text-slate-300">{t(section.description)}</p>
                   </div>
                   <div className="flex items-center gap-2 pt-2 text-sm font-medium text-blue-600 dark:text-blue-400">
-                    {t({ ru: "Перейти", en: "Open" })}
+                    {t(DASHBOARD_OPEN_LABEL)}
                     <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
                   </div>
                 </div>

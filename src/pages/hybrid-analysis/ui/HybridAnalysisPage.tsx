@@ -18,7 +18,7 @@ import { useAppSettings } from "../../../app/context/AppSettingsContext";
 import { Checkbox } from "../../../app/components/ui/checkbox";
 import { OptimizerSettingsFields, submitOptimizerSettings, useOptimizerSettings } from "../../../features/optimizer-settings";
 import { PortfolioSimulationPanel } from "../../../features/portfolio-simulation";
-import { API_BASE_URL } from "../../../config/api";
+import { API_BASE_URL } from "../../../config";
 import type {
   HybridMetricItem as MetricItem,
   HybridModelScore as ModelScore,

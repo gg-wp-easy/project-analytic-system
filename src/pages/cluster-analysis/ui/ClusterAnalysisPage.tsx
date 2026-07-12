@@ -38,7 +38,7 @@ import {
 } from "../../../app/components/ui/select";
 import { OptimizerSettingsFields, submitOptimizerSettings, useOptimizerSettings } from "../../../features/optimizer-settings";
 import { PortfolioSimulationPanel } from "../../../features/portfolio-simulation";
-import { API_BASE_URL } from "../../../config/api";
+import { API_BASE_URL } from "../../../config";
 import type {
   ClusterAnalysisSummary as AnalysisSummary,
   ClusterGroup,
