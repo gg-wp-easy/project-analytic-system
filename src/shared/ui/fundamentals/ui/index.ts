@@ -1,0 +1,1 @@
+export { FundamentalMetricLabel } from "./FundamentalMetricLabel";
