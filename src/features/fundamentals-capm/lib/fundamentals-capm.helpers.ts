@@ -11,7 +11,7 @@ import {
   FAMA_FRENCH_FACTORS,
   IMOEX_TICKER,
   TRADING_DAYS_PER_YEAR,
-} from "../model/fundamentals-capm.consts";
+} from "../model";
 import type {
   AlignedReturnPoint,
   CapmAdequacyLevel,
@@ -21,7 +21,7 @@ import type {
   FamaFrenchAlignedReturnPoint,
   FamaFrenchAnalysisResult,
   FamaFrenchFactorSource,
-} from "../model/fundamentals-capm.types";
+} from "../model";
 
 function toDateKey(value: string): string {
   return value.slice(0, 10);

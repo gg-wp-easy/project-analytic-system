@@ -1,11 +1,11 @@
-import type { BondSourceRow, BondSourceSummary } from "../model/bonds-analysis.types";
+import type { BondSourceRow, BondSourceSummary } from "../model";
 import {
   DEFAULT_BONDS_LIMIT,
   SUPPORTED_BOND_CURRENCIES,
   TBANK_BOND_COUPONS_ENDPOINT,
   TBANK_BONDS_ENDPOINT,
   TBANK_BONDS_TOKEN_STORAGE_KEY,
-} from "../model/bonds-analysis.consts";
+} from "../model";
 
 type AnyRecord = Record<string, unknown>;
 

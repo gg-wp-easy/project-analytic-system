@@ -1,4 +1,4 @@
-export { loadCapmAnalysis } from "./lib/fundamentals-capm.helpers";
+export { loadCapmAnalysis } from "./lib";
 export type {
   CapmAdequacyLevel,
   CapmAnalysisResult,
@@ -6,4 +6,4 @@ export type {
   CapmRiskFreeRateSource,
   FamaFrenchAnalysisResult,
   FamaFrenchFactorSource,
-} from "./model/fundamentals-capm.types";
+} from "./model";

@@ -1,5 +1,4 @@
-export { analyzeBondSource, getRiskProfileName } from "./lib/bonds-analysis.helpers";
-export { loadBondSourceFromClient } from "./lib/bonds-market-data.client";
+export { analyzeBondSource, getRiskProfileName, loadBondSourceFromClient } from "./lib";
 export type {
   BondAnalysisBond,
   BondAnalysisPreferences,
@@ -13,4 +12,4 @@ export type {
   BondSourceRow,
   BondSourceSummary,
   BondsAnalysisPersistedState,
-} from "./model/bonds-analysis.types";
+} from "./model";

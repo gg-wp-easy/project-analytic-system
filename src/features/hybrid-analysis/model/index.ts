@@ -4,4 +4,4 @@ export type {
   HybridPortfolioPosition,
   HybridStrategyPortfolio,
   HybridTrainingPoint,
-} from "./model";
+} from "./hybrid-analysis.types";

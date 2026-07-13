@@ -8,7 +8,7 @@ import type {
   BondRiskPortfolio,
   BondRiskStatRow,
   BondSourceRow,
-} from "../model/bonds-analysis.types";
+} from "../model";
 import {
   BASE_BOND_RISK_FREE_RATE,
   BOND_CURRENCY_PARAMS,
@@ -20,7 +20,7 @@ import {
   MAX_BONDS_IN_PORTFOLIO,
   MAX_WEIGHT_PER_BOND,
   MIN_BONDS_IN_PORTFOLIO,
-} from "../model/bonds-analysis.consts";
+} from "../model";
 
 type InternalBond = BondAnalysisBond & {
   nominal: number;

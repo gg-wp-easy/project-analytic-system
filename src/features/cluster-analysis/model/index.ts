@@ -5,4 +5,4 @@ export type {
   ClusterPoint,
   ClusterPortfolioRow,
   ClusterStrategyPortfolio,
-} from "./model";
+} from "./cluster-analysis.types";

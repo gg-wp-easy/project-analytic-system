@@ -5,4 +5,4 @@ export type {
   DecisionTreeNumericSummaryItem,
   DecisionTreePortfolioPosition,
   DecisionTreeSectorAllocationItem,
-} from "./model";
+} from "./decision-tree-analysis.types";

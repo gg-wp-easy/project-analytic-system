@@ -4,4 +4,4 @@ export type {
   NeuralPortfolioPosition,
   NeuralPortfolioStrategy,
   NeuralTrainingPoint,
-} from "./model";
+} from "./neural-analysis.types";
