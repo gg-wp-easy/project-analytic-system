@@ -63,7 +63,7 @@ function parseArgs(argv) {
     viteHost: "127.0.0.1",
     outputDir: null,
     appVersion: null,
-    versionMode: "branch",
+    versionMode: "timestamp",
     buildBranch: null,
     buildNumber: null,
     arch: null,
@@ -125,14 +125,13 @@ Usage:
   node scripts/electron.cjs dev [--skip-server-install] [--vite-port=5173]
   node scripts/electron.cjs build [--platform=current|win|linux|mac] [--profile=standard|msi|store]
                                 [--skip-icons] [--skip-server-build] [--skip-builder] [--skip-protect-asar]
-                                [--version-mode=branch|timestamp|package] [--app-version=x.y.z]
+                                [--version-mode=timestamp|package|branch] [--app-version=x.y.z]
                                 [--build-branch=name] [--build-number=n] [--arch=x64|ia32|arm64|armv7l]
 
 Examples:
   node scripts/electron.cjs dev
   node scripts/electron.cjs build
   node scripts/electron.cjs build --platform=win --profile=msi
-  node scripts/electron.cjs build --build-branch=main --build-number=42
   node scripts/electron.cjs build --app-version=2026.111.44113
 `);
 }

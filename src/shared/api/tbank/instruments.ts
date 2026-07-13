@@ -49,6 +49,43 @@ import type {
 let optionsCacheMemory: { savedAtMs: number; items: TBankOption[] } | null = null;
 let optionsCacheInFlight: Promise<TBankOption[]> | null = null;
 
+class TBankApiError extends Error {
+  readonly status?: number;
+
+  constructor(message: string, params?: { status?: number }) {
+    super(message);
+    this.name = "TBankApiError";
+    this.status = params?.status;
+  }
+}
+
+function createTBankApiRequestError(): TBankApiError {
+  return new TBankApiError(
+    "Ошибка обращения к API T-Банка. Проверьте токен, доступность сервиса и повторите запрос.",
+  );
+}
+
+function createTBankApiTimeoutError(): TBankApiError {
+  return new TBankApiError(
+    "Превышено время ожидания ответа API T-Банка. Попробуйте повторить запрос позже.",
+  );
+}
+
+function createTBankApiResponseError(status: number): TBankApiError {
+  return new TBankApiError(
+    "Ошибка обращения к API T-Банка. Сервис не смог обработать запрос. Проверьте токен и повторите попытку позже.",
+    { status },
+  );
+}
+
+function createTBankApiEmptyResponseError(): TBankApiError {
+  return new TBankApiError("API T-Банка вернул пустой ответ. Повторите запрос позже.");
+}
+
+function createTBankApiMalformedResponseError(): TBankApiError {
+  return new TBankApiError("API T-Банка вернул некорректный ответ. Повторите запрос позже.");
+}
+
 function pickString(source: AnyRecord, keys: string[]): string {
   for (const key of keys) {
     const value = source[key];
@@ -432,6 +469,10 @@ function scoreInstrumentReference(instrument: TBankInstrumentReference, query: s
 }
 
 function getErrorStatusCode(error: unknown): number | null {
+  if (error instanceof TBankApiError && typeof error.status === "number") {
+    return error.status;
+  }
+
   if (!(error instanceof Error)) {
     return null;
   }
@@ -681,13 +722,11 @@ async function requestJson<T>(
       clearTimeout(timeoutId);
     }
 
-    const message =
-      error instanceof Error
-        ? error.name === "AbortError"
-          ? `market data service request timed out for ${endpoint}.`
-          : `market data service request failed for ${endpoint}. ${error.message}`
-        : `market data service request failed for ${endpoint}. ${String(error)}`;
-    throw new Error(message);
+    if (error instanceof Error && error.name === "AbortError") {
+      throw createTBankApiTimeoutError();
+    }
+
+    throw createTBankApiRequestError();
   }
 
   if (timeoutId) {
@@ -695,28 +734,18 @@ async function requestJson<T>(
   }
 
   if (!response.ok) {
-    let details = "";
-    try {
-      details = await response.text();
-    } catch {
-      details = "";
-    }
-    throw new Error(`market data service ${response.status} ${response.statusText}${details ? `: ${details}` : ""}`);
+    throw createTBankApiResponseError(response.status);
   }
 
   const text = await response.text();
   if (!text.trim()) {
-    throw new Error(`market data service returned an empty response for ${endpoint}.`);
+    throw createTBankApiEmptyResponseError();
   }
 
   try {
     return JSON.parse(text) as T;
-  } catch (error) {
-    const message =
-      error instanceof Error ? error.message : "Unknown JSON parse error";
-    throw new Error(
-      `market data service returned malformed JSON for ${endpoint}. ${message}`,
-    );
+  } catch {
+    throw createTBankApiMalformedResponseError();
   }
 }
 

@@ -9,6 +9,12 @@ import {
 
 type AnyRecord = Record<string, unknown>;
 
+function createTBankBondsApiError(): Error {
+  return new Error(
+    "Ошибка обращения к API T-Банка. Не удалось загрузить список облигаций. Проверьте токен и повторите запрос позже.",
+  );
+}
+
 function pickString(source: AnyRecord, keys: string[]): string {
   for (const key of keys) {
     const value = source[key];
@@ -227,21 +233,30 @@ function normalizeRiskLevel(source: AnyRecord, sector: string): number {
 }
 
 async function requestJson<T>(endpoint: string, token: string, body: Record<string, unknown>): Promise<T> {
-  const response = await fetch(endpoint, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${token}`,
-      "Content-Type": "application/json",
-      Accept: "application/json",
-    },
-    body: JSON.stringify(body),
-  });
-
-  if (!response.ok) {
-    throw new Error(`Не удалось загрузить облигации. Код ответа: ${response.status}.`);
+  let response: Response;
+  try {
+    response = await fetch(endpoint, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+        Accept: "application/json",
+      },
+      body: JSON.stringify(body),
+    });
+  } catch {
+    throw createTBankBondsApiError();
   }
 
-  return (await response.json()) as T;
+  if (!response.ok) {
+    throw createTBankBondsApiError();
+  }
+
+  try {
+    return (await response.json()) as T;
+  } catch {
+    throw createTBankBondsApiError();
+  }
 }
 
 function resolveRuntimeToken(): string | undefined {

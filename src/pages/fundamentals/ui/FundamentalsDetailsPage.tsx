@@ -41,6 +41,7 @@ import {
   getRangeLabel,
   getRegressionScatterDomain,
   mapExchangeLabel,
+  normalizeCandles,
 } from "../lib";
 
 function useElementWidth() {
