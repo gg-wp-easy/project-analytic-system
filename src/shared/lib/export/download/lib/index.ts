@@ -1,10 +1,17 @@
 export {
+  canvasToBlob,
   downloadAnalysisResultsAsPdf,
   downloadAnalysisResultsAsXlsx,
+  downloadBlob,
   downloadRowsAsExcel,
   downloadRowsAsXlsx,
   downloadSvgAsPng,
+  escapeHtml,
+  estimateSheetWidths,
+  getAoa,
   getPortfolioHoldingColumns,
+  normalizeCellValue,
+  renderSvgToCanvas,
   svgToPngDataUrl,
-} from "./download/index";
-export type { AnalysisExportOptions, ExportColumn, ExportMetric, PortfolioHoldingLike } from "./download/index";
+  toCell,
+} from "./download.helpers";

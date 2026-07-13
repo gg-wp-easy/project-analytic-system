@@ -1,21 +1,14 @@
 import type { TBankOption } from "../../../shared/api/tbank";
+import { OPTIONS_EMPTY_VALUE } from "../model";
+import type {
+  OptionSideFilter,
+  OptionSortDirection,
+  OptionSortField,
+  UnderlyingCategory,
+  UnderlyingSummary,
+} from "../model";
 
-export type UnderlyingCategory = "all" | "security" | "commodity" | "currency" | "other";
-export type OptionSideFilter = "all" | "call" | "put";
-export type OptionSortField = "expirationDate" | "strikePrice";
-export type OptionSortDirection = "asc" | "desc";
-
-export type UnderlyingSummary = {
-  key: string;
-  label: string;
-  category: Exclude<UnderlyingCategory, "all">;
-  calls: number;
-  puts: number;
-  otherCount: number;
-  tradableCount: number;
-  options: TBankOption[];
-  searchText: string;
-};
+export type { OptionSideFilter, OptionSortDirection, OptionSortField, UnderlyingCategory, UnderlyingSummary } from "../model";
 
 export function getLocaleCode(locale: "ru" | "en"): string {
   return locale === "en" ? "en-US" : "ru-RU";
@@ -23,7 +16,7 @@ export function getLocaleCode(locale: "ru" | "en"): string {
 
 export function formatNumber(value: number | undefined, locale: "ru" | "en"): string {
   if (typeof value !== "number" || !Number.isFinite(value)) {
-    return "-";
+    return OPTIONS_EMPTY_VALUE;
   }
 
   return new Intl.NumberFormat(getLocaleCode(locale), {
@@ -33,7 +26,7 @@ export function formatNumber(value: number | undefined, locale: "ru" | "en"): st
 
 export function formatDate(value: string | undefined, locale: "ru" | "en"): string {
   if (!value) {
-    return "-";
+    return OPTIONS_EMPTY_VALUE;
   }
 
   const parsed = new Date(value);
@@ -50,7 +43,7 @@ export function formatDate(value: string | undefined, locale: "ru" | "en"): stri
 
 export function formatTimestamp(value: string | null, locale: "ru" | "en"): string {
   if (!value) {
-    return "-";
+    return OPTIONS_EMPTY_VALUE;
   }
 
   return new Date(value).toLocaleString(getLocaleCode(locale));

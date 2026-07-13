@@ -1,53 +1,8 @@
 import type { TBankCandle } from "../../../shared/api/tbank";
-import type { StrategyTemplateId } from "./strategy-builder";
+import { FORECAST_HORIZON_DAYS } from "../model";
+import type { AssetMovementForecast, ForecastDirection, OptionTradeRecommendation } from "../model";
 
-export type ForecastDirection = "bullish" | "bearish" | "neutral";
-
-export type TechnicalIndicatorSnapshot = {
-  currentPrice: number;
-  previousClose: number | null;
-  priceChangePct: number | null;
-  sma20: number | null;
-  sma50: number | null;
-  ema12: number | null;
-  ema26: number | null;
-  rsi14: number | null;
-  macd: number | null;
-  macdSignal: number | null;
-  atr14: number | null;
-  atrPct: number | null;
-  bollingerUpper: number | null;
-  bollingerMiddle: number | null;
-  bollingerLower: number | null;
-  bollingerPosition: number | null;
-  momentum20Pct: number | null;
-  realizedVolatility20Pct: number | null;
-  volumeRatio20: number | null;
-  trendSlope20Pct: number | null;
-};
-
-export type AssetMovementForecast = {
-  direction: ForecastDirection;
-  score: number;
-  confidence: number;
-  horizonDays: number;
-  expectedMovePct: number;
-  targetPrice: number;
-  indicators: TechnicalIndicatorSnapshot;
-  reasons: string[];
-  warnings: string[];
-};
-
-export type OptionTradeRecommendation = {
-  templateId: Exclude<StrategyTemplateId, "custom">;
-  outlook: ForecastDirection;
-  expirationKey: string;
-  expirationDays: number;
-  thesis: string;
-  riskNote: string;
-};
-
-const FORECAST_HORIZON_DAYS = 20;
+export type { AssetMovementForecast, ForecastDirection, OptionTradeRecommendation, TechnicalIndicatorSnapshot } from "../model";
 
 function isValidPrice(value: number): boolean {
   return Number.isFinite(value) && value > 0;

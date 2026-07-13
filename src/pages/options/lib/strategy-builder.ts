@@ -1,103 +1,28 @@
 import type { TBankOption } from "../../../shared/api/tbank";
+import { DEFAULT_PAYOFF_POINTS } from "../model";
+import type {
+  StrategyBuildResult,
+  StrategyHelp,
+  StrategyLeg,
+  StrategyLegAction,
+  StrategyOutlook,
+  StrategyPayoffPoint,
+  StrategyTemplate,
+  StrategyTemplateId,
+} from "../model";
 import { getOptionExpirationDateKey, getOptionSide } from "./options-helpers";
 
-export type StrategyOutlook = "all" | "bullish" | "bearish" | "neutral";
-export type StrategyTemplateId =
-  | "custom"
-  | "long-call"
-  | "short-call"
-  | "long-put"
-  | "short-put"
-  | "synthetic-long"
-  | "synthetic-short"
-  | "bull-call-spread"
-  | "bear-put-spread"
-  | "bear-call-spread"
-  | "bull-put-spread"
-  | "long-straddle"
-  | "short-straddle"
-  | "long-strangle"
-  | "short-strangle"
-  | "long-call-butterfly"
-  | "long-put-butterfly"
-  | "iron-condor"
-  | "iron-butterfly"
-  | "call-ratio-backspread"
-  | "put-ratio-backspread";
-
-export type StrategyTemplate = {
-  id: StrategyTemplateId;
-  name: {
-    ru: string;
-    en: string;
-  };
-  description: {
-    ru: string;
-    en: string;
-  };
-  outlook: Exclude<StrategyOutlook, "all">;
-  legs: number;
-};
-
-export type StrategyHelp = {
-  thesis: {
-    ru: string;
-    en: string;
-  };
-  bestFor: {
-    ru: string;
-    en: string;
-  };
-  maxProfit: {
-    ru: string;
-    en: string;
-  };
-  maxLoss: {
-    ru: string;
-    en: string;
-  };
-  breakEven: {
-    ru: string;
-    en: string;
-  };
-  note: {
-    ru: string;
-    en: string;
-  };
-};
-
-export type StrategyLegAction = "buy" | "sell";
-
-export type StrategyLeg = {
-  option: TBankOption;
-  action: StrategyLegAction;
-  quantity: number;
-  premium: number | null;
-};
-
-export type StrategyDraftLeg = {
-  optionUid: string;
-  action: StrategyLegAction;
-  quantity: number;
-};
-
-export type StrategyPayoffPoint = {
-  price: number;
-  pnl: number;
-};
-
-export type StrategyBuildResult = {
-  template: StrategyTemplate;
-  expirationKey: string;
-  referenceStrike: number;
-  legs: StrategyLeg[];
-  payoff: StrategyPayoffPoint[];
-  breakEvenPrices: number[];
-  maxProfit: number | null;
-  maxLoss: number | null;
-  netPremium: number | null;
-  warnings: string[];
-};
+export type {
+  StrategyBuildResult,
+  StrategyDraftLeg,
+  StrategyHelp,
+  StrategyLeg,
+  StrategyLegAction,
+  StrategyOutlook,
+  StrategyPayoffPoint,
+  StrategyTemplate,
+  StrategyTemplateId,
+} from "../model";
 
 type OptionSide = "call" | "put";
 
@@ -123,8 +48,6 @@ type CandidateLeg = {
 type BuildContext = {
   chain: StrategyChain;
 };
-
-const DEFAULT_PAYOFF_POINTS = 61;
 
 export const CUSTOM_STRATEGY_TEMPLATE: StrategyTemplate = {
   id: "custom",

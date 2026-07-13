@@ -42,123 +42,30 @@ import { InfoTooltip } from "../../../shared/ui/analysis/InfoTooltip";
 import { PortfolioHoldingsPanel } from "../../../shared/ui/analysis/PortfolioHoldingsPanel";
 import { AppErrorDialog } from "../../../shared/ui/app-error-dialog";
 import { TableSkeleton } from "../../../shared/ui/loading-state";
-
-const BONDS_STATE_KEY = "bonds-analysis-state-v3";
-const PAGE_SIZE = 25;
-const palette = ["#b45309", "#f59e0b", "#f97316", "#fb7185", "#0ea5e9", "#14b8a6", "#84cc16", "#8b5cf6"];
-const riskPalette = ["#16a34a", "#0ea5e9", "#f59e0b", "#dc2626"];
-const DEFAULT_ANALYSIS_PREFERENCES: BondAnalysisPreferences = {
-  targetYield: "12",
-  targetDuration: "3.5",
-  paymentFrequency: "quarterly",
-  targetRiskLevel: "3",
-  selectionMethod: "matching",
-  portfolioBondsCount: "20",
-};
-
-const RISK_LEVEL_OPTIONS = ["mixed", "0", "1", "2", "3"] as const;
-type BondViewMode = "charts" | "list";
-
-type BondBubblePoint = BondAnalysisBond & {
-  yieldPct: number;
-  maturityYears: number;
-  bubbleSize: number;
-};
-
-type BondChartGroup = {
-  key: string;
-  label: string;
-  description: string;
-  bonds: BondAnalysisBond[];
-};
-
-function normalizeRiskPreference(value: unknown): BondAnalysisPreferences["targetRiskLevel"] {
-  return value === "mixed" || value === "0" || value === "1" || value === "2" || value === "3"
-    ? value
-    : DEFAULT_ANALYSIS_PREFERENCES.targetRiskLevel;
-}
-
-function normalizeSelectionMethod(value: unknown): BondAnalysisPreferences["selectionMethod"] {
-  return value === "immunization" ? "immunization" : "matching";
-}
-
-function getVisiblePages(currentPage: number, totalPages: number): Array<number | null> {
-  if (totalPages <= 7) {
-    return Array.from({ length: totalPages }, (_, index) => index + 1);
-  }
-  if (currentPage <= 4) {
-    return [1, 2, 3, 4, 5, null, totalPages];
-  }
-  if (currentPage >= totalPages - 3) {
-    return [1, null, totalPages - 4, totalPages - 3, totalPages - 2, totalPages - 1, totalPages];
-  }
-  return [1, null, currentPage - 1, currentPage, currentPage + 1, null, totalPages];
-}
-
-function isPositiveNumberString(value: string): boolean {
-  const parsed = Number(value.replace(",", "."));
-  return Number.isFinite(parsed) && parsed > 0;
-}
-
-function isValidBondCountString(value: string): boolean {
-  const parsed = Math.trunc(Number(value.replace(",", ".")));
-  return Number.isFinite(parsed) && parsed >= 20;
-}
-
-function isFixedCouponSourceRow(row: BondSourceRow): boolean {
-  return !row.floating_coupon_flag && Number.isFinite(row.coupon_rate) && row.coupon_rate > 0;
-}
-
-function isPositiveYieldBond(row: BondAnalysisBond): boolean {
-  return Number.isFinite(row.currentYield) && row.currentYield > 0;
-}
-
-function riskLabel(level: number, t: ReturnType<typeof useAppSettings>["t"]): string {
-  if (level <= 0) return t("Низкий риск", "Low risk");
-  if (level === 1) return t("Умеренный риск", "Moderate risk");
-  if (level === 2) return t("Повышенный риск", "Elevated risk");
-  return t("Высокий риск", "High risk");
-}
-
-function isOfzBondIdentity(ticker: string, name: string): boolean {
-  const tickerUpper = ticker.trim().toUpperCase();
-  const nameLower = name.trim().toLowerCase();
-  return (
-    tickerUpper.startsWith("SU") ||
-    tickerUpper.startsWith("OFZ") ||
-    nameLower.includes("офз") ||
-    nameLower.includes("ofz") ||
-    nameLower.includes("федерального займа")
-  );
-}
-
-function isGovernmentBond(bond: BondAnalysisBond): boolean {
-  return bond.currency === "RUB" && isOfzBondIdentity(bond.ticker, bond.name);
-}
-
-function isMunicipalBond(bond: BondAnalysisBond): boolean {
-  const nameLower = bond.name.trim().toLowerCase();
-  return bond.currency === "RUB" && !isGovernmentBond(bond) && (bond.sector === "municipal" || nameLower.includes("муниц"));
-}
-
-function isCurrencyBond(bond: BondAnalysisBond): boolean {
-  return bond.currency !== "RUB";
-}
-
-function isCorporateBond(bond: BondAnalysisBond): boolean {
-  return !isGovernmentBond(bond) && !isMunicipalBond(bond) && !isCurrencyBond(bond);
-}
-
-function buildBubblePoints(bonds: BondAnalysisBond[]): BondBubblePoint[] {
-  return bonds
-    .filter((bond) => Number.isFinite(bond.currentYield) && Number.isFinite(bond.yearsToMaturity))
-    .map((bond) => ({
-      ...bond,
-      yieldPct: bond.currentYield * 100,
-      maturityYears: bond.yearsToMaturity,
-      bubbleSize: Math.max(40, 70 + bond.totalScore * 260),
-    }));
-}
+import {
+  BONDS_CHART_PALETTE,
+  BONDS_PAGE_SIZE,
+  BONDS_RISK_PALETTE,
+  BONDS_STATE_KEY,
+  BOND_RISK_LEVEL_OPTIONS,
+  DEFAULT_BOND_ANALYSIS_PREFERENCES,
+} from "../model";
+import type { BondBubblePoint, BondChartGroup, BondViewMode } from "../model";
+import {
+  buildBubblePoints,
+  getVisiblePages,
+  isCorporateBond,
+  isCurrencyBond,
+  isFixedCouponSourceRow,
+  isGovernmentBond,
+  isMunicipalBond,
+  isPositiveNumberString,
+  isPositiveYieldBond,
+  isValidBondCountString,
+  normalizeRiskPreference,
+  normalizeSelectionMethod,
+  riskLabel,
+} from "../lib";
 
 function BondBubbleTooltip({ payload }: { payload?: Array<{ payload: BondBubblePoint }> }) {
   if (!payload?.length) {
@@ -212,7 +119,10 @@ function BondBubbleChart({ bonds, emptyLabel }: { bonds: BondAnalysisBond[]; emp
         <Tooltip cursor={{ strokeDasharray: "3 3" }} content={<BondBubbleTooltip />} />
         <Scatter name="Bonds" data={points} fill="#f59e0b" fillOpacity={0.78}>
           {points.map((point) => (
-            <Cell key={`${point.ticker}-${point.name}`} fill={riskPalette[Math.round(point.riskLevel) % riskPalette.length]} />
+            <Cell
+              key={`${point.ticker}-${point.name}`}
+              fill={BONDS_RISK_PALETTE[Math.round(point.riskLevel) % BONDS_RISK_PALETTE.length]}
+            />
           ))}
         </Scatter>
       </ScatterChart>
@@ -224,7 +134,7 @@ export function BondsAnalysisPage() {
   const { t } = useAppSettings();
 
   const [sourceRows, setSourceRows] = useState<BondSourceRow[]>([]);
-  const [analysisPreferences, setAnalysisPreferences] = useState<BondAnalysisPreferences>(DEFAULT_ANALYSIS_PREFERENCES);
+  const [analysisPreferences, setAnalysisPreferences] = useState<BondAnalysisPreferences>(DEFAULT_BOND_ANALYSIS_PREFERENCES);
   const [positions, setPositions] = useState<BondPortfolioPosition[]>([]);
   const [allBonds, setAllBonds] = useState<BondAnalysisBond[]>([]);
   const [summary, setSummary] = useState<BondAnalysisSummary | null>(null);
@@ -250,12 +160,14 @@ export function BondsAnalysisPage() {
       if (Array.isArray(parsed.sourceRows)) setSourceRows(parsed.sourceRows.filter(isFixedCouponSourceRow));
       if (parsed.analysisPreferences && typeof parsed.analysisPreferences === "object") {
         setAnalysisPreferences({
-          targetYield: String(parsed.analysisPreferences.targetYield ?? DEFAULT_ANALYSIS_PREFERENCES.targetYield),
-          targetDuration: String(parsed.analysisPreferences.targetDuration ?? DEFAULT_ANALYSIS_PREFERENCES.targetDuration),
+          targetYield: String(parsed.analysisPreferences.targetYield ?? DEFAULT_BOND_ANALYSIS_PREFERENCES.targetYield),
+          targetDuration: String(parsed.analysisPreferences.targetDuration ?? DEFAULT_BOND_ANALYSIS_PREFERENCES.targetDuration),
           paymentFrequency: parsed.analysisPreferences.paymentFrequency === "monthly" ? "monthly" : "quarterly",
           targetRiskLevel: normalizeRiskPreference(parsed.analysisPreferences.targetRiskLevel),
           selectionMethod: normalizeSelectionMethod(parsed.analysisPreferences.selectionMethod),
-          portfolioBondsCount: String(parsed.analysisPreferences.portfolioBondsCount ?? DEFAULT_ANALYSIS_PREFERENCES.portfolioBondsCount),
+          portfolioBondsCount: String(
+            parsed.analysisPreferences.portfolioBondsCount ?? DEFAULT_BOND_ANALYSIS_PREFERENCES.portfolioBondsCount,
+          ),
         });
       }
       if (Array.isArray(parsed.positions)) setPositions(parsed.positions.filter(isPositiveYieldBond));
@@ -285,9 +197,9 @@ export function BondsAnalysisPage() {
     isPositiveNumberString(analysisPreferences.targetDuration) &&
     isValidBondCountString(analysisPreferences.portfolioBondsCount);
 
-  const totalPages = Math.max(1, Math.ceil(allBonds.length / PAGE_SIZE));
-  const pageStartIndex = (currentPage - 1) * PAGE_SIZE;
-  const pageEndIndex = Math.min(pageStartIndex + PAGE_SIZE, allBonds.length);
+  const totalPages = Math.max(1, Math.ceil(allBonds.length / BONDS_PAGE_SIZE));
+  const pageStartIndex = (currentPage - 1) * BONDS_PAGE_SIZE;
+  const pageEndIndex = Math.min(pageStartIndex + BONDS_PAGE_SIZE, allBonds.length);
   const paginatedBonds = useMemo(() => allBonds.slice(pageStartIndex, pageEndIndex), [allBonds, pageEndIndex, pageStartIndex]);
   const visiblePages = useMemo(() => getVisiblePages(currentPage, totalPages), [currentPage, totalPages]);
   const bondTypeGroups = useMemo<BondChartGroup[]>(
@@ -664,7 +576,7 @@ export function BondsAnalysisPage() {
                     }))
                   }
                 >
-                  {RISK_LEVEL_OPTIONS.map((level) => (
+                  {BOND_RISK_LEVEL_OPTIONS.map((level) => (
                     <option key={level} value={level}>
                       {level === "mixed" ? t("Смешанный риск", "Mixed risk") : t(`Риск ${level}`, `Risk ${level}`)}
                     </option>
@@ -834,7 +746,7 @@ export function BondsAnalysisPage() {
             <div className="mb-3 flex flex-wrap gap-2 text-xs text-slate-500 dark:text-slate-400">
               {[0, 1, 2, 3].map((level) => (
                 <span key={level} className="inline-flex items-center gap-2 rounded-full border border-slate-200 px-3 py-1 dark:border-slate-700">
-                  <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: riskPalette[level] }} />
+                  <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: BONDS_RISK_PALETTE[level] }} />
                   {riskLabel(level, t)}
                 </span>
               ))}
@@ -1017,7 +929,7 @@ export function BondsAnalysisPage() {
           >
             <PortfolioHoldingsPanel
               rows={positions}
-              palette={palette}
+              palette={BONDS_CHART_PALETTE}
               chartRef={portfolioChartRef}
               companyLabel={t("Облигация", "Bond")}
               weightLabel={t("Вес, %", "Weight, %")}

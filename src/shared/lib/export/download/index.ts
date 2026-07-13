@@ -6,5 +6,5 @@ export {
   downloadSvgAsPng,
   getPortfolioHoldingColumns,
   svgToPngDataUrl,
-} from "./download/index";
-export type { AnalysisExportOptions, ExportColumn, ExportMetric, PortfolioHoldingLike } from "./download/index";
+} from "./lib";
+export type { AnalysisExportOptions, ExportColumn, ExportMetric, PortfolioHoldingLike } from "./model";

@@ -1,24 +1,9 @@
 import type { TBankOption } from "../../../shared/api/tbank";
+import { DAYS_IN_YEAR, MAX_OPTION_VOLATILITY, MIN_OPTION_VOLATILITY } from "../model";
+import type { OptionGreeks, StrategyGreeks, StrategyLeg } from "../model";
 import { getOptionSide } from "./options-helpers";
-import type { StrategyLeg } from "./strategy-builder";
 
-export type OptionGreeks = {
-  impliedVolatility: number;
-  delta: number;
-  gamma: number;
-  theta: number;
-  vega: number;
-  rho: number;
-};
-
-export type StrategyGreeks = OptionGreeks & {
-  pricedLegs: number;
-  totalLegs: number;
-};
-
-const MIN_VOLATILITY = 0.0001;
-const MAX_VOLATILITY = 5;
-const DAYS_IN_YEAR = 365;
+export type { OptionGreeks, StrategyGreeks } from "../model";
 
 function erf(value: number): number {
   const sign = value < 0 ? -1 : 1;
@@ -109,8 +94,8 @@ function solveImpliedVolatility(params: {
     return null;
   }
 
-  let low = MIN_VOLATILITY;
-  let high = MAX_VOLATILITY;
+  let low = MIN_OPTION_VOLATILITY;
+  let high = MAX_OPTION_VOLATILITY;
   let lowPrice = getBlackScholesPrice({
     side,
     underlyingPrice,
