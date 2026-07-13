@@ -17,6 +17,31 @@ export type UnderlyingSummary = {
   searchText: string;
 };
 
+export type UnderlyingRouteState = {
+  summaryLabel?: string;
+  category?: Exclude<UnderlyingCategory, "all">;
+};
+
+export type UnderlyingLocationState = UnderlyingRouteState;
+
+export type DetailsTab = "list" | "forecast" | "builder" | "reference";
+
+export type PaginationControlsProps = {
+  page: number;
+  pageSize: number;
+  totalItems: number;
+  pageSizeOptions?: number[];
+  locale: "ru" | "en";
+  onPageChange: (page: number) => void;
+  onPageSizeChange: (pageSize: number) => void;
+};
+
+export type OptionContractsTableProps = {
+  items: TBankOption[];
+  locale: "ru" | "en";
+  framed?: boolean;
+};
+
 export type StrategyOutlook = "all" | "bullish" | "bearish" | "neutral";
 export type StrategyTemplateId =
   | "custom"
@@ -101,6 +126,22 @@ export type StrategyPayoffPoint = {
   price: number;
   pnl: number;
 };
+
+export type BuilderMode = "template" | "custom";
+
+export type OptionStrategyBuilderProps = {
+  options: TBankOption[];
+  activeExpirationKey: string;
+  expirationChoices: string[];
+  closePricesById?: Record<string, number>;
+};
+
+export type PayoffChartPoint = {
+  price: number;
+  pnl: number;
+};
+
+export type ManualPremiums = Record<string, string>;
 
 export type StrategyBuildResult = {
   template: StrategyTemplate;

@@ -1,15 +1,9 @@
-import type { TBankOption } from "../../../shared/api/tbank";
+import type { OptionContractsTableProps } from "../model";
 import {
   formatDate,
   formatNumber,
   getOptionTypeLabel,
 } from "../lib/options-helpers";
-
-type OptionContractsTableProps = {
-  items: TBankOption[];
-  locale: "ru" | "en";
-  framed?: boolean;
-};
 
 export function OptionContractsTable({ items, locale, framed = true }: OptionContractsTableProps) {
   const table = (

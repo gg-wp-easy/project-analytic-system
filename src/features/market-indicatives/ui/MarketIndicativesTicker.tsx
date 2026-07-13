@@ -9,8 +9,8 @@ import {
   loadMarketIndicativesCache,
   saveMarketIndicativesCache,
   shortMarketIndicativeName,
-} from "../lib/market-indicatives.helpers";
-import type { MarketIndicator } from "../model/market-indicatives.types";
+} from "../lib";
+import type { MarketIndicator } from "../model";
 
 export function MarketIndicativesTicker() {
   const { t, locale } = useAppSettings();

@@ -4,13 +4,13 @@ import { numberOr } from "../../../shared/lib/number/numberOr";
 import {
   PORTFOLIO_SIMULATION_CACHE_KEY,
   PORTFOLIO_SIMULATION_CACHE_LIMIT,
-} from "../model/portfolio-simulation.consts";
+} from "../model";
 import type {
   AssetMonthlyRow,
   PortfolioMonthlyRow,
   SimulationCacheEntry,
   SimulationResult,
-} from "../model/portfolio-simulation.types";
+} from "../model";
 
 export function defaultFormationDate(): string {
   const date = new Date();

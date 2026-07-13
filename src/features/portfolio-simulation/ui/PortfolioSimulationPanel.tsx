@@ -26,13 +26,13 @@ import {
   normalizeAnnualDividendYield,
   readCachedSimulation,
   saveCachedSimulation,
-} from "../lib/portfolio-simulation.helpers";
-import { PORTFOLIO_SIMULATION_CHART_COLORS } from "../model/portfolio-simulation.consts";
+} from "../lib";
+import { PORTFOLIO_SIMULATION_CHART_COLORS } from "../model";
 import type {
   NormalizedHolding,
   PortfolioSimulationPanelProps,
   SimulationResult,
-} from "../model/portfolio-simulation.types";
+} from "../model";
 
 export function PortfolioSimulationPanel({
   holdings,

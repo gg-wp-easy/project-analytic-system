@@ -48,7 +48,6 @@ import {
   downloadSvgAsPng,
   getPortfolioHoldingColumns,
 } from "../../../shared/lib/export/download";
-import { formatPercentOrNumber } from "../../../shared/lib/format/finance";
 import { numberOr } from "../../../shared/lib/number/numberOr";
 import {
   AnalysisPageFrame,
@@ -63,274 +62,30 @@ import { AnalysisRunningIndicator } from "../../../shared/ui/analysis/AnalysisRu
 import { InfoTooltip } from "../../../shared/ui/analysis/InfoTooltip";
 import { MetricTooltip } from "../../../shared/ui/analysis/MetricTooltip";
 import { PortfolioHoldingsPanel } from "../../../shared/ui/analysis/PortfolioHoldingsPanel";
-
-const palette = ["#10b981", "#059669", "#34d399", "#0ea5a4", "#22c55e", "#84cc16", "#14b8a6", "#2dd4bf"];
-const TREE_STATE_KEY = "decision-tree-analysis-state-v1";
-
-type SelectionMode = "all" | "manual";
-type TreeAlgorithm = "decision_tree" | "random_forest" | "gradient_boosting";
-type TreeCriterion = "gini" | "entropy" | "log_loss";
-type TreeTuningMetric = "f1" | "accuracy" | "roc_auc" | "balanced_accuracy";
-type TuningBudget = "fast" | "balanced" | "quality";
-
-type DecisionTreeSettings = {
-  algorithm: TreeAlgorithm;
-  criterion: TreeCriterion;
-  maxDepth: number;
-  minSamplesSplit: number;
-  minSamplesLeaf: number;
-  testSize: number;
-  randomState: number;
-  classBalance: boolean;
-  autoTune: boolean;
-  tuningMetric: TreeTuningMetric;
-  tuningBudget: TuningBudget;
-  features: string[];
-};
-
-const treeFeatureOptions = [
-  { key: "g", labelRu: "g / темпы роста", labelEn: "g / growth rate" },
-  { key: "pe_ratio", labelRu: "P/E", labelEn: "P/E" },
-  { key: "pb_ratio", labelRu: "P/B", labelEn: "P/B" },
-  { key: "ps_ratio", labelRu: "P/S", labelEn: "P/S" },
-  { key: "ev_to_ebitda", labelRu: "EV/EBITDA", labelEn: "EV/EBITDA" },
-  { key: "roe", labelRu: "ROE", labelEn: "ROE" },
-  { key: "roa", labelRu: "ROA", labelEn: "ROA" },
-  { key: "net_margin", labelRu: "Маржа", labelEn: "Margin" },
-  { key: "dividend_yield", labelRu: "Дивиденды", labelEn: "Dividend yield" },
-  { key: "market_cap_bn", labelRu: "Капитализация", labelEn: "Market cap" },
-  { key: "beta", labelRu: "Beta", labelEn: "Beta" },
-] as const;
-
-const defaultTreeSettings: DecisionTreeSettings = {
-  algorithm: "decision_tree",
-  criterion: "gini",
-  maxDepth: 5,
-  minSamplesSplit: 4,
-  minSamplesLeaf: 2,
-  testSize: 25,
-  randomState: 42,
-  classBalance: true,
-  autoTune: true,
-  tuningMetric: "f1",
-  tuningBudget: "balanced",
-  features: ["g", "pe_ratio", "pb_ratio", "ev_to_ebitda", "roe", "net_margin", "dividend_yield"],
-};
-
-function formatMetricPercentOrNumber(value: number): string {
-  return formatPercentOrNumber(value);
-}
-
-function extractMetrics(parsed: Record<string, unknown>): MetricItem[] {
-  const source =
-    (parsed.metrics as Record<string, unknown> | undefined) ??
-    (parsed.model_metrics as Record<string, unknown> | undefined) ??
-    (parsed.stats as Record<string, unknown> | undefined) ??
-    (parsed.summary as Record<string, unknown> | undefined) ??
-    {};
-
-  const mapping: Array<{ key: string; label: string }> = [
-    { key: "accuracy", label: "Accuracy" },
-    { key: "precision", label: "Precision" },
-    { key: "recall", label: "Recall" },
-    { key: "f1", label: "F1" },
-    { key: "f1_score", label: "F1 Score" },
-    { key: "roc_auc", label: "ROC AUC" },
-    { key: "balanced_accuracy", label: "Balanced Accuracy" },
-    { key: "train_accuracy", label: "Train Accuracy" },
-    { key: "test_accuracy", label: "Test Accuracy" },
-  ];
-
-  const result: MetricItem[] = [];
-  for (const item of mapping) {
-    if (item.key in source) {
-      result.push({
-        label: item.label,
-        value: formatMetricPercentOrNumber(numberOr(source[item.key], NaN)),
-      });
-    }
-  }
-
-  return result;
-}
-
-function extractFeatureImportance(parsed: Record<string, unknown>): FeatureImportanceItem[] {
-  const raw =
-    parsed.feature_importance ??
-    parsed.featureImportance ??
-    parsed.importances ??
-    parsed.feature_weights ??
-    null;
-
-  if (Array.isArray(raw)) {
-    const rows = raw
-      .map((item, idx) => {
-        const row = item as Record<string, unknown>;
-        return {
-          feature: String(row.feature ?? row.name ?? row.column ?? `Feature ${idx + 1}`),
-          importance: numberOr(row.importance, numberOr(row.score, numberOr(row.weight, 0))),
-        };
-      })
-      .filter((r) => Number.isFinite(r.importance));
-
-    const max = rows.length ? Math.max(...rows.map((r) => r.importance)) : 0;
-    const normalized = max <= 1 ? rows.map((r) => ({ ...r, importance: r.importance * 100 })) : rows;
-    return normalized.sort((a, b) => b.importance - a.importance);
-  }
-
-  if (raw && typeof raw === "object") {
-    const entries = Object.entries(raw as Record<string, unknown>)
-      .map(([feature, value]) => ({ feature, importance: numberOr(value, 0) }))
-      .filter((r) => Number.isFinite(r.importance));
-
-    const max = entries.length ? Math.max(...entries.map((r) => r.importance)) : 0;
-    const normalized = max <= 1 ? entries.map((r) => ({ ...r, importance: r.importance * 100 })) : entries;
-    return normalized.sort((a, b) => b.importance - a.importance);
-  }
-
-  return [];
-}
-
-function extractConfusionMatrix(parsed: Record<string, unknown>): ConfusionMatrixData | null {
-  const raw = parsed.confusion_matrix ?? parsed.confusionMatrix ?? parsed.matrix;
-
-  if (Array.isArray(raw) && raw.every((row) => Array.isArray(row))) {
-    const matrix = raw.map((row) => (row as unknown[]).map((v) => numberOr(v, 0)));
-    const labelsRaw = parsed.class_labels ?? parsed.classes;
-    const labels = Array.isArray(labelsRaw)
-      ? labelsRaw.map((v) => String(v))
-      : Array.from({ length: matrix.length }, (_, i) => `Class ${i + 1}`);
-    return { labels, matrix };
-  }
-
-  if (raw && typeof raw === "object") {
-    const obj = raw as Record<string, unknown>;
-    if ("truePositive" in obj || "falsePositive" in obj || "trueNegative" in obj || "falseNegative" in obj) {
-      const tp = numberOr(obj.truePositive, 0);
-      const fp = numberOr(obj.falsePositive, 0);
-      const tn = numberOr(obj.trueNegative, 0);
-      const fn = numberOr(obj.falseNegative, 0);
-      return {
-        labels: ["Покупка", "Продажа"],
-        matrix: [
-          [tp, fn],
-          [fp, tn],
-        ],
-      };
-    }
-  }
-
-  return null;
-}
-
-function extractPortfolioMetrics(parsed: Record<string, unknown>): MetricItem[] {
-  const portfolio = (parsed.portfolio as Record<string, unknown> | undefined) ?? {};
-  const portfolioMetrics = (portfolio.metrics as Record<string, unknown> | undefined) ?? {};
-  const stats = (parsed.stats as Record<string, unknown> | undefined) ?? {};
-  const summary = (parsed.summary as Record<string, unknown> | undefined) ?? {};
-  const summaryKeyMetrics = (summary.key_metrics as Record<string, unknown> | undefined) ?? {};
-
-  const source = Object.keys(portfolioMetrics).length
-    ? portfolioMetrics
-    : Object.keys(summaryKeyMetrics).length
-      ? summaryKeyMetrics
-      : stats;
-
-  const mapping: Array<{ key: string; label: string }> = [
-    { key: "expected_return", label: "Expected Return" },
-    { key: "risk", label: "Risk" },
-    { key: "sharpe_ratio", label: "Sharpe Ratio" },
-    { key: "diversification_score", label: "Diversification" },
-  ];
-
-  return mapping
-    .filter((item) => item.key in source)
-    .map((item) => {
-      const value = numberOr(source[item.key], NaN);
-      if (!Number.isFinite(value)) {
-        return { label: item.label, value: "-" };
-      }
-      return { label: item.label, value: formatMetricPercentOrNumber(value) };
-    });
-}
-
-function extractPortfolioPositions(parsed: Record<string, unknown>): PortfolioPosition[] {
-  const portfolio = (parsed.portfolio as Record<string, unknown> | undefined) ?? {};
-  const portfolioMetrics = (portfolio.metrics as Record<string, unknown> | undefined) ?? {};
-  const stats = (parsed.stats as Record<string, unknown> | undefined) ?? {};
-  const summary = (parsed.summary as Record<string, unknown> | undefined) ?? {};
-  const summaryKeyMetrics = (summary.key_metrics as Record<string, unknown> | undefined) ?? {};
-  const metricsSource = Object.keys(portfolioMetrics).length
-    ? portfolioMetrics
-    : Object.keys(summaryKeyMetrics).length
-      ? summaryKeyMetrics
-      : stats;
-  const positions = Array.isArray(portfolio.positions) ? portfolio.positions : [];
-
-  const rows = positions.map((item, idx) => {
-    const row = item as Record<string, unknown>;
-    return {
-      figi: String(row.figi ?? row.FIGI ?? row.instrumentFigi ?? ""),
-      ticker: String(row.ticker ?? row.Ticker ?? `Asset ${idx + 1}`),
-      name: String(row.name ?? row.Company ?? "-"),
-      sector: String(row["Сектор"] ?? row.sector ?? "-"),
-      weight: numberOr(row.weights, numberOr(row.weight, 0)),
-      expectedReturn: numberOr(row["Ожидаемая_доходность"], numberOr(row.expected_return, NaN)),
-      risk: numberOr(row["Риск"], numberOr(row.risk, NaN)),
-      sortino: numberOr(
-        row.sortino,
-        numberOr(row.sortino_ratio, numberOr(metricsSource.sortino, numberOr(metricsSource.sortino_ratio, NaN))),
-      ),
-      value_at_risk: numberOr(
-        row.value_at_risk,
-        numberOr(row.var, numberOr(metricsSource.value_at_risk, numberOr(metricsSource.var, NaN))),
-      ),
-      predictedText: String(row["Predicted_Оценка_текст"] ?? row.predicted_text ?? "-"),
-    } satisfies PortfolioPosition;
-  });
-
-  const maxWeight = rows.length ? Math.max(...rows.map((r) => r.weight)) : 0;
-  const normalized = maxWeight <= 1 ? rows.map((r) => ({ ...r, weight: r.weight * 100 })) : rows;
-  return normalized.sort((a, b) => b.weight - a.weight);
-}
-
-function extractSectorAllocation(parsed: Record<string, unknown>): SectorAllocationItem[] {
-  const portfolio = (parsed.portfolio as Record<string, unknown> | undefined) ?? {};
-  const allocation = (portfolio.sector_allocation as Record<string, unknown> | undefined) ?? {};
-  const rows = Object.entries(allocation).map(([sector, weight]) => ({ sector, weight: numberOr(weight, 0) }));
-  const maxWeight = rows.length ? Math.max(...rows.map((r) => r.weight)) : 0;
-  const normalized = maxWeight <= 1 ? rows.map((r) => ({ ...r, weight: r.weight * 100 })) : rows;
-  return normalized.sort((a, b) => b.weight - a.weight);
-}
-
-function extractNumericSummary(parsed: Record<string, unknown>): NumericSummaryItem[] {
-  const stats = (parsed.stats as Record<string, unknown> | undefined) ?? {};
-  const numericSummary = (stats.numeric_summary as Record<string, unknown> | undefined) ?? {};
-
-  return Object.entries(numericSummary)
-    .map(([metric, raw]) => {
-      const row = raw as Record<string, unknown>;
-      return {
-        metric,
-        mean: numberOr(row.mean, NaN),
-        median: numberOr(row.median, NaN),
-        min: numberOr(row.min, NaN),
-        max: numberOr(row.max, NaN),
-      } satisfies NumericSummaryItem;
-    })
-    .filter((item) => Number.isFinite(item.mean));
-}
-
-function extractPortfolioAssetsCount(parsed: Record<string, unknown>): number {
-  const portfolio = (parsed.portfolio as Record<string, unknown> | undefined) ?? {};
-  const stats = (parsed.stats as Record<string, unknown> | undefined) ?? {};
-  const summary = (parsed.summary as Record<string, unknown> | undefined) ?? {};
-
-  return numberOr(
-    portfolio.assets_count,
-    numberOr(stats.portfolio_assets_count, numberOr(summary.portfolio_assets_count, 0)),
-  );
-}
+import {
+  DEFAULT_TREE_SETTINGS,
+  TREE_FEATURE_OPTIONS,
+  TREE_PALETTE,
+  TREE_STATE_KEY,
+} from "../model";
+import type {
+  DecisionTreeSettings,
+  SelectionMode,
+  TreeAlgorithm,
+  TreeCriterion,
+  TreeTuningMetric,
+  TuningBudget,
+} from "../model";
+import {
+  extractConfusionMatrix,
+  extractFeatureImportance,
+  extractMetrics,
+  extractNumericSummary,
+  extractPortfolioAssetsCount,
+  extractPortfolioMetrics,
+  extractPortfolioPositions,
+  extractSectorAllocation,
+} from "../lib";
 
 export function DecisionTreeAnalysis() {
   const { cache, hasData } = useFundamentals();
@@ -350,7 +105,7 @@ export function DecisionTreeAnalysis() {
   const [selectionMode, setSelectionMode] = useState<SelectionMode>("all");
   const [selectedFigis, setSelectedFigis] = useState<string[]>([]);
   const [stockSearch, setStockSearch] = useState("");
-  const [treeSettings, setTreeSettings] = useState<DecisionTreeSettings>(defaultTreeSettings);
+  const [treeSettings, setTreeSettings] = useState<DecisionTreeSettings>(DEFAULT_TREE_SETTINGS);
   const portfolioChartRef = useRef<HTMLDivElement | null>(null);
   const visibleMetrics = useMemo(() => metrics.filter((item) => isVisibleAnalysisMetric(item.label)), [metrics]);
   const showErrorDialog = (message: string) => {
@@ -388,16 +143,16 @@ export function DecisionTreeAnalysis() {
       if (Array.isArray(parsed.selectedFigis)) setSelectedFigis(parsed.selectedFigis.filter((figi) => typeof figi === "string"));
       if (parsed.treeSettings && typeof parsed.treeSettings === "object") {
         setTreeSettings({
-          ...defaultTreeSettings,
+          ...DEFAULT_TREE_SETTINGS,
           ...parsed.treeSettings,
-          maxDepth: numberOr(parsed.treeSettings.maxDepth, defaultTreeSettings.maxDepth),
-          minSamplesSplit: numberOr(parsed.treeSettings.minSamplesSplit, defaultTreeSettings.minSamplesSplit),
-          minSamplesLeaf: numberOr(parsed.treeSettings.minSamplesLeaf, defaultTreeSettings.minSamplesLeaf),
-          testSize: numberOr(parsed.treeSettings.testSize, defaultTreeSettings.testSize),
-          randomState: numberOr(parsed.treeSettings.randomState, defaultTreeSettings.randomState),
+          maxDepth: numberOr(parsed.treeSettings.maxDepth, DEFAULT_TREE_SETTINGS.maxDepth),
+          minSamplesSplit: numberOr(parsed.treeSettings.minSamplesSplit, DEFAULT_TREE_SETTINGS.minSamplesSplit),
+          minSamplesLeaf: numberOr(parsed.treeSettings.minSamplesLeaf, DEFAULT_TREE_SETTINGS.minSamplesLeaf),
+          testSize: numberOr(parsed.treeSettings.testSize, DEFAULT_TREE_SETTINGS.testSize),
+          randomState: numberOr(parsed.treeSettings.randomState, DEFAULT_TREE_SETTINGS.randomState),
           features: Array.isArray(parsed.treeSettings.features)
             ? parsed.treeSettings.features.filter((item) => typeof item === "string")
-            : defaultTreeSettings.features,
+            : DEFAULT_TREE_SETTINGS.features,
         });
       }
     } catch {
@@ -500,7 +255,7 @@ export function DecisionTreeAnalysis() {
 
   const selectedFeatureLabels = useMemo(
     () =>
-      treeFeatureOptions
+      TREE_FEATURE_OPTIONS
         .filter((option) => treeSettings.features.includes(option.key))
         .map((option) => (isEn ? option.labelEn : option.labelRu)),
     [isEn, treeSettings.features],
@@ -579,7 +334,7 @@ export function DecisionTreeAnalysis() {
   };
 
   const resetTreeSettings = () => {
-    setTreeSettings(defaultTreeSettings);
+    setTreeSettings(DEFAULT_TREE_SETTINGS);
   };
 
   const toggleTreeFeature = (key: string) => {
@@ -923,7 +678,7 @@ export function DecisionTreeAnalysis() {
                   type="number"
                   value={treeSettings.randomState}
                   onChange={(event) =>
-                    updateTreeSettings({ randomState: Number(event.target.value) || defaultTreeSettings.randomState })
+                    updateTreeSettings({ randomState: Number(event.target.value) || DEFAULT_TREE_SETTINGS.randomState })
                   }
                 />
               </label>
@@ -999,7 +754,7 @@ export function DecisionTreeAnalysis() {
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-2">
-                {treeFeatureOptions.map((option) => {
+                {TREE_FEATURE_OPTIONS.map((option) => {
                   const checked = treeSettings.features.includes(option.key);
                   const label = isEn ? option.labelEn : option.labelRu;
                   return (
@@ -1260,7 +1015,7 @@ export function DecisionTreeAnalysis() {
             >
               <PortfolioHoldingsPanel
                 rows={portfolioPositions}
-                palette={palette}
+                palette={TREE_PALETTE}
                 chartRef={portfolioChartRef}
                 companyLabel={t("Акция", "Stock")}
                 weightLabel={t("Вес, %", "Weight, %")}
@@ -1317,7 +1072,7 @@ export function DecisionTreeAnalysis() {
                   <Tooltip formatter={(v: number) => `${Number(v).toFixed(2)}%`} />
                   <Bar dataKey="importance" radius={[0, 4, 4, 0]}>
                     {featureImportance.map((row, idx) => (
-                      <Cell key={row.feature} fill={palette[idx % palette.length]} />
+                      <Cell key={row.feature} fill={TREE_PALETTE[idx % TREE_PALETTE.length]} />
                     ))}
                   </Bar>
                 </BarChart>

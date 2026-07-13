@@ -8,13 +8,20 @@ export {
 } from "./options.consts";
 export type {
   AssetMovementForecast,
+  BuilderMode,
   CandleSeries,
+  DetailsTab,
   ForecastDirection,
+  ManualPremiums,
+  OptionContractsTableProps,
   OptionGreeks,
   OptionSideFilter,
   OptionSortDirection,
   OptionSortField,
+  OptionStrategyBuilderProps,
   OptionTradeRecommendation,
+  PaginationControlsProps,
+  PayoffChartPoint,
   StrategyBuildResult,
   StrategyDraftLeg,
   StrategyGreeks,
@@ -27,5 +34,7 @@ export type {
   StrategyTemplateId,
   TechnicalIndicatorSnapshot,
   UnderlyingCategory,
+  UnderlyingLocationState,
+  UnderlyingRouteState,
   UnderlyingSummary,
 } from "./options.types";

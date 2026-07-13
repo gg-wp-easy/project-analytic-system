@@ -1,6 +1,5 @@
 import { numberOr } from "../../../shared/lib/number/numberOr";
-import { DEFAULT_OPTIMIZER_SETTINGS } from "../model/optimizer-settings.consts";
-import type { OptimizationObjective, OptimizerSettings } from "../model/optimizer-settings.types";
+import { DEFAULT_OPTIMIZER_SETTINGS, type OptimizationObjective, type OptimizerSettings } from "../model";
 
 export function normalizeOptimizationObjective(value: unknown): OptimizationObjective {
   return value === "min_risk" ? "min_risk" : "max_sharpe";

@@ -10,14 +10,9 @@ import {
   buildUnderlyingSummaries,
   formatTimestamp,
   getCategoryLabel,
-  type UnderlyingCategory,
 } from "../lib/options-helpers";
+import type { UnderlyingCategory, UnderlyingRouteState } from "../model";
 import { PaginationControls } from "./PaginationControls";
-
-type UnderlyingRouteState = {
-  summaryLabel?: string;
-  category?: Exclude<UnderlyingCategory, "all">;
-};
 
 export function OptionsPage() {
   const { locale, t } = useAppSettings();

@@ -1,10 +1,5 @@
 import { useAppSettings } from "../../../app/context/AppSettingsContext";
-import type { OptimizerSettings } from "../model/optimizer-settings.types";
-
-type OptimizerSettingsFieldsProps = {
-  settings: OptimizerSettings;
-  onChange: (next: OptimizerSettings) => void;
-};
+import type { OptimizerSettingsFieldsProps } from "../model";
 
 export function OptimizerSettingsFields({ settings, onChange }: OptimizerSettingsFieldsProps) {
   const { t } = useAppSettings();

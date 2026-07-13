@@ -18,82 +18,10 @@ import { useAppSettings } from "../../../app/context/AppSettingsContext";
 import {
   createTBankInstrumentsApi,
   normalizeTBankToken,
-  TBANK_TOKEN_STORAGE_KEY,
 } from "../../../shared/api/tbank";
 import { PageHero, SectionCard } from "../../../shared/ui/analysis-shell";
-
-type StatusState = {
-  tone: "success" | "error" | "info";
-  message: string;
-} | null;
-
-type DesktopLogApi = {
-  debug?: (...data: unknown[]) => void;
-  info?: (...data: unknown[]) => void;
-  warn?: (...data: unknown[]) => void;
-  error?: (...data: unknown[]) => void;
-};
-
-type UpdateStatusPayload = {
-  status?: string;
-  version?: string;
-  progress?: number;
-  message?: string;
-};
-
-type LogInfo = {
-  logsDirectory?: string;
-  logFilePath?: string;
-};
-
-type DesktopApi = {
-  isDesktop?: boolean;
-  checkForUpdates?: () => Promise<{ status?: string; message?: string; version?: string }>;
-  installUpdate?: () => Promise<{ status?: string; message?: string }>;
-  getLogInfo?: () => Promise<LogInfo>;
-  openLogsDirectory?: () => Promise<{ status?: string; message?: string; logsDirectory?: string; logFilePath?: string }>;
-  onUpdateStatus?: (listener: (payload: UpdateStatusPayload) => void) => () => void;
-  log?: DesktopLogApi;
-};
-
-function getDesktopApi(): DesktopApi | undefined {
-  if (typeof window === "undefined") {
-    return undefined;
-  }
-
-  return (window as Window & { electron?: DesktopApi }).electron;
-}
-
-function readStoredToken(): string {
-  if (typeof window === "undefined") {
-    return "";
-  }
-
-  return window.localStorage.getItem(TBANK_TOKEN_STORAGE_KEY) ?? "";
-}
-
-function writeStoredToken(token: string): void {
-  if (typeof window === "undefined") {
-    return;
-  }
-
-  const normalized = normalizeTBankToken(token);
-  if (normalized) {
-    window.localStorage.setItem(TBANK_TOKEN_STORAGE_KEY, normalized);
-  } else {
-    window.localStorage.removeItem(TBANK_TOKEN_STORAGE_KEY);
-  }
-}
-
-function getStatusClassName(status: StatusState): string {
-  if (status?.tone === "success") {
-    return "border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-100";
-  }
-  if (status?.tone === "error") {
-    return "border-rose-200 bg-rose-50 text-rose-800 dark:border-rose-500/30 dark:bg-rose-500/10 dark:text-rose-100";
-  }
-  return "border-slate-200 bg-slate-50 text-slate-700 dark:border-slate-800 dark:bg-slate-900/70 dark:text-slate-200";
-}
+import type { DesktopLogApi, LogInfo, StatusState, UpdateStatusPayload } from "../model";
+import { getDesktopApi, getStatusClassName, readStoredToken, writeStoredToken } from "../lib";
 
 export function SettingsPage() {
   const { locale, setLocale, theme, setTheme, t } = useAppSettings();

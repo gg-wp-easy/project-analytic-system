@@ -9,3 +9,8 @@ export type OptimizerSettings = {
   optimizationObjective: OptimizationObjective;
   portfolioAssetsCount: string;
 };
+
+export type OptimizerSettingsFieldsProps = {
+  settings: OptimizerSettings;
+  onChange: (next: OptimizerSettings) => void;
+};

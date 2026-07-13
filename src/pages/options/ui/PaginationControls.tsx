@@ -1,12 +1,4 @@
-type PaginationControlsProps = {
-  page: number;
-  pageSize: number;
-  totalItems: number;
-  pageSizeOptions?: number[];
-  locale: "ru" | "en";
-  onPageChange: (page: number) => void;
-  onPageSizeChange: (pageSize: number) => void;
-};
+import type { PaginationControlsProps } from "../model";
 
 export function PaginationControls({
   page,

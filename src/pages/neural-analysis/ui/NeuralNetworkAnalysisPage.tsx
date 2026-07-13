@@ -59,7 +59,6 @@ import {
   downloadSvgAsPng,
   getPortfolioHoldingColumns,
 } from "../../../shared/lib/export/download";
-import { formatPercentOrNumber } from "../../../shared/lib/format/finance";
 import { numberOr } from "../../../shared/lib/number/numberOr";
 import {
   AnalysisPageFrame,
@@ -74,292 +73,29 @@ import { AnalysisRunningIndicator } from "../../../shared/ui/analysis/AnalysisRu
 import { InfoTooltip } from "../../../shared/ui/analysis/InfoTooltip";
 import { MetricTooltip } from "../../../shared/ui/analysis/MetricTooltip";
 import { PortfolioHoldingsPanel } from "../../../shared/ui/analysis/PortfolioHoldingsPanel";
-
-const palette = ["#f97316", "#ea580c", "#fb923c", "#f59e0b", "#f43f5e", "#ef4444", "#facc15", "#fdba74"];
-const NEURAL_STATE_KEY = "neural-analysis-state-v1";
-
-type SelectionMode = "all" | "manual";
-type NeuralModelType = "mlp" | "deep_mlp" | "auto";
-type NeuralActivation = "relu" | "tanh" | "gelu";
-type NeuralOptimizer = "adam" | "sgd" | "rmsprop";
-type NeuralTuningMetric = "val_loss" | "sharpe_ratio" | "expected_return";
-type TuningBudget = "fast" | "balanced" | "quality";
-
-type NeuralAnalysisSettings = {
-  modelType: NeuralModelType;
-  activation: NeuralActivation;
-  optimizer: NeuralOptimizer;
-  hiddenLayers: string;
-  epochs: number;
-  batchSize: number;
-  learningRate: number;
-  dropout: number;
-  validationSplit: number;
-  randomState: number;
-  earlyStopping: boolean;
-  autoTune: boolean;
-  tuningMetric: NeuralTuningMetric;
-  tuningBudget: TuningBudget;
-  features: string[];
-};
-
-const neuralFeatureOptions = [
-  { key: "g", labelRu: "g / темпы роста", labelEn: "g / growth rate" },
-  { key: "pe_ratio", labelRu: "P/E", labelEn: "P/E" },
-  { key: "pb_ratio", labelRu: "P/B", labelEn: "P/B" },
-  { key: "ps_ratio", labelRu: "P/S", labelEn: "P/S" },
-  { key: "ev_to_ebitda", labelRu: "EV/EBITDA", labelEn: "EV/EBITDA" },
-  { key: "roe", labelRu: "ROE", labelEn: "ROE" },
-  { key: "roa", labelRu: "ROA", labelEn: "ROA" },
-  { key: "net_margin", labelRu: "Маржа", labelEn: "Margin" },
-  { key: "dividend_yield", labelRu: "Дивиденды", labelEn: "Dividend yield" },
-  { key: "market_cap_bn", labelRu: "Капитализация", labelEn: "Market cap" },
-  { key: "beta", labelRu: "Beta", labelEn: "Beta" },
-] as const;
-
-const defaultNeuralSettings: NeuralAnalysisSettings = {
-  modelType: "mlp",
-  activation: "relu",
-  optimizer: "adam",
-  hiddenLayers: "64,32",
-  epochs: 120,
-  batchSize: 32,
-  learningRate: 0.001,
-  dropout: 0.2,
-  validationSplit: 20,
-  randomState: 42,
-  earlyStopping: true,
-  autoTune: true,
-  tuningMetric: "val_loss",
-  tuningBudget: "balanced",
-  features: ["g", "pe_ratio", "pb_ratio", "ev_to_ebitda", "roe", "net_margin", "dividend_yield"],
-};
-
-function formatMetricPercentOrNumber(value: number): string {
-  return formatPercentOrNumber(value);
-}
-
-function formatMetricValue(value: unknown): string {
-  if (typeof value === "number" && Number.isFinite(value)) {
-    if (Math.abs(value) >= 1000) {
-      return value.toFixed(0);
-    }
-    return formatMetricPercentOrNumber(value);
-  }
-  if (typeof value === "string") {
-    return value;
-  }
-  return "-";
-}
-
-function extractFeatureImportance(parsed: Record<string, unknown>): FeatureImportanceItem[] {
-  const raw =
-    parsed.feature_importance ??
-    parsed.featureImportance ??
-    parsed.importances ??
-    parsed.feature_weights ??
-    parsed.feature_scores ??
-    null;
-
-  if (Array.isArray(raw)) {
-    const rows = raw
-      .map((item, idx) => {
-        const row = item as Record<string, unknown>;
-        return {
-          feature: String(row.feature ?? row.name ?? row.column ?? `Feature ${idx + 1}`),
-          importance: numberOr(row.importance, numberOr(row.score, numberOr(row.weight, 0))),
-        };
-      })
-      .filter((r) => Number.isFinite(r.importance));
-
-    const max = rows.length ? Math.max(...rows.map((r) => r.importance)) : 0;
-    const normalized = max <= 1 ? rows.map((r) => ({ ...r, importance: r.importance * 100 })) : rows;
-    return normalized.sort((a, b) => b.importance - a.importance);
-  }
-
-  if (raw && typeof raw === "object") {
-    const entries = Object.entries(raw as Record<string, unknown>)
-      .map(([feature, value]) => ({ feature, importance: numberOr(value, 0) }))
-      .filter((r) => Number.isFinite(r.importance));
-    const max = entries.length ? Math.max(...entries.map((r) => r.importance)) : 0;
-    const normalized = max <= 1 ? entries.map((r) => ({ ...r, importance: r.importance * 100 })) : entries;
-    return normalized.sort((a, b) => b.importance - a.importance);
-  }
-
-  return [];
-}
-
-function extractPortfolioStrategies(parsed: Record<string, unknown>): PortfolioStrategy[] {
-  const portfolios = parsed.portfolios;
-  if (!portfolios || typeof portfolios !== "object" || Array.isArray(portfolios)) {
-    return [];
-  }
-
-  const undervaluedStocks = Array.isArray(parsed.undervalued_stocks) ? parsed.undervalued_stocks : [];
-  const tickerToName = new Map<string, string>();
-  const tickerToExpectedReturn = new Map<string, number>();
-  for (const item of undervaluedStocks) {
-    const row = item as Record<string, unknown>;
-    const ticker = String(row.ticker ?? row.Ticker ?? "");
-    if (!ticker) {
-      continue;
-    }
-    tickerToName.set(ticker, String(row.name ?? row.Company ?? ticker));
-    tickerToExpectedReturn.set(ticker, numberOr(row.expected_return, numberOr(row.g, numberOr(row.roe, NaN))));
-  }
-
-  const labelByKey: Record<string, string> = {
-    max_sharpe: "Max Sharpe",
-    min_volatility: "Min Volatility",
-    selected_portfolio: "Selected",
-  };
-
-  const strategies: PortfolioStrategy[] = [];
-  for (const [key, raw] of Object.entries(portfolios as Record<string, unknown>)) {
-    if (!raw || typeof raw !== "object") {
-      continue;
-    }
-    const entry = raw as Record<string, unknown>;
-    const metrics = (entry.metrics as Record<string, unknown> | undefined) ?? {};
-    const rawPositions = Array.isArray(entry.positions) ? entry.positions : [];
-
-    const rows = rawPositions.map((item, idx) => {
-      const row = item as Record<string, unknown>;
-      const ticker = String(row.ticker ?? row.Ticker ?? `Asset ${idx + 1}`);
-      return {
-        figi: String(row.figi ?? row.FIGI ?? row.instrumentFigi ?? ""),
-        ticker,
-        name: tickerToName.get(ticker) ?? ticker,
-        weight: numberOr(row.weight, numberOr(row.weights, 0)),
-        expectedReturn: numberOr(
-          row.expected_return,
-          numberOr(metrics.expected_return, numberOr(tickerToExpectedReturn.get(ticker), NaN)),
-        ),
-        risk: numberOr(row.risk, numberOr(metrics.volatility, numberOr(metrics.risk, NaN))),
-        sharpe: numberOr(row.sharpe, numberOr(metrics.sharpe_ratio, NaN)),
-        sortino: numberOr(row.sortino, numberOr(metrics.sortino, numberOr(metrics.sortino_ratio, NaN))),
-        value_at_risk: numberOr(
-          row.value_at_risk,
-          numberOr(row.var, numberOr(metrics.value_at_risk, numberOr(metrics.var, NaN))),
-        ),
-      } satisfies PortfolioPosition;
-    });
-
-    const maxWeight = rows.length ? Math.max(...rows.map((r) => r.weight)) : 0;
-    const normalized = maxWeight <= 1 ? rows.map((r) => ({ ...r, weight: r.weight * 100 })) : rows;
-
-    strategies.push({
-      key,
-      name: labelByKey[key] ?? key,
-      expectedReturn: numberOr(metrics.expected_return, NaN),
-      risk: numberOr(metrics.volatility, numberOr(metrics.risk, NaN)),
-      sharpe: numberOr(metrics.sharpe_ratio, NaN),
-      diversification: numberOr(metrics.diversification_score, NaN),
-      assetsCount: numberOr(entry.assets_count, normalized.length),
-      positions: normalized.sort((a, b) => b.weight - a.weight),
-    });
-  }
-
-  return strategies.sort((a, b) => numberOr(b.sharpe, -Infinity) - numberOr(a.sharpe, -Infinity));
-}
-
-function extractPortfolioPositions(parsed: Record<string, unknown>): PortfolioPosition[] {
-  const strategies = extractPortfolioStrategies(parsed);
-  const selected = strategies.find((s) => s.key === "selected_portfolio");
-  if (selected?.positions.length) {
-    return selected.positions;
-  }
-  const maxSharpe = strategies.find((s) => s.key === "max_sharpe");
-  if (maxSharpe?.positions.length) return maxSharpe.positions;
-  return strategies[0]?.positions ?? [];
-}
-
-function extractTrainingHistory(parsed: Record<string, unknown>): TrainingPoint[] {
-  const history = (parsed.training_history as Record<string, unknown> | undefined) ?? {};
-  const train = Array.isArray(history.train_loss) ? history.train_loss : [];
-  const val = Array.isArray(history.val_loss) ? history.val_loss : [];
-  const count = Math.max(train.length, val.length);
-
-  return Array.from({ length: count }, (_, idx) => ({
-    epoch: idx + 1,
-    trainLoss: numberOr(train[idx], NaN),
-    valLoss: numberOr(val[idx], NaN),
-  })).filter((row) => Number.isFinite(row.trainLoss) || Number.isFinite(row.valLoss));
-}
-
-function extractMetrics(parsed: Record<string, unknown>): MetricItem[] {
-  const stats = (parsed.stats as Record<string, unknown> | undefined) ?? {};
-  const summary = (parsed.summary as Record<string, unknown> | undefined) ?? {};
-  const finalLosses = (parsed.final_losses as Record<string, unknown> | undefined) ??
-    ((summary.final_losses as Record<string, unknown> | undefined) ?? {});
-  const portfolios = (parsed.portfolios as Record<string, unknown> | undefined) ?? {};
-  const selectedPortfolio =
-    (portfolios.selected_portfolio as Record<string, unknown> | undefined) ??
-    (portfolios.max_sharpe as Record<string, unknown> | undefined) ??
-    {};
-  const maxSharpeMetrics = (selectedPortfolio.metrics as Record<string, unknown> | undefined) ?? {};
-
-  const rows: MetricItem[] = [];
-
-  if ("best_model" in summary || "best_model" in parsed || "best_model" in stats) {
-    rows.push({
-      label: "Best Model",
-      value: formatMetricValue(summary.best_model ?? parsed.best_model ?? stats.best_model),
-    });
-  }
-  if ("undervalued_count" in stats || "undervalued_count" in summary) {
-    rows.push({
-      label: "Undervalued",
-      value: formatMetricValue(stats.undervalued_count ?? summary.undervalued_count),
-    });
-  }
-  if ("models_count" in stats) {
-    rows.push({ label: "Models", value: formatMetricValue(stats.models_count) });
-  }
-  if ("train_loss" in finalLosses) {
-    rows.push({ label: "Train Loss", value: formatMetricValue(finalLosses.train_loss) });
-  }
-  if ("val_loss" in finalLosses) {
-    rows.push({ label: "Val Loss", value: formatMetricValue(finalLosses.val_loss) });
-  }
-
-  const portfolioMapping: Array<{ key: string; label: string }> = [
-    { key: "expected_return", label: "Expected Return" },
-    { key: "volatility", label: "Volatility" },
-    { key: "sharpe_ratio", label: "Sharpe Ratio" },
-    { key: "diversification_score", label: "Diversification" },
-  ];
-
-  for (const item of portfolioMapping) {
-    if (item.key in maxSharpeMetrics) {
-      rows.push({
-        label: item.label,
-        value: formatMetricValue(maxSharpeMetrics[item.key]),
-      });
-    }
-  }
-
-  return rows;
-}
-
-function extractPortfolioAssetsCount(parsed: Record<string, unknown>): number {
-  const summary = (parsed.summary as Record<string, unknown> | undefined) ?? {};
-  const stats = (parsed.stats as Record<string, unknown> | undefined) ?? {};
-  const portfolios = (parsed.portfolios as Record<string, unknown> | undefined) ?? {};
-  const maxSharpe =
-    (portfolios.selected_portfolio as Record<string, unknown> | undefined) ??
-    (portfolios.max_sharpe as Record<string, unknown> | undefined) ??
-    {};
-  const minVolatility = (portfolios.min_volatility as Record<string, unknown> | undefined) ?? {};
-
-  return numberOr(
-    maxSharpe.assets_count,
-    numberOr(
-      minVolatility.assets_count,
-      numberOr(stats.portfolio_assets_count, numberOr(summary.portfolio_assets_count, 0)),
-    ),
-  );
-}
+import {
+  DEFAULT_NEURAL_SETTINGS,
+  NEURAL_FEATURE_OPTIONS,
+  NEURAL_PALETTE,
+  NEURAL_STATE_KEY,
+} from "../model";
+import type {
+  NeuralActivation,
+  NeuralAnalysisSettings,
+  NeuralModelType,
+  NeuralOptimizer,
+  NeuralTuningMetric,
+  SelectionMode,
+  TuningBudget,
+} from "../model";
+import {
+  extractFeatureImportance,
+  extractMetrics,
+  extractPortfolioAssetsCount,
+  extractPortfolioPositions,
+  extractPortfolioStrategies,
+  extractTrainingHistory,
+} from "../lib";
 
 export function NeuralNetworkAnalysis() {
   const { cache, hasData } = useFundamentals();
@@ -378,7 +114,7 @@ export function NeuralNetworkAnalysis() {
   const [selectionMode, setSelectionMode] = useState<SelectionMode>("all");
   const [selectedFigis, setSelectedFigis] = useState<string[]>([]);
   const [stockSearch, setStockSearch] = useState("");
-  const [neuralSettings, setNeuralSettings] = useState<NeuralAnalysisSettings>(defaultNeuralSettings);
+  const [neuralSettings, setNeuralSettings] = useState<NeuralAnalysisSettings>(DEFAULT_NEURAL_SETTINGS);
   const portfolioChartRef = useRef<HTMLDivElement | null>(null);
   const visibleMetrics = useMemo(() => metrics.filter((item) => isVisibleAnalysisMetric(item.label)), [metrics]);
   const showErrorDialog = (message: string) => {
@@ -414,17 +150,17 @@ export function NeuralNetworkAnalysis() {
       if (Array.isArray(parsed.selectedFigis)) setSelectedFigis(parsed.selectedFigis.filter((figi) => typeof figi === "string"));
       if (parsed.neuralSettings && typeof parsed.neuralSettings === "object") {
         setNeuralSettings({
-          ...defaultNeuralSettings,
+          ...DEFAULT_NEURAL_SETTINGS,
           ...parsed.neuralSettings,
-          epochs: numberOr(parsed.neuralSettings.epochs, defaultNeuralSettings.epochs),
-          batchSize: numberOr(parsed.neuralSettings.batchSize, defaultNeuralSettings.batchSize),
-          learningRate: numberOr(parsed.neuralSettings.learningRate, defaultNeuralSettings.learningRate),
-          dropout: numberOr(parsed.neuralSettings.dropout, defaultNeuralSettings.dropout),
-          validationSplit: numberOr(parsed.neuralSettings.validationSplit, defaultNeuralSettings.validationSplit),
-          randomState: numberOr(parsed.neuralSettings.randomState, defaultNeuralSettings.randomState),
+          epochs: numberOr(parsed.neuralSettings.epochs, DEFAULT_NEURAL_SETTINGS.epochs),
+          batchSize: numberOr(parsed.neuralSettings.batchSize, DEFAULT_NEURAL_SETTINGS.batchSize),
+          learningRate: numberOr(parsed.neuralSettings.learningRate, DEFAULT_NEURAL_SETTINGS.learningRate),
+          dropout: numberOr(parsed.neuralSettings.dropout, DEFAULT_NEURAL_SETTINGS.dropout),
+          validationSplit: numberOr(parsed.neuralSettings.validationSplit, DEFAULT_NEURAL_SETTINGS.validationSplit),
+          randomState: numberOr(parsed.neuralSettings.randomState, DEFAULT_NEURAL_SETTINGS.randomState),
           features: Array.isArray(parsed.neuralSettings.features)
             ? parsed.neuralSettings.features.filter((item) => typeof item === "string")
-            : defaultNeuralSettings.features,
+            : DEFAULT_NEURAL_SETTINGS.features,
         });
       }
     } catch {
@@ -534,7 +270,7 @@ export function NeuralNetworkAnalysis() {
 
   const selectedFeatureLabels = useMemo(
     () =>
-      neuralFeatureOptions
+      NEURAL_FEATURE_OPTIONS
         .filter((option) => neuralSettings.features.includes(option.key))
         .map((option) => (isEn ? option.labelEn : option.labelRu)),
     [isEn, neuralSettings.features],
@@ -615,7 +351,7 @@ export function NeuralNetworkAnalysis() {
   };
 
   const resetNeuralSettings = () => {
-    setNeuralSettings(defaultNeuralSettings);
+    setNeuralSettings(DEFAULT_NEURAL_SETTINGS);
   };
 
   const toggleNeuralFeature = (key: string) => {
@@ -1010,7 +746,7 @@ export function NeuralNetworkAnalysis() {
                     type="number"
                     value={neuralSettings.randomState}
                     onChange={(event) =>
-                      updateNeuralSettings({ randomState: Number(event.target.value) || defaultNeuralSettings.randomState })
+                      updateNeuralSettings({ randomState: Number(event.target.value) || DEFAULT_NEURAL_SETTINGS.randomState })
                     }
                   />
                 </label>
@@ -1086,7 +822,7 @@ export function NeuralNetworkAnalysis() {
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-2">
-                {neuralFeatureOptions.map((option) => {
+                {NEURAL_FEATURE_OPTIONS.map((option) => {
                   const checked = neuralSettings.features.includes(option.key);
                   const label = isEn ? option.labelEn : option.labelRu;
                   return (
@@ -1395,7 +1131,7 @@ export function NeuralNetworkAnalysis() {
               {!!portfolioPositions.length && (
                 <PortfolioHoldingsPanel
                   rows={portfolioPositions}
-                  palette={palette}
+                  palette={NEURAL_PALETTE}
                   chartRef={portfolioChartRef}
                   companyLabel={t("Акция", "Stock")}
                   weightLabel={t("Вес, %", "Weight, %")}
@@ -1424,7 +1160,7 @@ export function NeuralNetworkAnalysis() {
                   <Tooltip formatter={(v: number) => `${Number(v).toFixed(2)}%`} />
                   <Bar dataKey="importance" radius={[0, 4, 4, 0]}>
                     {featureImportance.map((row, idx) => (
-                      <Cell key={row.feature} fill={palette[idx % palette.length]} />
+                      <Cell key={row.feature} fill={NEURAL_PALETTE[idx % NEURAL_PALETTE.length]} />
                     ))}
                   </Bar>
                 </BarChart>

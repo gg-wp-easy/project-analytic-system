@@ -20,9 +20,9 @@ import {
   sortOptionContracts,
   type OptionSideFilter,
   type OptionSortDirection,
-  type UnderlyingCategory,
   type UnderlyingSummary,
 } from "../lib/options-helpers";
+import type { DetailsTab, UnderlyingCategory, UnderlyingLocationState } from "../model";
 import { buildStrategyFromTemplate } from "../lib/strategy-builder";
 import {
   buildAssetMovementForecast,
@@ -33,12 +33,6 @@ import { OptionContractsTable } from "./OptionContractsTable";
 import { OptionStrategiesReference } from "./OptionStrategiesReference";
 import { OptionStrategyBuilder } from "./OptionStrategyBuilder";
 import { PaginationControls } from "./PaginationControls";
-
-type UnderlyingLocationState = {
-  summaryLabel?: string;
-  category?: Exclude<UnderlyingCategory, "all">;
-};
-type DetailsTab = "list" | "forecast" | "builder" | "reference";
 
 export function UnderlyingOptionsPage() {
   const { locale, t } = useAppSettings();

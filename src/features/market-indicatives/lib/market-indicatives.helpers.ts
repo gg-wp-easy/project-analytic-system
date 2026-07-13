@@ -9,13 +9,13 @@ import {
   MARKET_INDICATIVES_CACHE_KEY,
   MARKET_INDICATIVES_CACHE_TTL_MS,
   MARKET_PRIORITY,
-} from "../model/market-indicatives.consts";
+} from "../model";
 import type {
   CurrencyTarget,
   IndicatorGroup,
   MarketIndicativesCachePayload,
   MarketIndicator,
-} from "../model/market-indicatives.types";
+} from "../model";
 
 export function loadMarketIndicativesCache(): MarketIndicativesCachePayload | null {
   if (typeof window === "undefined") {

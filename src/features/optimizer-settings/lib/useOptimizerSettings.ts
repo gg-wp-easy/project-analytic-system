@@ -1,6 +1,5 @@
 import { useEffect, useState } from "react";
-import { DEFAULT_OPTIMIZER_SETTINGS, OPTIMIZER_SETTINGS_STORAGE_KEY } from "../model/optimizer-settings.consts";
-import type { OptimizerSettings } from "../model/optimizer-settings.types";
+import { DEFAULT_OPTIMIZER_SETTINGS, OPTIMIZER_SETTINGS_STORAGE_KEY, type OptimizerSettings } from "../model";
 import { normalizeOptimizerSettings } from "./optimizer-settings.helpers";
 
 export function useOptimizerSettings() {

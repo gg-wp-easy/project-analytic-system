@@ -1,5 +1,5 @@
 import { API_BASE_URL } from "../../../config";
-import type { OptimizerSettings } from "../model/optimizer-settings.types";
+import type { OptimizerSettings } from "../model";
 import { buildOptimizerSettingsPayload } from "./optimizer-settings.helpers";
 
 export async function submitOptimizerSettings(settings: OptimizerSettings): Promise<void> {

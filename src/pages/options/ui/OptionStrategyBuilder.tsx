@@ -12,6 +12,12 @@ import {
 import type { TBankOption } from "../../../shared/api/tbank";
 import { useAppSettings } from "../../../app/context/AppSettingsContext";
 import { SectionCard } from "../../../shared/ui/analysis-shell";
+import type {
+  BuilderMode,
+  ManualPremiums,
+  OptionStrategyBuilderProps,
+  PayoffChartPoint,
+} from "../model";
 import {
   formatDate,
   formatNumber,
@@ -32,22 +38,6 @@ import {
   type StrategyOutlook,
   type StrategyTemplateId,
 } from "../lib/strategy-builder";
-
-type BuilderMode = "template" | "custom";
-
-type OptionStrategyBuilderProps = {
-  options: TBankOption[];
-  activeExpirationKey: string;
-  expirationChoices: string[];
-  closePricesById?: Record<string, number>;
-};
-
-type PayoffChartPoint = {
-  price: number;
-  pnl: number;
-};
-
-type ManualPremiums = Record<string, string>;
 
 function createDraftLeg(optionUid: string): StrategyDraftLeg {
   return {

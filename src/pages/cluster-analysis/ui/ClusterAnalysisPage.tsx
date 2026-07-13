@@ -73,397 +73,31 @@ import { AnalysisRunningIndicator } from "../../../shared/ui/analysis/AnalysisRu
 import { InfoTooltip } from "../../../shared/ui/analysis/InfoTooltip";
 import { MetricTooltip } from "../../../shared/ui/analysis/MetricTooltip";
 import { PortfolioHoldingsPanel } from "../../../shared/ui/analysis/PortfolioHoldingsPanel";
-
-const palette = ["#3b82f6", "#10b981", "#f59e0b", "#ef4444", "#8b5cf6", "#06b6d4", "#14b8a6", "#f97316"];
-const CLUSTER_STATE_KEY = "cluster-analysis-state-v2";
-
-type SelectionMode = "all" | "manual";
-type ClusterAlgorithm = "kmeans" | "agglomerative" | "dbscan";
-type DistanceMetric = "euclidean" | "manhattan" | "cosine";
-type ScalingMethod = "standard" | "minmax" | "robust" | "none";
-type ClusterTuningMetric = "silhouette" | "davies_bouldin" | "calinski_harabasz";
-type TuningBudget = "fast" | "balanced" | "quality";
-
-type ClusterAnalysisSettings = {
-  algorithm: ClusterAlgorithm;
-  clustersCount: number;
-  distanceMetric: DistanceMetric;
-  scalingMethod: ScalingMethod;
-  randomState: number;
-  includeOutliers: boolean;
-  autoTune: boolean;
-  tuningMetric: ClusterTuningMetric;
-  tuningBudget: TuningBudget;
-  features: string[];
-};
-
-const clusterFeatureOptions = [
-  { key: "g", labelRu: "g / темпы роста", labelEn: "g / growth rate" },
-  { key: "pe_ratio", labelRu: "P/E", labelEn: "P/E" },
-  { key: "pb_ratio", labelRu: "P/B", labelEn: "P/B" },
-  { key: "ps_ratio", labelRu: "P/S", labelEn: "P/S" },
-  { key: "ev_to_ebitda", labelRu: "EV/EBITDA", labelEn: "EV/EBITDA" },
-  { key: "roe", labelRu: "ROE", labelEn: "ROE" },
-  { key: "roa", labelRu: "ROA", labelEn: "ROA" },
-  { key: "net_margin", labelRu: "Маржа", labelEn: "Margin" },
-  { key: "dividend_yield", labelRu: "Дивиденды", labelEn: "Dividend yield" },
-  { key: "market_cap_bn", labelRu: "Капитализация", labelEn: "Market cap" },
-  { key: "beta", labelRu: "Beta", labelEn: "Beta" },
-] as const;
-
-const defaultClusterSettings: ClusterAnalysisSettings = {
-  algorithm: "kmeans",
-  clustersCount: 4,
-  distanceMetric: "euclidean",
-  scalingMethod: "standard",
-  randomState: 42,
-  includeOutliers: true,
-  autoTune: true,
-  tuningMetric: "silhouette",
-  tuningBudget: "balanced",
-  features: ["g", "pe_ratio", "pb_ratio", "ev_to_ebitda", "roe", "net_margin", "dividend_yield"],
-};
-
-function getClusterColor(cluster: number): string {
-  const safeCluster = Number.isFinite(cluster) ? Math.abs(Math.trunc(cluster)) : 0;
-  return palette[safeCluster % palette.length];
-}
-
-function formatMetric(value: unknown): string {
-  if (typeof value === "number") {
-    if (Math.abs(value) >= 1000) {
-      return value.toFixed(0);
-    }
-    return value.toFixed(4);
-  }
-  return String(value);
-}
-
-function firstObject(source: unknown[]): Record<string, unknown> {
-  const found = source.find((item) => item && typeof item === "object");
-  return (found as Record<string, unknown>) ?? {};
-}
-
-function extractPortfolioRowsFromTopPositions(
-  topPositions: unknown,
-  metrics?: Record<string, unknown>,
-): PortfolioRow[] {
-  if (!Array.isArray(topPositions)) {
-    return [];
-  }
-
-  const rows = topPositions.map((item, index) => {
-    const row = item as Record<string, unknown>;
-    return {
-      figi: String(row.figi ?? row.FIGI ?? row.instrumentFigi ?? ""),
-      ticker: String(row.ticker ?? row.Ticker ?? row.symbol ?? `Asset ${index + 1}`),
-      name: String(row.name ?? row.Name ?? ""),
-      weight: numberOr(row.weight, numberOr(row.Weight, numberOr(row.allocation, numberOr(row.share, 0)))),
-      expectedReturn: numberOr(
-        row.expected_return,
-        numberOr(row.Expected_Return, numberOr(metrics?.expected_return, numberOr(metrics?.return, NaN))),
-      ),
-      risk: numberOr(row.risk, numberOr(row.Risk, numberOr(metrics?.risk, numberOr(metrics?.volatility, NaN)))),
-      sharpe: numberOr(row.sharpe, numberOr(row.sharpe_ratio, numberOr(metrics?.sharpe, numberOr(metrics?.sharpe_ratio, NaN)))),
-      sortino: numberOr(row.sortino, numberOr(metrics?.sortino, NaN)),
-      value_at_risk: numberOr(row.value_at_risk, numberOr(metrics?.value_at_risk, NaN)),
-    } satisfies PortfolioRow;
-  });
-
-  return normalizeWeights(rows);
-}
-
-function readAssetsCount(source: Record<string, unknown>): number {
-  return numberOr(
-    source.assets_count,
-    numberOr(
-      source.assetsCount,
-      numberOr(
-        source.positions_count,
-        numberOr(source.positionsCount, numberOr(source.portfolio_size, numberOr(source.count, 0))),
-      ),
-    ),
-  );
-}
-
-function extractPoints(parsed: Record<string, unknown>): ClusterPoint[] {
-  const pointsSource = Array.isArray(parsed.points)
-    ? parsed.points
-    : Array.isArray(parsed.data)
-      ? parsed.data
-      : Array.isArray(parsed.clusters)
-        ? parsed.clusters
-        : Array.isArray(parsed.companies)
-          ? parsed.companies
-        : [];
-
-  return pointsSource
-    .map((item, index) => {
-      const row = item as Record<string, unknown>;
-      const cluster = numberOr(
-        row.cluster,
-        numberOr(
-          row.cluster_id,
-          numberOr(row.clusterId, numberOr(row.cluster_label, numberOr(row.group, numberOr(row.Cluster, 0)))),
-        ),
-      );
-      const color = getClusterColor(cluster);
-      return {
-        ticker: String(row.ticker ?? row.Ticker ?? row.name ?? row.Company ?? `Asset ${index + 1}`),
-        figi: String(row.figi ?? row.id ?? index),
-        pe: numberOr(row.pe, numberOr(row.pe_ratio, numberOr(row.peRatio, numberOr(row.PE, numberOr(row["P/E"], 0))))),
-        g: numberOr(
-          row.g,
-          numberOr(
-            row.roe,
-            numberOr(
-              row.ROE,
-              numberOr(row.growth, numberOr(row.Expected_Return, numberOr(row.dividend_yield, numberOr(row.dividendYield, 0)))),
-            ),
-          ),
-        ),
-        cluster,
-        color,
-        label: String(row.label ?? `Кластер ${cluster + 1}`),
-      } satisfies ClusterPoint;
-    })
-    .filter((p) => Number.isFinite(p.pe) && Number.isFinite(p.g));
-}
-
-function extractGroups(parsed: Record<string, unknown>, points: ClusterPoint[]): ClusterGroup[] {
-  const profilesSource = Array.isArray(parsed.cluster_profiles) ? parsed.cluster_profiles : [];
-  if (profilesSource.length > 0) {
-    return profilesSource.map((item, index) => {
-      const row = item as Record<string, unknown>;
-      const cluster = numberOr(
-        row.cluster,
-        numberOr(row.cluster_id, numberOr(row.clusterId, numberOr(row.group, index))),
-      );
-
-      const count = numberOr(
-        row.count,
-        numberOr(row.size, numberOr(row.companies_count, points.filter((p) => p.cluster === cluster).length)),
-      );
-
-      const avgPE = numberOr(
-        row.avg_pe,
-        numberOr(row.avgPE, numberOr(row.mean_pe, numberOr(row.pe_mean, 0))),
-      );
-      const avgG = numberOr(
-        row.avg_g,
-        numberOr(row.avg_roe, numberOr(row.avgROE, numberOr(row.g_mean, numberOr(row.mean_growth, 0)))),
-      );
-
-      return {
-        name: String(row.name ?? row.label ?? `Кластер ${cluster + 1}`),
-        count,
-        avgPE,
-        avgG,
-        color: getClusterColor(cluster),
-        description: String(row.description ?? "Результат серверной кластеризации (k-means)"),
-      } satisfies ClusterGroup;
-    });
-  }
-
-  const groupsMap = new Map<number, ClusterPoint[]>();
-  points.forEach((point) => {
-    const current = groupsMap.get(point.cluster) ?? [];
-    current.push(point);
-    groupsMap.set(point.cluster, current);
-  });
-
-  return Array.from(groupsMap.entries()).map(([cluster, pointsInCluster]) => {
-    const avgPE = pointsInCluster.reduce((acc, p) => acc + p.pe, 0) / pointsInCluster.length;
-    const avgG = pointsInCluster.reduce((acc, p) => acc + p.g, 0) / pointsInCluster.length;
-    return {
-      name: `Кластер ${cluster + 1}`,
-      count: pointsInCluster.length,
-      avgPE,
-      avgG,
-      color: getClusterColor(cluster),
-      description: "Результат серверной кластеризации (k-means)",
-    };
-  });
-}
-
-function extractMetrics(parsed: Record<string, unknown>, points: ClusterPoint[], groups: ClusterGroup[]): MetricItem[] {
-  const summaryObj = (parsed.summary as Record<string, unknown> | undefined) ?? {};
-  const bestPortfolioObj = (summaryObj.best_portfolio as Record<string, unknown> | undefined) ?? {};
-  const bestMetrics = bestPortfolioObj.metrics as Record<string, unknown> | undefined;
-
-  const metricsObj =
-    bestMetrics ??
-    (parsed.metrics as Record<string, unknown> | undefined) ??
-    (parsed.model_metrics as Record<string, unknown> | undefined) ??
-    (parsed.stats as Record<string, unknown> | undefined) ??
-    summaryObj ??
-    {};
-
-  const collected: MetricItem[] = [];
-  const candidates: Array<{ key: string; label: string }> = [
-    { key: "silhouette", label: "Качество кластеров" },
-    { key: "silhouette_score", label: "Качество кластеров" },
-    { key: "davies_bouldin", label: "Davies-Bouldin" },
-    { key: "calinski_harabasz", label: "Calinski-Harabasz" },
-    { key: "inertia", label: "Inertia" },
-    { key: "score", label: "Model score" },
-    { key: "expected_return", label: "Expected return" },
-    { key: "risk", label: "Risk" },
-    { key: "volatility", label: "Volatility" },
-    { key: "sharpe", label: "Sharpe" },
-    { key: "sharpe_ratio", label: "Sharpe ratio" },
-    { key: "diversification_score", label: "Diversification" },
-  ];
-
-  for (const item of candidates) {
-    if (item.key in metricsObj) {
-      collected.push({ label: item.label, value: formatMetric(metricsObj[item.key]) });
-    }
-  }
-
-  collected.unshift(
-    { label: "Кластеров", value: String(groups.length) },
-    { label: "Активов", value: String(points.length) },
-  );
-
-  return collected;
-}
-
-function extractPortfolioStrategies(parsed: Record<string, unknown>): StrategyPortfolio[] {
-  const fromPortfolios = parsed.portfolios;
-  const strategies: StrategyPortfolio[] = [];
-
-  if (fromPortfolios && typeof fromPortfolios === "object" && !Array.isArray(fromPortfolios)) {
-    for (const [name, rawValue] of Object.entries(fromPortfolios as Record<string, unknown>)) {
-      if (!rawValue || typeof rawValue !== "object") {
-        continue;
-      }
-      const portfolio = rawValue as Record<string, unknown>;
-      const metrics = (portfolio.metrics as Record<string, unknown> | undefined) ?? {};
-      const rows = extractPortfolioRowsFromTopPositions(portfolio.top_positions, metrics);
-      strategies.push({
-        name: String(portfolio.name ?? name),
-        expectedReturn: numberOr(metrics.expected_return, 0),
-        risk: numberOr(metrics.risk, 0),
-        sharpe: numberOr(metrics.sharpe_ratio, numberOr(metrics.sharpe, 0)),
-        diversification: numberOr(metrics.diversification_score, 0),
-        rows,
-        assetsCount: readAssetsCount(portfolio) || rows.length,
-      });
-    }
-  }
-
-  return strategies.sort((a, b) => b.sharpe - a.sharpe);
-}
-
-function extractBestPortfolioAssetsCount(parsed: Record<string, unknown>): number {
-  const summary = (parsed.summary as Record<string, unknown> | undefined) ?? {};
-  const bestPortfolio = (summary.best_portfolio as Record<string, unknown> | undefined) ?? {};
-  return readAssetsCount(bestPortfolio);
-}
-
-function extractSummary(parsed: Record<string, unknown>): AnalysisSummary | null {
-  const summary = (parsed.summary as Record<string, unknown> | undefined) ?? null;
-  if (!summary) {
-    return null;
-  }
-
-  const rawDistribution = (summary.cluster_distribution as Record<string, unknown> | undefined) ?? {};
-  const clusterDistribution = Object.entries(rawDistribution).map(([cluster, value], index) => ({
-    cluster: `Кластер ${Number(cluster) + 1}`,
-    count: numberOr(value, 0),
-    color: getClusterColor(numberOr(cluster, index)),
-  }));
-
-  return {
-    companiesCount: numberOr(summary.companies_count, 0),
-    clustersCount: numberOr(summary.clusters_count, clusterDistribution.length),
-    portfoliosCount: numberOr(summary.portfolios_count, 0),
-    clusterDistribution,
-  };
-}
-
-function extractPortfolio(parsed: Record<string, unknown>): PortfolioRow[] {
-  const summary = (parsed.summary as Record<string, unknown> | undefined) ?? {};
-  const bestPortfolio = (summary.best_portfolio as Record<string, unknown> | undefined) ?? {};
-  const bestMetrics = (bestPortfolio.metrics as Record<string, unknown> | undefined) ?? {};
-  const fromBestPositions = extractPortfolioRowsFromTopPositions(bestPortfolio.positions, bestMetrics);
-  const fromBestTopPositions = extractPortfolioRowsFromTopPositions(bestPortfolio.top_positions, bestMetrics);
-  const fromBest = fromBestPositions.length ? fromBestPositions : fromBestTopPositions;
-  if (fromBest.length) {
-    return fromBest;
-  }
-
-  const portfolios = Array.isArray(parsed.portfolios) ? parsed.portfolios : [];
-  if (portfolios.length) {
-    const first = firstObject(portfolios);
-    const fromWeights =
-      first.weights ??
-      first.optimal_weights ??
-      first.portfolio ??
-      first.best_portfolio;
-
-    if (fromWeights && typeof fromWeights === "object") {
-      const rows = Object.entries(fromWeights as Record<string, unknown>).map(([ticker, rawWeight]) => ({
-        ticker,
-        name: ticker,
-        weight: numberOr(rawWeight, 0),
-        expectedReturn: numberOr(first.expected_return, numberOr(first.return, NaN)),
-        risk: numberOr(first.risk, numberOr(first.volatility, NaN)),
-        sharpe: numberOr(first.sharpe, NaN),
-        sortino: numberOr(first.sortino, NaN),
-        value_at_risk: numberOr(first.value_at_risk, NaN),
-      }));
-      return normalizeWeights(rows);
-    }
-  }
-
-  const portfolioCandidate =
-    parsed.optimal_portfolio ??
-    parsed.portfolio ??
-    parsed.best_portfolio ??
-    parsed.optimal_weights ??
-    parsed.weights;
-
-  if (Array.isArray(portfolioCandidate)) {
-    const rows = portfolioCandidate.map((item, index) => {
-      const row = item as Record<string, unknown>;
-      const ticker = String(row.ticker ?? row.asset ?? row.symbol ?? `Asset ${index + 1}`);
-      const weight = numberOr(row.weight, numberOr(row.allocation, numberOr(row.share, 0)));
-      return {
-        figi: String(row.figi ?? row.FIGI ?? row.instrumentFigi ?? ""),
-        ticker,
-        name: String(row.name ?? row.company ?? row.Company ?? ticker),
-        weight,
-        expectedReturn: numberOr(row.expected_return, numberOr(row.return, NaN)),
-        risk: numberOr(row.risk, numberOr(row.volatility, NaN)),
-        sharpe: numberOr(row.sharpe, NaN),
-        sortino: numberOr(row.sortino, NaN),
-        value_at_risk: numberOr(row.value_at_risk, NaN),
-      };
-    });
-    return normalizeWeights(rows);
-  }
-
-  if (portfolioCandidate && typeof portfolioCandidate === "object") {
-    const entries = Object.entries(portfolioCandidate as Record<string, unknown>).filter(
-      ([, value]) => typeof value === "number" || typeof value === "string",
-    );
-    const rows = entries.map(([ticker, rawWeight]) => ({ ticker, name: ticker, weight: numberOr(rawWeight, 0) }));
-    return normalizeWeights(rows);
-  }
-
-  return [];
-}
-
-function normalizeWeights(rows: PortfolioRow[]): PortfolioRow[] {
-  if (!rows.length) {
-    return [];
-  }
-  const max = Math.max(...rows.map((r) => r.weight));
-  const scaled = max <= 1 ? rows.map((r) => ({ ...r, weight: r.weight * 100 })) : rows;
-  return scaled.sort((a, b) => b.weight - a.weight);
-}
+import {
+  CLUSTER_FEATURE_OPTIONS,
+  CLUSTER_PALETTE,
+  CLUSTER_STATE_KEY,
+  DEFAULT_CLUSTER_SETTINGS,
+} from "../model";
+import type {
+  ClusterAlgorithm,
+  ClusterAnalysisSettings,
+  ClusterTuningMetric,
+  DistanceMetric,
+  ScalingMethod,
+  SelectionMode,
+  TuningBudget,
+} from "../model";
+import {
+  extractBestPortfolioAssetsCount,
+  extractGroups,
+  extractMetrics,
+  extractPoints,
+  extractPortfolio,
+  extractPortfolioStrategies,
+  extractSummary,
+  getClusterColor,
+} from "../lib";
 
 export function ClusterAnalysis() {
   const { cache, hasData } = useFundamentals();
@@ -483,7 +117,7 @@ export function ClusterAnalysis() {
   const [selectionMode, setSelectionMode] = useState<SelectionMode>("all");
   const [selectedFigis, setSelectedFigis] = useState<string[]>([]);
   const [stockSearch, setStockSearch] = useState("");
-  const [clusterSettings, setClusterSettings] = useState<ClusterAnalysisSettings>(defaultClusterSettings);
+  const [clusterSettings, setClusterSettings] = useState<ClusterAnalysisSettings>(DEFAULT_CLUSTER_SETTINGS);
   const portfolioChartRef = useRef<HTMLDivElement | null>(null);
   const visibleMetrics = useMemo(() => metrics.filter((item) => isVisibleAnalysisMetric(item.label)), [metrics]);
   const clusterSeries = useMemo(
@@ -538,13 +172,13 @@ export function ClusterAnalysis() {
       if (Array.isArray(parsed.selectedFigis)) setSelectedFigis(parsed.selectedFigis.filter((figi) => typeof figi === "string"));
       if (parsed.clusterSettings && typeof parsed.clusterSettings === "object") {
         setClusterSettings({
-          ...defaultClusterSettings,
+          ...DEFAULT_CLUSTER_SETTINGS,
           ...parsed.clusterSettings,
-          clustersCount: numberOr(parsed.clusterSettings.clustersCount, defaultClusterSettings.clustersCount),
-          randomState: numberOr(parsed.clusterSettings.randomState, defaultClusterSettings.randomState),
+          clustersCount: numberOr(parsed.clusterSettings.clustersCount, DEFAULT_CLUSTER_SETTINGS.clustersCount),
+          randomState: numberOr(parsed.clusterSettings.randomState, DEFAULT_CLUSTER_SETTINGS.randomState),
           features: Array.isArray(parsed.clusterSettings.features)
             ? parsed.clusterSettings.features.filter((item) => typeof item === "string")
-            : defaultClusterSettings.features,
+            : DEFAULT_CLUSTER_SETTINGS.features,
         });
       }
     } catch {
@@ -659,7 +293,7 @@ export function ClusterAnalysis() {
 
   const selectedFeatureLabels = useMemo(
     () =>
-      clusterFeatureOptions
+      CLUSTER_FEATURE_OPTIONS
         .filter((option) => clusterSettings.features.includes(option.key))
         .map((option) => (isEn ? option.labelEn : option.labelRu)),
     [clusterSettings.features, isEn],
@@ -737,7 +371,7 @@ export function ClusterAnalysis() {
   };
 
   const resetClusterSettings = () => {
-    setClusterSettings(defaultClusterSettings);
+    setClusterSettings(DEFAULT_CLUSTER_SETTINGS);
   };
 
   const toggleClusterFeature = (key: string) => {
@@ -1063,7 +697,7 @@ export function ClusterAnalysis() {
                   type="number"
                   value={clusterSettings.randomState}
                   onChange={(event) =>
-                    updateClusterSettings({ randomState: Number(event.target.value) || defaultClusterSettings.randomState })
+                    updateClusterSettings({ randomState: Number(event.target.value) || DEFAULT_CLUSTER_SETTINGS.randomState })
                   }
                 />
               </label>
@@ -1138,7 +772,7 @@ export function ClusterAnalysis() {
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-2">
-                {clusterFeatureOptions.map((option) => {
+                {CLUSTER_FEATURE_OPTIONS.map((option) => {
                   const checked = clusterSettings.features.includes(option.key);
                   const label = isEn ? option.labelEn : option.labelRu;
                   return (
@@ -1526,7 +1160,7 @@ export function ClusterAnalysis() {
               {!!displayPortfolio.length && (
                 <PortfolioHoldingsPanel
                   rows={displayPortfolio}
-                  palette={palette}
+                  palette={CLUSTER_PALETTE}
                   chartRef={portfolioChartRef}
                   companyLabel={t("Акция", "Stock")}
                   weightLabel={t("Вес, %", "Weight, %")}

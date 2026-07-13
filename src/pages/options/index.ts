@@ -2,12 +2,19 @@ export { OptionsPage } from "./ui/OptionsPage";
 export { UnderlyingOptionsPage } from "./ui/OptionDetailsPage";
 export type {
   AssetMovementForecast,
+  BuilderMode,
+  DetailsTab,
   ForecastDirection,
+  ManualPremiums,
+  OptionContractsTableProps,
   OptionGreeks,
   OptionSideFilter,
   OptionSortDirection,
   OptionSortField,
+  OptionStrategyBuilderProps,
   OptionTradeRecommendation,
+  PaginationControlsProps,
+  PayoffChartPoint,
   StrategyBuildResult,
   StrategyDraftLeg,
   StrategyGreeks,
@@ -20,5 +27,7 @@ export type {
   StrategyTemplateId,
   TechnicalIndicatorSnapshot,
   UnderlyingCategory,
+  UnderlyingLocationState,
+  UnderlyingRouteState,
   UnderlyingSummary,
 } from "./model";
