@@ -36,3 +36,14 @@ export type NeuralTrainingPoint = {
   trainLoss: number;
   valLoss: number;
 };
+
+export type NeuralModelStatItem = {
+  modelName: string;
+  hiddenLayers: string;
+  activation: string;
+  solver: string;
+  bestEpoch: number;
+  bestValMse: number;
+  finalValMse: number;
+  valR2Final: number;
+};

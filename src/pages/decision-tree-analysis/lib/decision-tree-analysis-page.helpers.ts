@@ -4,6 +4,8 @@ import type {
   DecisionTreeMetricItem as MetricItem,
   DecisionTreeNumericSummaryItem as NumericSummaryItem,
   DecisionTreePortfolioPosition as PortfolioPosition,
+  DecisionTreePreviewNode as TreePreviewNode,
+  DecisionTreeRuleItem as RuleItem,
   DecisionTreeSectorAllocationItem as SectorAllocationItem,
 } from "../../../features/decision-tree-analysis";
 import { formatPercentOrNumber } from "../../../shared/lib/format/finance";
@@ -214,4 +216,35 @@ export function extractPortfolioAssetsCount(parsed: Record<string, unknown>): nu
   const summary = (parsed.summary as Record<string, unknown> | undefined) ?? {};
 
   return numberOr(portfolio.assets_count, numberOr(stats.portfolio_assets_count, numberOr(summary.portfolio_assets_count, 0)));
+}
+
+export function extractDecisionRules(parsed: Record<string, unknown>): RuleItem[] {
+  const raw = parsed.decision_rules ?? parsed.rules ?? parsed.tree_rules ?? [];
+  if (!Array.isArray(raw)) {
+    return [];
+  }
+  return raw
+    .map((item, index) => {
+      const row = item as Record<string, unknown>;
+      return {
+        conditions: String(row.conditions ?? row.condition ?? `Rule ${index + 1}`),
+        prediction: String(row.prediction ?? row.class ?? row.label ?? "-"),
+        samples: numberOr(row.samples, 0),
+        confidence: typeof row.confidence === "number" ? row.confidence : String(row.confidence ?? "-"),
+      } satisfies RuleItem;
+    })
+    .filter((row) => row.conditions && row.prediction);
+}
+
+function isTreePreviewNode(value: unknown): value is TreePreviewNode {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return false;
+  }
+  const row = value as Record<string, unknown>;
+  return typeof row.id === "number" && typeof row.prediction === "string" && typeof row.kind === "string";
+}
+
+export function extractTreePreview(parsed: Record<string, unknown>): TreePreviewNode | null {
+  const raw = parsed.tree_preview ?? parsed.treePreview ?? parsed.compact_tree ?? null;
+  return isTreePreviewNode(raw) ? raw : null;
 }

@@ -1,5 +1,6 @@
 import type {
   ClusterAnalysisSummary as AnalysisSummary,
+  ClusterFeatureImportanceItem as FeatureImportanceItem,
   ClusterGroup,
   ClusterMetricItem as MetricItem,
   ClusterPoint,
@@ -325,6 +326,36 @@ export function extractPortfolio(parsed: Record<string, unknown>): PortfolioRow[
     );
     const rows = entries.map(([ticker, rawWeight]) => ({ ticker, name: ticker, weight: numberOr(rawWeight, 0) }));
     return normalizeWeights(rows);
+  }
+
+  return [];
+}
+
+export function extractFeatureImportance(parsed: Record<string, unknown>): FeatureImportanceItem[] {
+  const raw = parsed.feature_importance ?? parsed.featureImportance ?? parsed.importances ?? parsed.feature_weights ?? null;
+
+  if (Array.isArray(raw)) {
+    const rows = raw
+      .map((item, idx) => {
+        const row = item as Record<string, unknown>;
+        return {
+          feature: String(row.feature ?? row.name ?? row.column ?? `Feature ${idx + 1}`),
+          importance: numberOr(row.importance, numberOr(row.score, numberOr(row.weight, 0))),
+        };
+      })
+      .filter((row) => Number.isFinite(row.importance));
+    const max = rows.length ? Math.max(...rows.map((row) => row.importance)) : 0;
+    const normalized = max <= 1 ? rows.map((row) => ({ ...row, importance: row.importance * 100 })) : rows;
+    return normalized.sort((a, b) => b.importance - a.importance);
+  }
+
+  if (raw && typeof raw === "object") {
+    const rows = Object.entries(raw as Record<string, unknown>)
+      .map(([feature, value]) => ({ feature, importance: numberOr(value, 0) }))
+      .filter((row) => Number.isFinite(row.importance));
+    const max = rows.length ? Math.max(...rows.map((row) => row.importance)) : 0;
+    const normalized = max <= 1 ? rows.map((row) => ({ ...row, importance: row.importance * 100 })) : rows;
+    return normalized.sort((a, b) => b.importance - a.importance);
   }
 
   return [];

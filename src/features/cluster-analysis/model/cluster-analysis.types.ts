@@ -50,3 +50,8 @@ export type ClusterAnalysisSummary = {
   portfoliosCount: number;
   clusterDistribution: Array<{ cluster: string; count: number; color: string }>;
 };
+
+export type ClusterFeatureImportanceItem = {
+  feature: string;
+  importance: number;
+};

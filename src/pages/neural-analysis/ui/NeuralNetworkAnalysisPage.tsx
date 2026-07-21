@@ -1,4 +1,4 @@
-﻿import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Brain,
   CheckSquare,
@@ -43,6 +43,7 @@ import { API_BASE_URL } from "../../../config";
 import type {
   NeuralFeatureImportanceItem as FeatureImportanceItem,
   NeuralMetricItem as MetricItem,
+  NeuralModelStatItem as ModelStatItem,
   NeuralPortfolioPosition as PortfolioPosition,
   NeuralPortfolioStrategy as PortfolioStrategy,
   NeuralTrainingPoint as TrainingPoint,
@@ -53,6 +54,10 @@ import {
   isVisibleAnalysisMetric,
   localizeMetricLabel,
 } from "../../../shared/lib/analysis/metric-display";
+import {
+  buildParameterRows,
+  extractModelParameters,
+} from "../../../shared/lib/analysis/model-details";
 import {
   downloadAnalysisResultsAsPdf,
   downloadAnalysisResultsAsXlsx,
@@ -91,6 +96,7 @@ import type {
 import {
   extractFeatureImportance,
   extractMetrics,
+  extractModelStats,
   extractPortfolioAssetsCount,
   extractPortfolioPositions,
   extractPortfolioStrategies,
@@ -110,6 +116,8 @@ export function NeuralNetworkAnalysis() {
   const [portfolioStrategies, setPortfolioStrategies] = useState<PortfolioStrategy[]>([]);
   const [portfolioPositions, setPortfolioPositions] = useState<PortfolioPosition[]>([]);
   const [trainingHistory, setTrainingHistory] = useState<TrainingPoint[]>([]);
+  const [modelStats, setModelStats] = useState<ModelStatItem[]>([]);
+  const [modelParameters, setModelParameters] = useState<Record<string, unknown>>({});
   const [portfolioAssetsCount, setPortfolioAssetsCount] = useState(0);
   const [selectionMode, setSelectionMode] = useState<SelectionMode>("all");
   const [selectedFigis, setSelectedFigis] = useState<string[]>([]);
@@ -134,6 +142,8 @@ export function NeuralNetworkAnalysis() {
         portfolioStrategies?: PortfolioStrategy[];
         portfolioPositions?: PortfolioPosition[];
         trainingHistory?: TrainingPoint[];
+        modelStats?: ModelStatItem[];
+        modelParameters?: Record<string, unknown>;
         portfolioAssetsCount?: number;
         selectionMode?: SelectionMode;
         selectedFigis?: string[];
@@ -145,6 +155,8 @@ export function NeuralNetworkAnalysis() {
       if (Array.isArray(parsed.portfolioStrategies)) setPortfolioStrategies(parsed.portfolioStrategies);
       if (Array.isArray(parsed.portfolioPositions)) setPortfolioPositions(parsed.portfolioPositions);
       if (Array.isArray(parsed.trainingHistory)) setTrainingHistory(parsed.trainingHistory);
+      if (Array.isArray(parsed.modelStats)) setModelStats(parsed.modelStats);
+      if (parsed.modelParameters && typeof parsed.modelParameters === "object") setModelParameters(parsed.modelParameters);
       if (typeof parsed.portfolioAssetsCount === "number") setPortfolioAssetsCount(parsed.portfolioAssetsCount);
       if (parsed.selectionMode === "all" || parsed.selectionMode === "manual") setSelectionMode(parsed.selectionMode);
       if (Array.isArray(parsed.selectedFigis)) setSelectedFigis(parsed.selectedFigis.filter((figi) => typeof figi === "string"));
@@ -176,6 +188,8 @@ export function NeuralNetworkAnalysis() {
       portfolioStrategies,
       portfolioPositions,
       trainingHistory,
+      modelStats,
+      modelParameters,
       portfolioAssetsCount,
       selectionMode,
       selectedFigis,
@@ -189,11 +203,34 @@ export function NeuralNetworkAnalysis() {
     portfolioStrategies,
     portfolioPositions,
     trainingHistory,
+    modelStats,
+    modelParameters,
     portfolioAssetsCount,
     selectionMode,
     selectedFigis,
     neuralSettings,
   ]);
+
+
+  const modelParameterRows = useMemo(
+    () =>
+      buildParameterRows(
+        modelParameters,
+        {
+          model_type: t("\u0422\u0438\u043f \u043c\u043e\u0434\u0435\u043b\u0438", "Model type"),
+          best_model: t("\u041b\u0443\u0447\u0448\u0430\u044f \u043c\u043e\u0434\u0435\u043b\u044c", "Best model"),
+          epochs: t("\u042d\u043f\u043e\u0445", "Epochs"),
+          validation_split: t("\u0412\u0430\u043b\u0438\u0434\u0430\u0446\u0438\u043e\u043d\u043d\u0430\u044f \u0434\u043e\u043b\u044f", "Validation split"),
+          random_state: t("Random state", "Random state"),
+          selection_metric: t("\u041c\u0435\u0442\u0440\u0438\u043a\u0430 \u043f\u043e\u0434\u0431\u043e\u0440\u0430", "Selection metric"),
+          auto_tune: t("\u0410\u0432\u0442\u043e\u043f\u043e\u0434\u0431\u043e\u0440", "Auto tune"),
+          features: t("\u041f\u0440\u0438\u0437\u043d\u0430\u043a\u0438", "Features"),
+          variants_count: t("\u041a\u043e\u043d\u0444\u0438\u0433\u0443\u0440\u0430\u0446\u0438\u0439", "Variants"),
+        },
+        ["model_type", "best_model", "epochs", "validation_split", "random_state", "selection_metric", "auto_tune", "features", "variants_count"],
+      ),
+    [modelParameters, t],
+  );
 
   const requestData = useMemo(
     () =>
@@ -430,6 +467,8 @@ export function NeuralNetworkAnalysis() {
       const parsedStrategies = extractPortfolioStrategies(parsed);
       const parsedPositions = extractPortfolioPositions(parsed);
       const parsedHistory = extractTrainingHistory(parsed);
+      const parsedModelStats = extractModelStats(parsed);
+      const parsedModelParameters = extractModelParameters(parsed);
       const parsedAssetsCount = extractPortfolioAssetsCount(parsed);
 
       setMetrics(parsedMetrics);
@@ -437,6 +476,8 @@ export function NeuralNetworkAnalysis() {
       setPortfolioStrategies(parsedStrategies);
       setPortfolioPositions(parsedPositions);
       setTrainingHistory(parsedHistory);
+      setModelStats(parsedModelStats);
+      setModelParameters(parsedModelParameters);
       setPortfolioAssetsCount(parsedAssetsCount);
     } catch (e) {
       const message = e instanceof Error
@@ -448,6 +489,8 @@ export function NeuralNetworkAnalysis() {
       setPortfolioStrategies([]);
       setPortfolioPositions([]);
       setTrainingHistory([]);
+      setModelStats([]);
+      setModelParameters({});
       setPortfolioAssetsCount(0);
     } finally {
       setIsRunning(false);
@@ -1037,6 +1080,65 @@ export function NeuralNetworkAnalysis() {
                 />
               ))}
             </MetricGrid>
+          )}
+
+
+          {!!modelParameterRows.length && (
+            <SectionCard title={t("\u041f\u0430\u0440\u0430\u043c\u0435\u0442\u0440\u044b \u043d\u0435\u0439\u0440\u043e\u0441\u0435\u0442\u0438", "Neural Network Parameters")}>
+              <div className="ui-table-shell overflow-x-auto">
+                <table className="ui-data-table">
+                  <thead>
+                    <tr>
+                      <th>{t("\u041f\u0430\u0440\u0430\u043c\u0435\u0442\u0440", "Parameter")}</th>
+                      <th>{t("\u0417\u043d\u0430\u0447\u0435\u043d\u0438\u0435", "Value")}</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {modelParameterRows.map((row) => (
+                      <tr key={row.key}>
+                        <td className="font-medium text-slate-900 dark:text-slate-100">{row.label}</td>
+                        <td>{row.value}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </SectionCard>
+          )}
+
+          {!!modelStats.length && (
+            <SectionCard title={t("\u0421\u0440\u0430\u0432\u043d\u0435\u043d\u0438\u0435 \u043c\u043e\u0434\u0435\u043b\u0435\u0439", "Model Comparison")}>
+              <div className="ui-table-shell overflow-x-auto">
+                <table className="ui-data-table">
+                  <thead>
+                    <tr>
+                      <th>{t("\u041c\u043e\u0434\u0435\u043b\u044c", "Model")}</th>
+                      <th>{t("\u0421\u043b\u043e\u0438", "Layers")}</th>
+                      <th>Activation</th>
+                      <th>Solver</th>
+                      <th>{t("\u041b\u0443\u0447\u0448\u0430\u044f \u044d\u043f\u043e\u0445\u0430", "Best epoch")}</th>
+                      <th>Best val MSE</th>
+                      <th>Final val MSE</th>
+                      <th>Val R2</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {modelStats.map((row) => (
+                      <tr key={row.modelName}>
+                        <td className="font-medium text-slate-900 dark:text-slate-100">{row.modelName}</td>
+                        <td>{row.hiddenLayers}</td>
+                        <td>{row.activation}</td>
+                        <td>{row.solver}</td>
+                        <td>{Number.isFinite(row.bestEpoch) ? row.bestEpoch : "-"}</td>
+                        <td>{Number.isFinite(row.bestValMse) ? row.bestValMse.toFixed(5) : "-"}</td>
+                        <td>{Number.isFinite(row.finalValMse) ? row.finalValMse.toFixed(5) : "-"}</td>
+                        <td>{Number.isFinite(row.valR2Final) ? row.valR2Final.toFixed(4) : "-"}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </SectionCard>
           )}
 
           {!!trainingHistory.length && (

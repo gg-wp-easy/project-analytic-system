@@ -1,6 +1,7 @@
 export {
   extractFeatureImportance,
   extractMetrics,
+  extractModelStats,
   extractPortfolioAssetsCount,
   extractPortfolioPositions,
   extractPortfolioStrategies,

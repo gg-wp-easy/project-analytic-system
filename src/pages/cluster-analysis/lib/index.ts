@@ -1,5 +1,6 @@
 export {
   extractBestPortfolioAssetsCount,
+  extractFeatureImportance,
   extractGroups,
   extractMetrics,
   extractPoints,

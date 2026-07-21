@@ -1,4 +1,4 @@
-﻿import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   CheckSquare,
   FileSpreadsheet,
@@ -41,6 +41,7 @@ import { PortfolioSimulationPanel } from "../../../features/portfolio-simulation
 import { API_BASE_URL } from "../../../config";
 import type {
   ClusterAnalysisSummary as AnalysisSummary,
+  ClusterFeatureImportanceItem as FeatureImportanceItem,
   ClusterGroup,
   ClusterMetricItem as MetricItem,
   ClusterPoint,
@@ -53,6 +54,10 @@ import {
   isVisibleAnalysisMetric,
   localizeMetricLabel,
 } from "../../../shared/lib/analysis/metric-display";
+import {
+  buildParameterRows,
+  extractModelParameters,
+} from "../../../shared/lib/analysis/model-details";
 import {
   downloadAnalysisResultsAsPdf,
   downloadAnalysisResultsAsXlsx,
@@ -90,6 +95,7 @@ import type {
 } from "../model";
 import {
   extractBestPortfolioAssetsCount,
+  extractFeatureImportance,
   extractGroups,
   extractMetrics,
   extractPoints,
@@ -110,6 +116,8 @@ export function ClusterAnalysis() {
   const [clusterData, setClusterData] = useState<ClusterPoint[]>([]);
   const [clusterGroups, setClusterGroups] = useState<ClusterGroup[]>([]);
   const [metrics, setMetrics] = useState<MetricItem[]>([]);
+  const [featureImportance, setFeatureImportance] = useState<FeatureImportanceItem[]>([]);
+  const [modelParameters, setModelParameters] = useState<Record<string, unknown>>({});
   const [optimalPortfolio, setOptimalPortfolio] = useState<PortfolioRow[]>([]);
   const [portfolioStrategies, setPortfolioStrategies] = useState<StrategyPortfolio[]>([]);
   const [summaryInfo, setSummaryInfo] = useState<AnalysisSummary | null>(null);
@@ -151,6 +159,8 @@ export function ClusterAnalysis() {
         clusterData?: ClusterPoint[];
         clusterGroups?: ClusterGroup[];
         metrics?: MetricItem[];
+        featureImportance?: FeatureImportanceItem[];
+        modelParameters?: Record<string, unknown>;
         optimalPortfolio?: PortfolioRow[];
         portfolioStrategies?: StrategyPortfolio[];
         summaryInfo?: AnalysisSummary | null;
@@ -164,6 +174,8 @@ export function ClusterAnalysis() {
       if (Array.isArray(parsed.clusterData)) setClusterData(parsed.clusterData);
       if (Array.isArray(parsed.clusterGroups)) setClusterGroups(parsed.clusterGroups);
       if (Array.isArray(parsed.metrics)) setMetrics(parsed.metrics.filter((item) => isVisibleAnalysisMetric(item.label)));
+      if (Array.isArray(parsed.featureImportance)) setFeatureImportance(parsed.featureImportance);
+      if (parsed.modelParameters && typeof parsed.modelParameters === "object") setModelParameters(parsed.modelParameters);
       if (Array.isArray(parsed.optimalPortfolio)) setOptimalPortfolio(parsed.optimalPortfolio);
       if (Array.isArray(parsed.portfolioStrategies)) setPortfolioStrategies(parsed.portfolioStrategies);
       if (parsed.summaryInfo && typeof parsed.summaryInfo === "object") setSummaryInfo(parsed.summaryInfo);
@@ -192,6 +204,8 @@ export function ClusterAnalysis() {
       clusterData,
       clusterGroups,
       metrics,
+      featureImportance,
+      modelParameters,
       optimalPortfolio,
       portfolioStrategies,
       summaryInfo,
@@ -206,6 +220,8 @@ export function ClusterAnalysis() {
     clusterData,
     clusterGroups,
     metrics,
+    featureImportance,
+    modelParameters,
     optimalPortfolio,
     portfolioStrategies,
     summaryInfo,
@@ -215,6 +231,34 @@ export function ClusterAnalysis() {
     clusterSettings,
   ]);
 
+
+  const modelParameterRows = useMemo(
+    () =>
+      buildParameterRows(
+        modelParameters,
+        {
+          requested_algorithm: t("Запрошенный алгоритм", "Requested algorithm"),
+          used_algorithm: t("Алгоритм на сервере", "Server algorithm"),
+          clusters_count: t("Кластеров получено", "Clusters found"),
+          requested_clusters_count: t("Кластеров запрошено", "Requested clusters"),
+          auto_tune: t("Автоподбор", "Auto tune"),
+          scaling_method: t("Масштабирование", "Scaling"),
+          distance_metric: t("Метрика расстояния", "Distance metric"),
+          features: t("Признаки модели", "Model features"),
+        },
+        [
+          "used_algorithm",
+          "requested_algorithm",
+          "clusters_count",
+          "requested_clusters_count",
+          "auto_tune",
+          "scaling_method",
+          "distance_metric",
+          "features",
+        ],
+      ),
+    [modelParameters, t],
+  );
   const displayPortfolio = useMemo(() => {
     if (optimalPortfolio.length) {
       return optimalPortfolio;
@@ -503,6 +547,8 @@ export function ClusterAnalysis() {
       const points = extractPoints(parsed);
       const groups = extractGroups(parsed, points);
       const parsedMetrics = extractMetrics(parsed, points, groups);
+      const parsedImportance = extractFeatureImportance(parsed);
+      const parsedModelParameters = extractModelParameters(parsed);
       const portfolio = extractPortfolio(parsed);
       const strategies = extractPortfolioStrategies(parsed);
       const summary = extractSummary(parsed);
@@ -511,6 +557,8 @@ export function ClusterAnalysis() {
       setClusterData(points);
       setClusterGroups(groups);
       setMetrics(parsedMetrics);
+      setFeatureImportance(parsedImportance);
+      setModelParameters(parsedModelParameters);
       setOptimalPortfolio(portfolio);
       setPortfolioStrategies(strategies);
       setSummaryInfo(summary);
@@ -522,6 +570,8 @@ export function ClusterAnalysis() {
       setClusterData([]);
       setClusterGroups([]);
       setMetrics([]);
+      setFeatureImportance([]);
+      setModelParameters({});
       setOptimalPortfolio([]);
       setPortfolioStrategies([]);
       setSummaryInfo(null);
@@ -989,6 +1039,58 @@ export function ClusterAnalysis() {
             </MetricGrid>
           )}
 
+
+          {!!modelParameterRows.length && (
+            <SectionCard title={t("Параметры модели", "Model Parameters")}> 
+              <div className="ui-table-shell overflow-x-auto">
+                <table className="ui-data-table">
+                  <tbody>
+                    {modelParameterRows.map((row) => (
+                      <tr key={row.label}>
+                        <td className="font-medium text-slate-900 dark:text-slate-100">{row.label}</td>
+                        <td>{row.value}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </SectionCard>
+          )}
+
+          {!!featureImportance.length && (
+            <SectionCard
+              title={t("Значимость признаков кластеризации", "Clustering Feature Significance")}
+              description={t(
+                "Чем выше доля, тем сильнее признак разделял центры кластеров в итоговой модели.",
+                "Higher values mean the feature separated cluster centers more strongly in the final model.",
+              )}
+            >
+              <div className="grid grid-cols-1 gap-5 lg:grid-cols-[minmax(0,1.4fr)_minmax(16rem,0.6fr)]">
+                <ResponsiveContainer width="100%" height={260}>
+                  <BarChart data={featureImportance} layout="vertical" margin={{ top: 5, right: 30, left: 90, bottom: 5 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                    <XAxis type="number" stroke="#64748b" unit="%" />
+                    <YAxis type="category" dataKey="feature" stroke="#64748b" width={90} />
+                    <Tooltip formatter={(v: number) => `${Number(v).toFixed(2)}%`} />
+                    <Bar dataKey="importance" radius={[0, 4, 4, 0]}>
+                      {featureImportance.map((row, idx) => (
+                        <Cell key={row.feature} fill={CLUSTER_PALETTE[idx % CLUSTER_PALETTE.length]} />
+                      ))}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+                <div className="space-y-3">
+                  {featureImportance.slice(0, 4).map((row, index) => (
+                    <div key={row.feature} className="ui-stat-card">
+                      <div className="text-xs text-slate-500 dark:text-slate-400">#{index + 1}</div>
+                      <div className="font-semibold text-slate-900 dark:text-slate-100">{row.feature}</div>
+                      <div className="text-sm text-slate-600 dark:text-slate-300">{row.importance.toFixed(2)}%</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </SectionCard>
+          )}
           {summaryInfo && (
             <SectionCard title={t("Сводка по результату", "Result Summary")}>
               <div className="space-y-5">

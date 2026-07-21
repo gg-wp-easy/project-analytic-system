@@ -1,6 +1,7 @@
 import type {
   NeuralFeatureImportanceItem as FeatureImportanceItem,
   NeuralMetricItem as MetricItem,
+  NeuralModelStatItem as ModelStatItem,
   NeuralPortfolioPosition as PortfolioPosition,
   NeuralPortfolioStrategy as PortfolioStrategy,
   NeuralTrainingPoint as TrainingPoint,
@@ -233,4 +234,27 @@ export function extractPortfolioAssetsCount(parsed: Record<string, unknown>): nu
       numberOr(stats.portfolio_assets_count, numberOr(summary.portfolio_assets_count, 0)),
     ),
   );
+}
+
+export function extractModelStats(parsed: Record<string, unknown>): ModelStatItem[] {
+  const raw = parsed.model_stats ?? parsed.modelStats ?? [];
+  if (!Array.isArray(raw)) {
+    return [];
+  }
+  return raw
+    .map((item, index) => {
+      const row = item as Record<string, unknown>;
+      return {
+        modelName: String(row.model_name ?? row.modelName ?? `Model ${index + 1}`),
+        hiddenLayers: String(row.hidden_layers ?? row.hiddenLayers ?? "-"),
+        activation: String(row.activation ?? "-"),
+        solver: String(row.solver ?? row.optimizer ?? "-"),
+        bestEpoch: numberOr(row.best_epoch, NaN),
+        bestValMse: numberOr(row.best_val_mse, NaN),
+        finalValMse: numberOr(row.final_val_mse, NaN),
+        valR2Final: numberOr(row.val_r2_final, NaN),
+      } satisfies ModelStatItem;
+    })
+    .filter((row) => Number.isFinite(row.bestValMse))
+    .sort((a, b) => a.bestValMse - b.bestValMse);
 }

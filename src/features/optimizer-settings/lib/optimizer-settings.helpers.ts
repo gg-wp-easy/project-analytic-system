@@ -47,6 +47,6 @@ export function buildOptimizerSettingsPayload(settings: OptimizerSettings) {
     sharpe_blend_weight: optimizationObjective === "max_sharpe" ? Math.max(sharpeBlendWeight, 100) : 0,
     min_risk_blend_weight: optimizationObjective === "min_risk" ? Math.max(minRiskBlendWeight, 100) : 0,
     optimization_objective: optimizationObjective,
-    portfolio_assets_count: portfolioAssetsCount,
+    ...(portfolioAssetsCount > 0 ? { portfolio_assets_count: portfolioAssetsCount } : {}),
   };
 }

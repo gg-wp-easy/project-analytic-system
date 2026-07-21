@@ -1,4 +1,4 @@
-﻿import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   CheckSquare,
   FileSpreadsheet,
@@ -34,6 +34,8 @@ import type {
   DecisionTreeMetricItem as MetricItem,
   DecisionTreeNumericSummaryItem as NumericSummaryItem,
   DecisionTreePortfolioPosition as PortfolioPosition,
+  DecisionTreePreviewNode as TreePreviewNode,
+  DecisionTreeRuleItem as RuleItem,
   DecisionTreeSectorAllocationItem as SectorAllocationItem,
 } from "../../../features/decision-tree-analysis";
 import {
@@ -42,6 +44,10 @@ import {
   isVisibleAnalysisMetric,
   localizeMetricLabel,
 } from "../../../shared/lib/analysis/metric-display";
+import {
+  buildParameterRows,
+  extractModelParameters,
+} from "../../../shared/lib/analysis/model-details";
 import {
   downloadAnalysisResultsAsPdf,
   downloadAnalysisResultsAsXlsx,
@@ -78,6 +84,7 @@ import type {
 } from "../model";
 import {
   extractConfusionMatrix,
+  extractDecisionRules,
   extractFeatureImportance,
   extractMetrics,
   extractNumericSummary,
@@ -85,7 +92,45 @@ import {
   extractPortfolioMetrics,
   extractPortfolioPositions,
   extractSectorAllocation,
+  extractTreePreview,
 } from "../lib";
+
+type TreeDiagramNode = {
+  key: string;
+  parentKey?: string;
+  branch?: string;
+  node: TreePreviewNode;
+  x: number;
+  y: number;
+};
+
+function buildTreeDiagramNodes(root: TreePreviewNode): TreeDiagramNode[] {
+  const rows: TreeDiagramNode[] = [];
+
+  function walk(node: TreePreviewNode, path: string, depth: number, index: number, parentKey?: string, branch?: string) {
+    const slots = 2 ** depth;
+    rows.push({
+      key: path,
+      parentKey,
+      branch,
+      node,
+      x: ((index + 0.5) / slots) * 1000,
+      y: 56 + depth * 122,
+    });
+    if (node.left) walk(node.left, path + "L", depth + 1, index * 2, path, "<=");
+    if (node.right) walk(node.right, path + "R", depth + 1, index * 2 + 1, path, ">");
+  }
+
+  walk(root, "root", 0, 0);
+  return rows;
+}
+
+function formatTreeConfidence(value: number | string): string {
+  if (typeof value === "string") {
+    return value || "-";
+  }
+  return Number.isFinite(value) ? (value * 100).toFixed(1) + "%" : "-";
+}
 
 export function DecisionTreeAnalysis() {
   const { cache, hasData } = useFundamentals();
@@ -101,6 +146,9 @@ export function DecisionTreeAnalysis() {
   const [portfolioPositions, setPortfolioPositions] = useState<PortfolioPosition[]>([]);
   const [sectorAllocation, setSectorAllocation] = useState<SectorAllocationItem[]>([]);
   const [numericSummary, setNumericSummary] = useState<NumericSummaryItem[]>([]);
+  const [decisionRules, setDecisionRules] = useState<RuleItem[]>([]);
+  const [treePreview, setTreePreview] = useState<TreePreviewNode | null>(null);
+  const [modelParameters, setModelParameters] = useState<Record<string, unknown>>({});
   const [portfolioAssetsCount, setPortfolioAssetsCount] = useState(0);
   const [selectionMode, setSelectionMode] = useState<SelectionMode>("all");
   const [selectedFigis, setSelectedFigis] = useState<string[]>([]);
@@ -126,6 +174,9 @@ export function DecisionTreeAnalysis() {
         portfolioPositions?: PortfolioPosition[];
         sectorAllocation?: SectorAllocationItem[];
         numericSummary?: NumericSummaryItem[];
+        decisionRules?: RuleItem[];
+        treePreview?: TreePreviewNode | null;
+        modelParameters?: Record<string, unknown>;
         portfolioAssetsCount?: number;
         selectionMode?: SelectionMode;
         selectedFigis?: string[];
@@ -138,6 +189,9 @@ export function DecisionTreeAnalysis() {
       if (Array.isArray(parsed.portfolioPositions)) setPortfolioPositions(parsed.portfolioPositions);
       if (Array.isArray(parsed.sectorAllocation)) setSectorAllocation(parsed.sectorAllocation);
       if (Array.isArray(parsed.numericSummary)) setNumericSummary(parsed.numericSummary);
+      if (Array.isArray(parsed.decisionRules)) setDecisionRules(parsed.decisionRules);
+      if (parsed.treePreview && typeof parsed.treePreview === "object") setTreePreview(parsed.treePreview);
+      if (parsed.modelParameters && typeof parsed.modelParameters === "object") setModelParameters(parsed.modelParameters);
       if (typeof parsed.portfolioAssetsCount === "number") setPortfolioAssetsCount(parsed.portfolioAssetsCount);
       if (parsed.selectionMode === "all" || parsed.selectionMode === "manual") setSelectionMode(parsed.selectionMode);
       if (Array.isArray(parsed.selectedFigis)) setSelectedFigis(parsed.selectedFigis.filter((figi) => typeof figi === "string"));
@@ -169,6 +223,9 @@ export function DecisionTreeAnalysis() {
       portfolioPositions,
       sectorAllocation,
       numericSummary,
+      decisionRules,
+      treePreview,
+      modelParameters,
       portfolioAssetsCount,
       selectionMode,
       selectedFigis,
@@ -183,11 +240,38 @@ export function DecisionTreeAnalysis() {
     portfolioPositions,
     sectorAllocation,
     numericSummary,
+    decisionRules,
+    treePreview,
+    modelParameters,
     portfolioAssetsCount,
     selectionMode,
     selectedFigis,
     treeSettings,
   ]);
+
+
+  const modelParameterRows = useMemo(
+    () =>
+      buildParameterRows(
+        modelParameters,
+        {
+          algorithm: t("\u0410\u043b\u0433\u043e\u0440\u0438\u0442\u043c", "Algorithm"),
+          criterion: t("\u041a\u0440\u0438\u0442\u0435\u0440\u0438\u0439", "Criterion"),
+          max_depth: t("\u041c\u0430\u043a\u0441. \u0433\u043b\u0443\u0431\u0438\u043d\u0430", "Max depth"),
+          min_samples_split: t("\u041c\u0438\u043d. \u043e\u0431\u044a\u0435\u043a\u0442\u043e\u0432 \u0434\u043b\u044f split", "Min samples split"),
+          min_samples_leaf: t("\u041c\u0438\u043d. \u043e\u0431\u044a\u0435\u043a\u0442\u043e\u0432 \u0432 \u043b\u0438\u0441\u0442\u0435", "Min samples leaf"),
+          test_size: t("\u0422\u0435\u0441\u0442\u043e\u0432\u0430\u044f \u0434\u043e\u043b\u044f", "Test size"),
+          random_state: t("Random state", "Random state"),
+          class_weight: t("\u0411\u0430\u043b\u0430\u043d\u0441 \u043a\u043b\u0430\u0441\u0441\u043e\u0432", "Class weight"),
+          features: t("\u041f\u0440\u0438\u0437\u043d\u0430\u043a\u0438", "Features"),
+        },
+        ["algorithm", "criterion", "max_depth", "min_samples_split", "min_samples_leaf", "test_size", "random_state", "class_weight", "features"],
+      ),
+    [modelParameters, t],
+  );
+
+  const treeDiagramNodes = useMemo(() => (treePreview ? buildTreeDiagramNodes(treePreview) : []), [treePreview]);
+  const treeDiagramNodeMap = useMemo(() => new Map(treeDiagramNodes.map((node) => [node.key, node])), [treeDiagramNodes]);
 
   const requestData = useMemo(
     () =>
@@ -405,12 +489,15 @@ export function DecisionTreeAnalysis() {
         throw new Error(`HTTP ${response.status}${text ? `: ${text}` : ""}`);
       }
 
-      const parsedMetrics = extractPortfolioMetrics(parsed);
+      const parsedMetrics = [...extractMetrics(parsed), ...extractPortfolioMetrics(parsed)];
       const parsedImportance = extractFeatureImportance(parsed);
       const parsedMatrix = extractConfusionMatrix(parsed);
       const parsedPositions = extractPortfolioPositions(parsed);
       const parsedAllocation = extractSectorAllocation(parsed);
       const parsedNumericSummary = extractNumericSummary(parsed);
+      const parsedRules = extractDecisionRules(parsed);
+      const parsedTreePreview = extractTreePreview(parsed);
+      const parsedModelParameters = extractModelParameters(parsed);
       const parsedAssetsCount = extractPortfolioAssetsCount(parsed);
 
       setMetrics(parsedMetrics);
@@ -419,6 +506,9 @@ export function DecisionTreeAnalysis() {
       setPortfolioPositions(parsedPositions);
       setSectorAllocation(parsedAllocation);
       setNumericSummary(parsedNumericSummary);
+      setDecisionRules(parsedRules);
+      setTreePreview(parsedTreePreview);
+      setModelParameters(parsedModelParameters);
       setPortfolioAssetsCount(parsedAssetsCount);
     } catch (e) {
       const message = e instanceof Error ? e.message : t("Не удалось выполнить анализ дерева решений", "Failed to run decision tree analysis");
@@ -429,6 +519,9 @@ export function DecisionTreeAnalysis() {
       setPortfolioPositions([]);
       setSectorAllocation([]);
       setNumericSummary([]);
+      setDecisionRules([]);
+      setTreePreview(null);
+      setModelParameters({});
       setPortfolioAssetsCount(0);
     } finally {
       setIsRunning(false);
@@ -969,6 +1062,104 @@ export function DecisionTreeAnalysis() {
                 />
               ))}
             </MetricGrid>
+          )}
+
+
+          {!!modelParameterRows.length && (
+            <SectionCard title={t("\u041f\u0430\u0440\u0430\u043c\u0435\u0442\u0440\u044b \u0438 \u0440\u0435\u0437\u0443\u043b\u044c\u0442\u0430\u0442\u044b \u043c\u043e\u0434\u0435\u043b\u0438", "Model Parameters and Results")}>
+              <div className="ui-table-shell overflow-x-auto">
+                <table className="ui-data-table">
+                  <thead>
+                    <tr>
+                      <th>{t("\u041f\u0430\u0440\u0430\u043c\u0435\u0442\u0440", "Parameter")}</th>
+                      <th>{t("\u0417\u043d\u0430\u0447\u0435\u043d\u0438\u0435", "Value")}</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {modelParameterRows.map((row) => (
+                      <tr key={row.key}>
+                        <td className="font-medium text-slate-900 dark:text-slate-100">{row.label}</td>
+                        <td>{row.value}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </SectionCard>
+          )}
+
+          {!!treeDiagramNodes.length && (
+            <SectionCard
+              title={t("\u0421\u043e\u043a\u0440\u0430\u0449\u0435\u043d\u043d\u043e\u0435 \u0434\u0435\u0440\u0435\u0432\u043e \u0440\u0435\u0448\u0435\u043d\u0438\u0439", "Compact Decision Tree")}
+              description={t(
+                "\u041f\u043e\u043a\u0430\u0437\u0430\u043d\u044b \u0432\u0435\u0440\u0445\u043d\u0438\u0435 \u0443\u0440\u043e\u0432\u043d\u0438 \u0434\u0435\u0440\u0435\u0432\u0430: \u0443\u0441\u043b\u043e\u0432\u0438\u0435 \u0440\u0430\u0437\u0434\u0435\u043b\u0435\u043d\u0438\u044f, \u043f\u0440\u043e\u0433\u043d\u043e\u0437 \u043a\u043b\u0430\u0441\u0441\u0430, \u0443\u0432\u0435\u0440\u0435\u043d\u043d\u043e\u0441\u0442\u044c \u0438 \u0447\u0438\u0441\u043b\u043e \u043e\u0431\u044a\u0435\u043a\u0442\u043e\u0432 \u0432 \u0443\u0437\u043b\u0435.",
+                "Shows the top levels: split condition, predicted class, confidence, and samples per node.",
+              )}
+            >
+              <div className="overflow-x-auto rounded-md border border-slate-200 bg-white p-3 dark:border-slate-700 dark:bg-slate-950">
+                <svg viewBox="0 0 1000 360" className="min-w-[900px]" role="img" aria-label={t("\u0421\u043e\u043a\u0440\u0430\u0449\u0435\u043d\u043d\u043e\u0435 \u0434\u0435\u0440\u0435\u0432\u043e \u0440\u0435\u0448\u0435\u043d\u0438\u0439", "Compact decision tree")}>
+                  {treeDiagramNodes
+                    .filter((node) => node.parentKey)
+                    .map((node) => {
+                      const parent = treeDiagramNodeMap.get(node.parentKey ?? "");
+                      if (!parent) return null;
+                      const midX = (parent.x + node.x) / 2;
+                      const midY = (parent.y + node.y) / 2;
+                      return (
+                        <g key={node.key + "-edge"}>
+                          <line x1={parent.x} y1={parent.y + 36} x2={node.x} y2={node.y - 36} stroke="#94a3b8" strokeWidth="2" />
+                          <text x={midX} y={midY - 4} textAnchor="middle" className="fill-slate-500 text-[13px] font-semibold">
+                            {node.branch}
+                          </text>
+                        </g>
+                      );
+                    })}
+                  {treeDiagramNodes.map((item) => (
+                    <foreignObject key={item.key} x={item.x - 82} y={item.y - 42} width="164" height="84">
+                      <div className="h-full rounded-md border border-emerald-200 bg-emerald-50 p-2 text-center text-[11px] leading-tight text-slate-700 shadow-sm dark:border-emerald-800 dark:bg-emerald-950 dark:text-slate-100">
+                        <div className="truncate font-semibold text-emerald-800 dark:text-emerald-200">
+                          {item.node.kind === "leaf" ? t("\u041b\u0438\u0441\u0442", "Leaf") : item.node.feature}
+                        </div>
+                        <div className="mt-1 truncate">
+                          {item.node.kind === "leaf" ? t("\u041f\u0440\u043e\u0433\u043d\u043e\u0437", "Prediction") : "<= " + Number(item.node.threshold ?? 0).toFixed(2)}
+                        </div>
+                        <div className="mt-1 font-semibold text-slate-900 dark:text-slate-50">
+                          {String(item.node.prediction ?? "-")}
+                        </div>
+                        <div className="text-[10px] text-slate-500 dark:text-slate-400">
+                          {formatTreeConfidence(item.node.confidence)} | n={item.node.samples}
+                        </div>
+                      </div>
+                    </foreignObject>
+                  ))}
+                </svg>
+              </div>
+
+              {!!decisionRules.length && (
+                <div className="mt-4 ui-table-shell overflow-x-auto">
+                  <table className="ui-data-table">
+                    <thead>
+                      <tr>
+                        <th>{t("\u041f\u0440\u0430\u0432\u0438\u043b\u043e", "Rule")}</th>
+                        <th>{t("\u041f\u0440\u043e\u0433\u043d\u043e\u0437", "Prediction")}</th>
+                        <th>{t("\u0423\u0432\u0435\u0440\u0435\u043d\u043d\u043e\u0441\u0442\u044c", "Confidence")}</th>
+                        <th>{t("\u041e\u0431\u044a\u0435\u043a\u0442\u043e\u0432", "Samples")}</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {decisionRules.map((rule, index) => (
+                        <tr key={String(rule.prediction) + "-" + index}>
+                          <td className="max-w-xl text-slate-700 dark:text-slate-200">{rule.conditions}</td>
+                          <td className="font-semibold text-slate-900 dark:text-slate-100">{String(rule.prediction)}</td>
+                          <td>{formatTreeConfidence(rule.confidence)}</td>
+                          <td>{rule.samples}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </SectionCard>
           )}
 
           {portfolioAssetsCount > 0 && (

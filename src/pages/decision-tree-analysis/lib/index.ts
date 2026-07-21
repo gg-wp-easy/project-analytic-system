@@ -1,5 +1,6 @@
 export {
   extractConfusionMatrix,
+  extractDecisionRules,
   extractFeatureImportance,
   extractMetrics,
   extractNumericSummary,
@@ -7,4 +8,5 @@ export {
   extractPortfolioMetrics,
   extractPortfolioPositions,
   extractSectorAllocation,
+  extractTreePreview,
 } from "./decision-tree-analysis-page.helpers";
