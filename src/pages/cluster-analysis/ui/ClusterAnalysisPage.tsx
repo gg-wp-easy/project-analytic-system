@@ -105,6 +105,16 @@ import {
   getClusterColor,
 } from "../lib";
 
+function formatOptionalNumber(value: number | undefined, digits = 4): string {
+  return typeof value === "number" && Number.isFinite(value) ? value.toFixed(digits) : "";
+}
+
+const PORTFOLIO_METRIC_LABELS = new Set(["expected return", "risk", "sharpe", "sharpe ratio", "diversification"]);
+
+function isPortfolioMetric(label: string): boolean {
+  return PORTFOLIO_METRIC_LABELS.has(label.trim().toLowerCase());
+}
+
 export function ClusterAnalysis() {
   const { cache, hasData } = useFundamentals();
   const { locale, t } = useAppSettings();
@@ -128,6 +138,8 @@ export function ClusterAnalysis() {
   const [clusterSettings, setClusterSettings] = useState<ClusterAnalysisSettings>(DEFAULT_CLUSTER_SETTINGS);
   const portfolioChartRef = useRef<HTMLDivElement | null>(null);
   const visibleMetrics = useMemo(() => metrics.filter((item) => isVisibleAnalysisMetric(item.label)), [metrics]);
+  const portfolioMetrics = useMemo(() => visibleMetrics.filter((item) => isPortfolioMetric(item.label)), [visibleMetrics]);
+  const overviewMetrics = useMemo(() => visibleMetrics.filter((item) => !isPortfolioMetric(item.label)), [visibleMetrics]);
   const clusterSeries = useMemo(
     () =>
       Array.from(new Set(clusterData.map((point) => point.cluster)))
@@ -178,7 +190,13 @@ export function ClusterAnalysis() {
       if (parsed.modelParameters && typeof parsed.modelParameters === "object") setModelParameters(parsed.modelParameters);
       if (Array.isArray(parsed.optimalPortfolio)) setOptimalPortfolio(parsed.optimalPortfolio);
       if (Array.isArray(parsed.portfolioStrategies)) setPortfolioStrategies(parsed.portfolioStrategies);
-      if (parsed.summaryInfo && typeof parsed.summaryInfo === "object") setSummaryInfo(parsed.summaryInfo);
+      if (parsed.summaryInfo && typeof parsed.summaryInfo === "object") {
+        const savedSummary = parsed.summaryInfo as AnalysisSummary;
+        setSummaryInfo({
+          ...savedSummary,
+          companiesCount: savedSummary.companiesCount || (Array.isArray(parsed.clusterData) ? parsed.clusterData.length : 0),
+        });
+      }
       if (typeof parsed.bestPortfolioAssetsCount === "number") setBestPortfolioAssetsCount(parsed.bestPortfolioAssetsCount);
       if (parsed.selectionMode === "all" || parsed.selectionMode === "manual") setSelectionMode(parsed.selectionMode);
       if (Array.isArray(parsed.selectedFigis)) setSelectedFigis(parsed.selectedFigis.filter((figi) => typeof figi === "string"));
@@ -245,6 +263,14 @@ export function ClusterAnalysis() {
           scaling_method: t("Масштабирование", "Scaling"),
           distance_metric: t("Метрика расстояния", "Distance metric"),
           features: t("Признаки модели", "Model features"),
+          requested_features: "Requested features",
+          model_features: "Model feature columns",
+          random_state: "Random state",
+          portfolio_assets_count: "Assets in portfolio",
+          requested_portfolio_assets_count: "Requested assets",
+          effective_min_weight_pct: "Effective min weight, %",
+          effective_max_weight_pct: "Effective max weight, %",
+          auto_fit_weights: "Auto-fit weights",
         },
         [
           "used_algorithm",
@@ -255,6 +281,14 @@ export function ClusterAnalysis() {
           "scaling_method",
           "distance_metric",
           "features",
+          "requested_features",
+          "model_features",
+          "random_state",
+          "portfolio_assets_count",
+          "requested_portfolio_assets_count",
+          "effective_min_weight_pct",
+          "effective_max_weight_pct",
+          "auto_fit_weights",
         ],
       ),
     [modelParameters, t],
@@ -481,6 +515,72 @@ export function ClusterAnalysis() {
       });
     } catch (e) {
       const message = e instanceof Error ? e.message : t("Не удалось сохранить PDF", "Failed to save PDF");
+      showErrorDialog(message);
+    }
+  };
+
+
+  const buildAnalysisExportMetrics = () => [
+    ...visibleMetrics.map((item) => ({
+      label: localizeMetricLabel(item.label, isEn),
+      value: formatMetricDisplay(item.label, item.value),
+    })),
+    ...modelParameterRows.map((row) => ({ label: row.label, value: row.value })),
+    ...clusterGroups.map((cluster) => ({
+      label: cluster.name,
+      value: [
+        "count=" + cluster.count,
+        "P/E=" + cluster.avgPE.toFixed(2),
+        "g=" + cluster.avgG.toFixed(2),
+        cluster.recommendation ? "recommendation=" + cluster.recommendation : "",
+      ].filter(Boolean).join("; "),
+    })),
+  ];
+
+  const buildClusterAnalysisColumns = () => [
+    { header: "Ticker", render: (row: ClusterPoint) => row.ticker },
+    { header: "Company", render: (row: ClusterPoint) => row.name ?? "" },
+    { header: "Cluster", render: (row: ClusterPoint) => row.cluster + 1 },
+    { header: "P/E", render: (row: ClusterPoint) => formatOptionalNumber(row.pe, 2) },
+    { header: "g, %", render: (row: ClusterPoint) => formatOptionalNumber(row.g, 2) },
+    { header: "Expected return", render: (row: ClusterPoint) => formatOptionalNumber(row.expectedReturn, 4) },
+    { header: "Risk", render: (row: ClusterPoint) => formatOptionalNumber(row.risk, 4) },
+    { header: "ROE", render: (row: ClusterPoint) => formatOptionalNumber(row.roe, 2) },
+    { header: "Market cap", render: (row: ClusterPoint) => formatOptionalNumber(row.marketCap, 0) },
+    { header: "Value score", render: (row: ClusterPoint) => formatOptionalNumber(row.valueScore, 2) },
+    { header: "Quality score", render: (row: ClusterPoint) => formatOptionalNumber(row.qualityScore, 2) },
+    { header: "Growth score", render: (row: ClusterPoint) => formatOptionalNumber(row.growthScore, 2) },
+    { header: "Income score", render: (row: ClusterPoint) => formatOptionalNumber(row.incomeScore, 2) },
+    { header: "Composite score", render: (row: ClusterPoint) => formatOptionalNumber(row.compositeScore, 2) },
+  ];
+
+  const exportAnalysisToXlsx = async () => {
+    if (!clusterData.length) {
+      return;
+    }
+    await downloadAnalysisResultsAsXlsx({
+      title: "Cluster Analysis Results",
+      filename: "cluster-analysis-results.xlsx",
+      rows: clusterData,
+      columns: buildClusterAnalysisColumns(),
+      metrics: buildAnalysisExportMetrics(),
+    });
+  };
+
+  const exportAnalysisToPdf = async () => {
+    if (!clusterData.length) {
+      return;
+    }
+    try {
+      await downloadAnalysisResultsAsPdf({
+        title: "Cluster Analysis Results",
+        filename: "cluster-analysis-results.pdf",
+        rows: clusterData,
+        columns: buildClusterAnalysisColumns(),
+        metrics: buildAnalysisExportMetrics(),
+      });
+    } catch (e) {
+      const message = e instanceof Error ? e.message : "Failed to save PDF";
       showErrorDialog(message);
     }
   };
@@ -845,6 +945,7 @@ export function ClusterAnalysis() {
             <OptimizerSettingsFields
               settings={optimizerSettings}
               onChange={setOptimizerSettings}
+              autoFitWeights
             />
 
             {!hasData && (
@@ -1020,9 +1121,9 @@ export function ClusterAnalysis() {
             />
           )}
 
-          {!!visibleMetrics.length && (
+          {!!overviewMetrics.length && (
             <MetricGrid>
-              {visibleMetrics.map((m) => (
+              {overviewMetrics.map((m) => (
                 <MetricCard
                   key={m.label}
                   label={(
@@ -1041,12 +1142,12 @@ export function ClusterAnalysis() {
 
 
           {!!modelParameterRows.length && (
-            <SectionCard title={t("Параметры модели", "Model Parameters")}> 
+            <SectionCard title={t("\u041f\u0430\u0440\u0430\u043c\u0435\u0442\u0440\u044b \u043c\u043e\u0434\u0435\u043b\u0438", "Model Parameters")}>
               <div className="ui-table-shell overflow-x-auto">
                 <table className="ui-data-table">
                   <tbody>
                     {modelParameterRows.map((row) => (
-                      <tr key={row.label}>
+                      <tr key={row.key}>
                         <td className="font-medium text-slate-900 dark:text-slate-100">{row.label}</td>
                         <td>{row.value}</td>
                       </tr>
@@ -1092,7 +1193,29 @@ export function ClusterAnalysis() {
             </SectionCard>
           )}
           {summaryInfo && (
-            <SectionCard title={t("Сводка по результату", "Result Summary")}>
+            <SectionCard
+              title={t("\u0421\u0432\u043e\u0434\u043a\u0430 \u043f\u043e \u0440\u0435\u0437\u0443\u043b\u044c\u0442\u0430\u0442\u0443", "Result Summary")}
+              action={(
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={exportAnalysisToXlsx}
+                    disabled={!clusterData.length}
+                    className="ui-secondary-button px-3 py-2 text-xs"
+                  >
+                    <FileSpreadsheet className="h-4 w-4" />
+                    XLSX
+                  </button>
+                  <button
+                    onClick={exportAnalysisToPdf}
+                    disabled={!clusterData.length}
+                    className="ui-secondary-button px-3 py-2 text-xs"
+                  >
+                    <FileText className="h-4 w-4" />
+                    PDF
+                  </button>
+                </div>
+              )}
+            >
               <div className="space-y-5">
                 <div className="grid grid-cols-1 gap-3 text-sm md:grid-cols-2">
                   <div className="ui-stat-card">
@@ -1108,10 +1231,17 @@ export function ClusterAnalysis() {
                 {!!summaryInfo.clusterDistribution.length && (
                   <div className="h-64">
                     <ResponsiveContainer width="100%" height="100%">
-                      <BarChart data={summaryInfo.clusterDistribution}>
+                      <BarChart data={summaryInfo.clusterDistribution} margin={{ top: 10, right: 20, left: 18, bottom: 32 }}>
                         <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                        <XAxis dataKey="cluster" stroke="#64748b" />
-                        <YAxis stroke="#64748b" />
+                        <XAxis
+                          dataKey="cluster"
+                          stroke="#64748b"
+                          label={{ value: t("\u041a\u043b\u0430\u0441\u0442\u0435\u0440", "Cluster"), position: "insideBottom", offset: -10 }}
+                        />
+                        <YAxis
+                          stroke="#64748b"
+                          label={{ value: t("\u041a\u043e\u043c\u043f\u0430\u043d\u0438\u0439", "Companies"), angle: -90, position: "insideLeft" }}
+                        />
                         <Tooltip />
                         <Bar dataKey="count">
                           {summaryInfo.clusterDistribution.map((entry) => (
@@ -1154,9 +1284,33 @@ export function ClusterAnalysis() {
                         <span className="font-medium text-blue-600 dark:text-blue-400">{cluster.avgPE.toFixed(2)}</span>
                       </div>
                       <div className="flex justify-between gap-4">
-                        <span className="text-slate-600 dark:text-slate-400">{t("Средний g:", "Average g:")}</span>
+                        <span className="text-slate-600 dark:text-slate-400">{t("\u0421\u0440\u0435\u0434\u043d\u0438\u0439 g:", "Average g:")}</span>
                         <span className="font-medium text-green-600 dark:text-green-400">{cluster.avgG.toFixed(2)}%</span>
                       </div>
+                      {typeof cluster.avgROE === "number" && Number.isFinite(cluster.avgROE) && (
+                        <div className="flex justify-between gap-4">
+                          <span className="text-slate-600 dark:text-slate-400">ROE:</span>
+                          <span className="font-medium text-slate-900 dark:text-slate-100">{cluster.avgROE.toFixed(2)}%</span>
+                        </div>
+                      )}
+                      {typeof cluster.avgDividendYield === "number" && Number.isFinite(cluster.avgDividendYield) && (
+                        <div className="flex justify-between gap-4">
+                          <span className="text-slate-600 dark:text-slate-400">Div yield:</span>
+                          <span className="font-medium text-slate-900 dark:text-slate-100">{cluster.avgDividendYield.toFixed(2)}%</span>
+                        </div>
+                      )}
+                      {typeof cluster.avgRisk === "number" && Number.isFinite(cluster.avgRisk) && (
+                        <div className="flex justify-between gap-4">
+                          <span className="text-slate-600 dark:text-slate-400">Risk:</span>
+                          <span className="font-medium text-slate-900 dark:text-slate-100">{cluster.avgRisk.toFixed(2)}</span>
+                        </div>
+                      )}
+                      {cluster.recommendation && (
+                        <div className="flex justify-between gap-4">
+                          <span className="text-slate-600 dark:text-slate-400">Recommendation:</span>
+                          <span className="font-medium text-slate-900 dark:text-slate-100">{cluster.recommendation}</span>
+                        </div>
+                      )}
                     </div>
                   </div>
                 ))}
@@ -1182,10 +1336,23 @@ export function ClusterAnalysis() {
               </div>
             )}
             <ResponsiveContainer width="100%" height={460}>
-              <ScatterChart margin={{ top: 20, right: 30, left: 20, bottom: 20 }}>
+              <ScatterChart margin={{ top: 20, right: 36, left: 28, bottom: 42 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                <XAxis type="number" dataKey="pe" name="P/E" stroke="#64748b" />
-                <YAxis type="number" dataKey="g" name="g/ROE" unit="%" stroke="#64748b" />
+                <XAxis
+                  type="number"
+                  dataKey="pe"
+                  name="P/E"
+                  stroke="#64748b"
+                  label={{ value: "P/E", position: "insideBottom", offset: -14 }}
+                />
+                <YAxis
+                  type="number"
+                  dataKey="g"
+                  name="g/ROE"
+                  unit="%"
+                  stroke="#64748b"
+                  label={{ value: t("g / ROE, %", "g / ROE, %"), angle: -90, position: "insideLeft" }}
+                />
                 <Tooltip
                   cursor={{ strokeDasharray: "3 3" }}
                   content={({ payload }) => {
@@ -1259,6 +1426,16 @@ export function ClusterAnalysis() {
                 </div>
               )}
             >
+              {!!portfolioMetrics.length && (
+                <div className="mb-5 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                  {portfolioMetrics.map((metric) => (
+                    <div key={metric.label} className="ui-stat-card">
+                      <div className="text-xs text-slate-500 dark:text-slate-400">{localizeMetricLabel(metric.label, isEn)}</div>
+                      <div className="text-xl font-semibold text-slate-900 dark:text-slate-100">{formatMetricDisplay(metric.label, metric.value)}</div>
+                    </div>
+                  ))}
+                </div>
+              )}
               {!!displayPortfolio.length && (
                 <PortfolioHoldingsPanel
                   rows={displayPortfolio}

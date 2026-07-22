@@ -25,6 +25,9 @@ import {
   LineChart,
   Line,
   Legend,
+  ScatterChart,
+  Scatter,
+  ZAxis,
 } from "recharts";
 import { useFundamentals } from "../../../entities/fundamentals";
 import { useAppSettings } from "../../../app/context/AppSettingsContext";
@@ -43,6 +46,7 @@ import { API_BASE_URL } from "../../../config";
 import type {
   NeuralFeatureImportanceItem as FeatureImportanceItem,
   NeuralMetricItem as MetricItem,
+  NeuralAnalysisResultRow as AnalysisResultRow,
   NeuralModelStatItem as ModelStatItem,
   NeuralPortfolioPosition as PortfolioPosition,
   NeuralPortfolioStrategy as PortfolioStrategy,
@@ -94,6 +98,7 @@ import type {
   TuningBudget,
 } from "../model";
 import {
+  extractAnalysisRows,
   extractFeatureImportance,
   extractMetrics,
   extractModelStats,
@@ -101,7 +106,42 @@ import {
   extractPortfolioPositions,
   extractPortfolioStrategies,
   extractTrainingHistory,
+  formatOptionalNumber,
+  formatPercentValue,
 } from "../lib";
+
+const PORTFOLIO_METRIC_LABELS = new Set(["expected return", "risk", "volatility", "sharpe", "sharpe ratio", "diversification"]);
+const ARCHITECTURE_DIAGRAM_WIDTH = 760;
+const ARCHITECTURE_DIAGRAM_HEIGHT = 280;
+
+function isPortfolioMetric(label: string): boolean {
+  return PORTFOLIO_METRIC_LABELS.has(label.trim().toLowerCase());
+}
+
+function parseLayerSizesFromValue(value: unknown): number[] {
+  if (Array.isArray(value)) {
+    return value.map((item) => Math.trunc(Number(item))).filter((item) => Number.isFinite(item) && item > 0);
+  }
+  const matches = String(value ?? "").match(/\d+/g) ?? [];
+  return matches.map((item) => Math.trunc(Number(item))).filter((item) => Number.isFinite(item) && item > 0);
+}
+
+function averageFinite(values: number[]): number {
+  const finite = values.filter((value) => Number.isFinite(value));
+  if (!finite.length) {
+    return NaN;
+  }
+  return finite.reduce((sum, value) => sum + value, 0) / finite.length;
+}
+
+function getArchitectureNodeY(index: number, count: number): number {
+  if (count <= 1) {
+    return ARCHITECTURE_DIAGRAM_HEIGHT / 2;
+  }
+  const top = 74;
+  const bottom = ARCHITECTURE_DIAGRAM_HEIGHT - 74;
+  return top + (index * (bottom - top)) / (count - 1);
+}
 
 export function NeuralNetworkAnalysis() {
   const { cache, hasData } = useFundamentals();
@@ -112,6 +152,7 @@ export function NeuralNetworkAnalysis() {
   const [error, setError] = useState<string | null>(null);
   const [errorDialogMessage, setErrorDialogMessage] = useState<string | null>(null);
   const [metrics, setMetrics] = useState<MetricItem[]>([]);
+  const [analysisRows, setAnalysisRows] = useState<AnalysisResultRow[]>([]);
   const [featureImportance, setFeatureImportance] = useState<FeatureImportanceItem[]>([]);
   const [portfolioStrategies, setPortfolioStrategies] = useState<PortfolioStrategy[]>([]);
   const [portfolioPositions, setPortfolioPositions] = useState<PortfolioPosition[]>([]);
@@ -124,7 +165,11 @@ export function NeuralNetworkAnalysis() {
   const [stockSearch, setStockSearch] = useState("");
   const [neuralSettings, setNeuralSettings] = useState<NeuralAnalysisSettings>(DEFAULT_NEURAL_SETTINGS);
   const portfolioChartRef = useRef<HTMLDivElement | null>(null);
+  const predictionChartRef = useRef<HTMLDivElement | null>(null);
+  const architectureChartRef = useRef<HTMLDivElement | null>(null);
   const visibleMetrics = useMemo(() => metrics.filter((item) => isVisibleAnalysisMetric(item.label)), [metrics]);
+  const portfolioMetrics = useMemo(() => visibleMetrics.filter((item) => isPortfolioMetric(item.label)), [visibleMetrics]);
+  const overviewMetrics = useMemo(() => visibleMetrics.filter((item) => !isPortfolioMetric(item.label)), [visibleMetrics]);
   const showErrorDialog = (message: string) => {
     setError(message);
     setErrorDialogMessage(message);
@@ -138,6 +183,7 @@ export function NeuralNetworkAnalysis() {
       const parsed = JSON.parse(raw) as {
         error?: string | null;
         metrics?: MetricItem[];
+        analysisRows?: AnalysisResultRow[];
         featureImportance?: FeatureImportanceItem[];
         portfolioStrategies?: PortfolioStrategy[];
         portfolioPositions?: PortfolioPosition[];
@@ -151,6 +197,7 @@ export function NeuralNetworkAnalysis() {
       };
       if (typeof parsed.error === "string" || parsed.error === null) setError(parsed.error);
       if (Array.isArray(parsed.metrics)) setMetrics(parsed.metrics.filter((item) => isVisibleAnalysisMetric(item.label)));
+      if (Array.isArray(parsed.analysisRows)) setAnalysisRows(parsed.analysisRows);
       if (Array.isArray(parsed.featureImportance)) setFeatureImportance(parsed.featureImportance);
       if (Array.isArray(parsed.portfolioStrategies)) setPortfolioStrategies(parsed.portfolioStrategies);
       if (Array.isArray(parsed.portfolioPositions)) setPortfolioPositions(parsed.portfolioPositions);
@@ -184,6 +231,7 @@ export function NeuralNetworkAnalysis() {
     const payload = {
       error,
       metrics,
+      analysisRows,
       featureImportance,
       portfolioStrategies,
       portfolioPositions,
@@ -199,6 +247,7 @@ export function NeuralNetworkAnalysis() {
   }, [
     error,
     metrics,
+    analysisRows,
     featureImportance,
     portfolioStrategies,
     portfolioPositions,
@@ -311,6 +360,64 @@ export function NeuralNetworkAnalysis() {
         .filter((option) => neuralSettings.features.includes(option.key))
         .map((option) => (isEn ? option.labelEn : option.labelRu)),
     [isEn, neuralSettings.features],
+  );
+
+  const topSignalRows = useMemo(() => analysisRows.slice(0, 10), [analysisRows]);
+
+  const predictionChartRows = useMemo(
+    () => analysisRows.filter((row) => Number.isFinite(row.pe) && Number.isFinite(row.predictedPE)).slice(0, 40),
+    [analysisRows],
+  );
+
+  const bestModelStat = modelStats[0] ?? null;
+
+  const resolvedHiddenLayerSizes = useMemo(() => {
+    const fromBestModel = parseLayerSizesFromValue(bestModelStat?.hiddenLayers);
+    if (fromBestModel.length) {
+      return fromBestModel;
+    }
+    const fromParameters = parseLayerSizesFromValue(modelParameters.hidden_layer_sizes ?? modelParameters.hidden_layers);
+    return fromParameters.length ? fromParameters : hiddenLayerSizes;
+  }, [bestModelStat?.hiddenLayers, hiddenLayerSizes, modelParameters]);
+
+  const architectureLayers = useMemo(
+    () => [
+      {
+        key: "input",
+        title: t("Вход", "Input"),
+        subtitle: t("Признаки", "Features"),
+        count: Math.max(neuralSettings.features.length, 1),
+        color: "#f97316",
+      },
+      ...resolvedHiddenLayerSizes.map((size, index) => ({
+        key: "hidden-" + index,
+        title: t("Слой", "Layer") + " " + (index + 1),
+        subtitle: t("Нейроны", "Neurons"),
+        count: size,
+        color: index % 2 === 0 ? "#fb923c" : "#ef4444",
+      })),
+      {
+        key: "output",
+        title: t("Выход", "Output"),
+        subtitle: "P/E",
+        count: 1,
+        color: "#14b8a6",
+      },
+    ],
+    [neuralSettings.features.length, resolvedHiddenLayerSizes, t],
+  );
+
+  const analysisSummary = useMemo(
+    () => ({
+      sampleSize: selectedRequestData.length,
+      resultCount: analysisRows.length,
+      averageGap: averageFinite(analysisRows.map((row) => row.undervaluationGap)),
+      averageExpectedReturn: averageFinite(analysisRows.map((row) => row.expectedReturn)),
+      averageSignal: averageFinite(analysisRows.map((row) => row.portfolioSignal)),
+      topTicker: analysisRows[0]?.ticker ?? "-",
+      bestModel: bestModelStat?.modelName ?? String(modelParameters.best_model ?? "-"),
+    }),
+    [analysisRows, bestModelStat?.modelName, modelParameters.best_model, selectedRequestData.length],
   );
 
   const neuralHelp = useMemo(() => {
@@ -463,6 +570,7 @@ export function NeuralNetworkAnalysis() {
       }
 
       const parsedMetrics = extractMetrics(parsed);
+      const parsedAnalysisRows = extractAnalysisRows(parsed);
       const parsedImportance = extractFeatureImportance(parsed);
       const parsedStrategies = extractPortfolioStrategies(parsed);
       const parsedPositions = extractPortfolioPositions(parsed);
@@ -472,6 +580,7 @@ export function NeuralNetworkAnalysis() {
       const parsedAssetsCount = extractPortfolioAssetsCount(parsed);
 
       setMetrics(parsedMetrics);
+      setAnalysisRows(parsedAnalysisRows);
       setFeatureImportance(parsedImportance);
       setPortfolioStrategies(parsedStrategies);
       setPortfolioPositions(parsedPositions);
@@ -485,6 +594,7 @@ export function NeuralNetworkAnalysis() {
         : t("Не удалось выполнить нейросетевой анализ", "Failed to run neural network analysis");
       showErrorDialog(message);
       setMetrics([]);
+      setAnalysisRows([]);
       setFeatureImportance([]);
       setPortfolioStrategies([]);
       setPortfolioPositions([]);
@@ -550,6 +660,111 @@ export function NeuralNetworkAnalysis() {
       });
     } catch (e) {
       const message = e instanceof Error ? e.message : t("Не удалось сохранить PDF", "Failed to save PDF");
+      showErrorDialog(message);
+    }
+  };
+
+  const buildAnalysisExportMetrics = () => [
+    { label: t("Акций в анализе", "Stocks in analysis"), value: analysisSummary.sampleSize },
+    { label: t("Недооценённых", "Undervalued"), value: analysisSummary.resultCount },
+    { label: t("Средний разрыв P/E", "Average P/E gap"), value: formatPercentValue(analysisSummary.averageGap) },
+    { label: t("Средняя ожидаемая доходность", "Average expected return"), value: formatPercentValue(analysisSummary.averageExpectedReturn) },
+    { label: t("Средний сигнал", "Average signal"), value: formatPercentValue(analysisSummary.averageSignal) },
+    { label: t("Лучший сигнал", "Top signal"), value: analysisSummary.topTicker },
+    { label: t("Лучшая модель", "Best model"), value: analysisSummary.bestModel },
+    ...overviewMetrics.map((item) => ({
+      label: localizeMetricLabel(item.label, isEn),
+      value: formatMetricDisplay(item.label, item.value),
+    })),
+    ...portfolioMetrics.map((item) => ({
+      label: localizeMetricLabel(item.label, isEn),
+      value: formatMetricDisplay(item.label, item.value),
+    })),
+    ...modelParameterRows.map((row) => ({ label: row.label, value: row.value })),
+    ...modelStats.slice(0, 5).map((row, index) => ({
+      label: t("Модель", "Model") + " #" + (index + 1),
+      value: [
+        row.modelName,
+        row.hiddenLayers,
+        "best_val_mse=" + formatOptionalNumber(row.bestValMse, 5),
+        "val_r2=" + formatOptionalNumber(row.valR2Final, 4),
+      ].join("; "),
+    })),
+  ];
+
+  const buildAnalysisResultColumns = () => [
+    { header: "Ticker", render: (row: AnalysisResultRow) => row.ticker },
+    { header: t("Компания", "Company"), render: (row: AnalysisResultRow) => row.name },
+    { header: "P/E fact", render: (row: AnalysisResultRow) => formatOptionalNumber(row.pe, 2) },
+    { header: "P/E forecast", render: (row: AnalysisResultRow) => formatOptionalNumber(row.predictedPE, 2) },
+    { header: "Residual", render: (row: AnalysisResultRow) => formatOptionalNumber(row.residual, 2) },
+    { header: "Gap, %", render: (row: AnalysisResultRow) => formatPercentValue(row.undervaluationGap) },
+    { header: "Expected return, %", render: (row: AnalysisResultRow) => formatPercentValue(row.expectedReturn) },
+    { header: "Signal, %", render: (row: AnalysisResultRow) => formatPercentValue(row.portfolioSignal) },
+    { header: "Value score, %", render: (row: AnalysisResultRow) => formatPercentValue(row.valueScore) },
+    { header: "Quality score, %", render: (row: AnalysisResultRow) => formatPercentValue(row.qualityScore) },
+    { header: "Growth score, %", render: (row: AnalysisResultRow) => formatPercentValue(row.growthScore) },
+    { header: "Risk score, %", render: (row: AnalysisResultRow) => formatPercentValue(row.riskScore) },
+    { header: "ROE, %", render: (row: AnalysisResultRow) => formatPercentValue(row.roe) },
+    { header: "Dividend yield, %", render: (row: AnalysisResultRow) => formatPercentValue(row.dividendYield) },
+    { header: "Beta", render: (row: AnalysisResultRow) => formatOptionalNumber(row.beta, 2) },
+    { header: "Market cap", render: (row: AnalysisResultRow) => formatOptionalNumber(row.marketCap, 0) },
+  ];
+
+  const exportAnalysisToXlsx = async () => {
+    if (!analysisRows.length) {
+      return;
+    }
+    await downloadAnalysisResultsAsXlsx({
+      title: t("Результаты нейросетевого анализа", "Neural Network Analysis Results"),
+      filename: "ai-analysis-results.xlsx",
+      rows: analysisRows,
+      columns: buildAnalysisResultColumns(),
+      metrics: buildAnalysisExportMetrics(),
+    });
+  };
+
+  const exportAnalysisToPdf = async () => {
+    if (!analysisRows.length) {
+      return;
+    }
+    try {
+      await downloadAnalysisResultsAsPdf({
+        title: t("Результаты нейросетевого анализа", "Neural Network Analysis Results"),
+        filename: "ai-analysis-results.pdf",
+        rows: analysisRows,
+        columns: buildAnalysisResultColumns(),
+        metrics: buildAnalysisExportMetrics(),
+        chartSvg: predictionChartRef.current?.querySelector("svg"),
+      });
+    } catch (e) {
+      const message = e instanceof Error ? e.message : t("Не удалось сохранить PDF", "Failed to save PDF");
+      showErrorDialog(message);
+    }
+  };
+
+  const savePredictionChartPng = async () => {
+    const svg = predictionChartRef.current?.querySelector("svg");
+    if (!svg) {
+      return;
+    }
+    try {
+      await downloadSvgAsPng(svg as SVGSVGElement, "ai-pe-prediction.png");
+    } catch (e) {
+      const message = e instanceof Error ? e.message : t("Не удалось сохранить PNG", "Failed to save PNG");
+      showErrorDialog(message);
+    }
+  };
+
+  const saveArchitectureChartPng = async () => {
+    const svg = architectureChartRef.current?.querySelector("svg");
+    if (!svg) {
+      return;
+    }
+    try {
+      await downloadSvgAsPng(svg as SVGSVGElement, "ai-network-schema.png");
+    } catch (e) {
+      const message = e instanceof Error ? e.message : t("Не удалось сохранить PNG", "Failed to save PNG");
       showErrorDialog(message);
     }
   };
@@ -888,6 +1103,7 @@ export function NeuralNetworkAnalysis() {
             <OptimizerSettingsFields
               settings={optimizerSettings}
               onChange={setOptimizerSettings}
+              autoFitWeights
             />
 
             {!hasData && (
@@ -1063,9 +1279,9 @@ export function NeuralNetworkAnalysis() {
             />
           )}
 
-          {!!visibleMetrics.length && (
+          {!!overviewMetrics.length && (
             <MetricGrid>
-              {visibleMetrics.map((m) => (
+              {overviewMetrics.map((m) => (
                 <MetricCard
                   key={m.label}
                   label={(
@@ -1102,6 +1318,105 @@ export function NeuralNetworkAnalysis() {
                     ))}
                   </tbody>
                 </table>
+              </div>
+            </SectionCard>
+          )}
+
+          {(!!modelParameterRows.length || !!modelStats.length) && (
+            <SectionCard
+              title={t("Мини-схема нейросети", "Neural Network Mini Schema")}
+              description={t(
+                "Упрощенная архитектура лучшей обученной конфигурации.",
+                "Simplified architecture of the best trained configuration.",
+              )}
+              action={(
+                <button
+                  onClick={saveArchitectureChartPng}
+                  className="ui-secondary-button px-3 py-2 text-xs"
+                >
+                  <ImageDown className="h-4 w-4" />
+                  PNG
+                </button>
+              )}
+            >
+              <div className="grid grid-cols-1 gap-5 xl:grid-cols-[minmax(0,1.35fr)_minmax(16rem,0.65fr)]">
+                <div ref={architectureChartRef} className="overflow-x-auto">
+                  <svg
+                    viewBox={"0 0 " + ARCHITECTURE_DIAGRAM_WIDTH + " " + ARCHITECTURE_DIAGRAM_HEIGHT}
+                    className="h-auto w-full min-w-[42rem]"
+                    role="img"
+                    aria-label={t("Мини-схема нейросети", "Neural network mini schema")}
+                  >
+                    <rect width={ARCHITECTURE_DIAGRAM_WIDTH} height={ARCHITECTURE_DIAGRAM_HEIGHT} rx="24" fill="rgba(255, 247, 237, 0.55)" />
+                    {architectureLayers.slice(0, -1).map((_, index) => {
+                      const x1 = 84 + (index * (ARCHITECTURE_DIAGRAM_WIDTH - 168)) / Math.max(architectureLayers.length - 1, 1);
+                      const x2 = 84 + ((index + 1) * (ARCHITECTURE_DIAGRAM_WIDTH - 168)) / Math.max(architectureLayers.length - 1, 1);
+                      return (
+                        <g key={"connection-" + index}>
+                          {[92, 140, 188].map((y) => (
+                            <line
+                              key={"connection-" + index + "-" + y}
+                              x1={x1 + 18}
+                              y1={y}
+                              x2={x2 - 18}
+                              y2={y}
+                              stroke="#fdba74"
+                              strokeOpacity="0.45"
+                              strokeWidth="2"
+                            />
+                          ))}
+                        </g>
+                      );
+                    })}
+                    {architectureLayers.map((layer, layerIndex) => {
+                      const x = 84 + (layerIndex * (ARCHITECTURE_DIAGRAM_WIDTH - 168)) / Math.max(architectureLayers.length - 1, 1);
+                      const visibleNodeCount = Math.min(layer.count, 7);
+                      return (
+                        <g key={layer.key}>
+                          <text x={x} y="34" textAnchor="middle" fill="#334155" fontSize="16" fontWeight="700">
+                            {layer.title}
+                          </text>
+                          <text x={x} y="54" textAnchor="middle" fill="#64748b" fontSize="12">
+                            {layer.count} {layer.subtitle}
+                          </text>
+                          {Array.from({ length: visibleNodeCount }).map((_, nodeIndex) => (
+                            <circle
+                              key={layer.key + "-node-" + nodeIndex}
+                              cx={x}
+                              cy={getArchitectureNodeY(nodeIndex, visibleNodeCount)}
+                              r="10"
+                              fill={layer.color}
+                              fillOpacity="0.9"
+                              stroke="#ffffff"
+                              strokeWidth="3"
+                            />
+                          ))}
+                          {layer.count > visibleNodeCount && (
+                            <text x={x} y={ARCHITECTURE_DIAGRAM_HEIGHT - 38} textAnchor="middle" fill="#64748b" fontSize="18" fontWeight="700">
+                              ...
+                            </text>
+                          )}
+                        </g>
+                      );
+                    })}
+                  </svg>
+                </div>
+                <div className="grid gap-3 sm:grid-cols-3 xl:grid-cols-1">
+                  <div className="ui-stat-card">
+                    <div className="text-slate-500 dark:text-slate-400">{t("Входов", "Inputs")}</div>
+                    <div className="text-xl font-semibold text-slate-900 dark:text-slate-100">{neuralSettings.features.length}</div>
+                  </div>
+                  <div className="ui-stat-card">
+                    <div className="text-slate-500 dark:text-slate-400">{t("Скрытых слоев", "Hidden layers")}</div>
+                    <div className="text-xl font-semibold text-slate-900 dark:text-slate-100">{resolvedHiddenLayerSizes.length}</div>
+                  </div>
+                  <div className="ui-stat-card">
+                    <div className="text-slate-500 dark:text-slate-400">{t("Нейронов", "Neurons")}</div>
+                    <div className="text-xl font-semibold text-slate-900 dark:text-slate-100">
+                      {resolvedHiddenLayerSizes.reduce((sum, value) => sum + value, 0)}
+                    </div>
+                  </div>
+                </div>
               </div>
             </SectionCard>
           )}
@@ -1146,14 +1461,209 @@ export function NeuralNetworkAnalysis() {
               <ResponsiveContainer width="100%" height={320}>
                 <LineChart data={trainingHistory}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                  <XAxis dataKey="epoch" stroke="#64748b" />
-                  <YAxis stroke="#64748b" />
+                  <XAxis
+                    dataKey="epoch"
+                    stroke="#64748b"
+                    label={{ value: t("Эпоха", "Epoch"), position: "insideBottom", offset: -6 }}
+                  />
+                  <YAxis
+                    stroke="#64748b"
+                    label={{ value: t("MSE / loss", "MSE / loss"), angle: -90, position: "insideLeft" }}
+                  />
                   <Tooltip formatter={(v: number) => Number(v).toFixed(4)} />
                   <Legend />
                   <Line type="monotone" dataKey="trainLoss" name={t("Train Loss", "Train Loss")} stroke="#f97316" strokeWidth={2} dot={false} />
                   <Line type="monotone" dataKey="valLoss" name={t("Val Loss", "Val Loss")} stroke="#ef4444" strokeWidth={2} dot={false} />
                 </LineChart>
               </ResponsiveContainer>
+            </SectionCard>
+          )}
+
+          {!!analysisRows.length && (
+            <SectionCard
+              title={t("Сводка по результату", "Result Summary")}
+              action={(
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={exportAnalysisToXlsx}
+                    disabled={!analysisRows.length}
+                    className="ui-secondary-button px-3 py-2 text-xs"
+                  >
+                    <FileSpreadsheet className="h-4 w-4" />
+                    XLSX
+                  </button>
+                  <button
+                    onClick={exportAnalysisToPdf}
+                    disabled={!analysisRows.length}
+                    className="ui-secondary-button px-3 py-2 text-xs"
+                  >
+                    <FileText className="h-4 w-4" />
+                    PDF
+                  </button>
+                </div>
+              )}
+            >
+              <div className="space-y-5">
+                <div className="grid grid-cols-1 gap-3 text-sm md:grid-cols-2 xl:grid-cols-4">
+                  <div className="ui-stat-card">
+                    <div className="text-slate-500 dark:text-slate-400">{t("Акций в анализе", "Stocks in analysis")}</div>
+                    <div className="text-xl font-semibold text-slate-900 dark:text-slate-100">{analysisSummary.sampleSize}</div>
+                  </div>
+                  <div className="ui-stat-card">
+                    <div className="text-slate-500 dark:text-slate-400">{t("Недооцененных", "Undervalued")}</div>
+                    <div className="text-xl font-semibold text-slate-900 dark:text-slate-100">{analysisSummary.resultCount}</div>
+                  </div>
+                  <div className="ui-stat-card">
+                    <div className="text-slate-500 dark:text-slate-400">{t("Средний разрыв P/E", "Average P/E gap")}</div>
+                    <div className="text-xl font-semibold text-slate-900 dark:text-slate-100">{formatPercentValue(analysisSummary.averageGap)}</div>
+                  </div>
+                  <div className="ui-stat-card">
+                    <div className="text-slate-500 dark:text-slate-400">{t("Лучший сигнал", "Top signal")}</div>
+                    <div className="text-xl font-semibold text-slate-900 dark:text-slate-100">{analysisSummary.topTicker}</div>
+                  </div>
+                </div>
+
+                {!!topSignalRows.length && (
+                  <div className="h-72">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart data={topSignalRows} margin={{ top: 10, right: 20, left: 18, bottom: 36 }}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                        <XAxis
+                          dataKey="ticker"
+                          stroke="#64748b"
+                          label={{ value: t("Акция", "Stock"), position: "insideBottom", offset: -12 }}
+                        />
+                        <YAxis
+                          stroke="#64748b"
+                          unit="%"
+                          label={{ value: t("Сигнал, %", "Signal, %"), angle: -90, position: "insideLeft" }}
+                        />
+                        <Tooltip formatter={(value: number) => formatPercentValue(value)} />
+                        <Bar dataKey="portfolioSignal" name={t("Сигнал", "Signal")} radius={[6, 6, 0, 0]}>
+                          {topSignalRows.map((row, idx) => (
+                            <Cell key={row.ticker} fill={NEURAL_PALETTE[idx % NEURAL_PALETTE.length]} />
+                          ))}
+                        </Bar>
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+                )}
+              </div>
+            </SectionCard>
+          )}
+
+          {!!predictionChartRows.length && (
+            <SectionCard
+              title={t("P/E факт vs прогноз", "Actual P/E vs Predicted P/E")}
+              description={t(
+                "Сравнение фактического мультипликатора с оценкой нейросети для найденных кандидатов.",
+                "Compares the actual valuation multiple with the neural estimate for detected candidates.",
+              )}
+              action={(
+                <button
+                  onClick={savePredictionChartPng}
+                  disabled={!predictionChartRows.length}
+                  className="ui-secondary-button px-3 py-2 text-xs"
+                >
+                  <ImageDown className="h-4 w-4" />
+                  PNG
+                </button>
+              )}
+            >
+              <div ref={predictionChartRef} className="h-[420px]">
+                <ResponsiveContainer width="100%" height="100%">
+                  <ScatterChart margin={{ top: 20, right: 36, left: 28, bottom: 42 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                    <XAxis
+                      type="number"
+                      dataKey="pe"
+                      name="P/E fact"
+                      stroke="#64748b"
+                      label={{ value: t("P/E факт", "Actual P/E"), position: "insideBottom", offset: -14 }}
+                    />
+                    <YAxis
+                      type="number"
+                      dataKey="predictedPE"
+                      name="P/E forecast"
+                      stroke="#64748b"
+                      label={{ value: t("P/E прогноз", "Predicted P/E"), angle: -90, position: "insideLeft" }}
+                    />
+                    <ZAxis dataKey="portfolioSignal" range={[70, 230]} />
+                    <Tooltip
+                      cursor={{ strokeDasharray: "3 3" }}
+                      content={({ payload }) => {
+                        if (!payload || !payload.length) {
+                          return null;
+                        }
+                        const row = payload[0].payload as AnalysisResultRow;
+                        return (
+                          <div className="rounded-2xl border border-slate-200 bg-white p-3 shadow-lg dark:border-slate-700 dark:bg-slate-900">
+                            <p className="mb-1 text-sm font-medium text-slate-700 dark:text-slate-200">{row.ticker}</p>
+                            <p className="text-sm text-slate-600 dark:text-slate-300">P/E факт: {formatOptionalNumber(row.pe, 2)}</p>
+                            <p className="text-sm text-slate-600 dark:text-slate-300">P/E прогноз: {formatOptionalNumber(row.predictedPE, 2)}</p>
+                            <p className="text-sm text-slate-600 dark:text-slate-300">Gap: {formatPercentValue(row.undervaluationGap)}</p>
+                            <p className="text-sm text-slate-600 dark:text-slate-300">Signal: {formatPercentValue(row.portfolioSignal)}</p>
+                          </div>
+                        );
+                      }}
+                    />
+                    <Scatter
+                      name={t("Акции", "Stocks")}
+                      data={predictionChartRows}
+                      fill="#f97316"
+                      stroke="#ea580c"
+                      fillOpacity={0.82}
+                    />
+                  </ScatterChart>
+                </ResponsiveContainer>
+              </div>
+            </SectionCard>
+          )}
+
+          {!!analysisRows.length && (
+            <SectionCard
+              title={t("Результаты нейросетевого анализа", "Neural Network Analysis Results")}
+              description={t(
+                "Таблица кандидатов, отсортированная по итоговому сигналу модели.",
+                "Candidate table sorted by the final model signal.",
+              )}
+            >
+              <div className="ui-table-shell overflow-x-auto">
+                <table className="ui-data-table min-w-[72rem]">
+                  <thead>
+                    <tr>
+                      <th>Ticker</th>
+                      <th>{t("Компания", "Company")}</th>
+                      <th>P/E</th>
+                      <th>{t("Прогноз P/E", "Predicted P/E")}</th>
+                      <th>Gap</th>
+                      <th>{t("Ожид. доходность", "Expected return")}</th>
+                      <th>{t("Сигнал", "Signal")}</th>
+                      <th>Value</th>
+                      <th>Quality</th>
+                      <th>Growth</th>
+                      <th>Beta</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {analysisRows.slice(0, 40).map((row) => (
+                      <tr key={(row.figi || row.ticker) + "-analysis"}>
+                        <td className="font-medium text-slate-900 dark:text-slate-100">{row.ticker}</td>
+                        <td className="ui-cell-name">{row.name}</td>
+                        <td className="ui-cell-number">{formatOptionalNumber(row.pe, 2)}</td>
+                        <td className="ui-cell-number">{formatOptionalNumber(row.predictedPE, 2)}</td>
+                        <td className="ui-cell-number">{formatPercentValue(row.undervaluationGap)}</td>
+                        <td className="ui-cell-number">{formatPercentValue(row.expectedReturn)}</td>
+                        <td className="ui-cell-number font-semibold text-orange-700 dark:text-orange-300">{formatPercentValue(row.portfolioSignal)}</td>
+                        <td className="ui-cell-number">{formatPercentValue(row.valueScore)}</td>
+                        <td className="ui-cell-number">{formatPercentValue(row.qualityScore)}</td>
+                        <td className="ui-cell-number">{formatPercentValue(row.growthScore)}</td>
+                        <td className="ui-cell-number">{formatOptionalNumber(row.beta, 2)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             </SectionCard>
           )}
 
@@ -1230,6 +1740,16 @@ export function NeuralNetworkAnalysis() {
                 </div>
               )}
             >
+              {!!portfolioMetrics.length && (
+                <div className="mb-5 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                  {portfolioMetrics.map((metric) => (
+                    <div key={metric.label} className="ui-stat-card">
+                      <div className="text-xs text-slate-500 dark:text-slate-400">{localizeMetricLabel(metric.label, isEn)}</div>
+                      <div className="text-xl font-semibold text-slate-900 dark:text-slate-100">{formatMetricDisplay(metric.label, metric.value)}</div>
+                    </div>
+                  ))}
+                </div>
+              )}
               {!!portfolioPositions.length && (
                 <PortfolioHoldingsPanel
                   rows={portfolioPositions}
@@ -1253,20 +1773,37 @@ export function NeuralNetworkAnalysis() {
           )}
 
           {!!featureImportance.length && (
-            <SectionCard title={t("Важность признаков", "Feature Importance")}>
-              <ResponsiveContainer width="100%" height={300}>
-                <BarChart data={featureImportance} layout="vertical" margin={{ top: 5, right: 30, left: 90, bottom: 5 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                  <XAxis type="number" stroke="#64748b" unit="%" />
-                  <YAxis type="category" dataKey="feature" stroke="#64748b" width={90} />
-                  <Tooltip formatter={(v: number) => `${Number(v).toFixed(2)}%`} />
-                  <Bar dataKey="importance" radius={[0, 4, 4, 0]}>
-                    {featureImportance.map((row, idx) => (
-                      <Cell key={row.feature} fill={NEURAL_PALETTE[idx % NEURAL_PALETTE.length]} />
-                    ))}
-                  </Bar>
-                </BarChart>
-              </ResponsiveContainer>
+            <SectionCard
+              title={t("Значимость параметров нейросети", "Neural Feature Significance")}
+              description={t(
+                "Оценка построена по абсолютным весам первого слоя лучшей обученной модели.",
+                "The estimate is based on absolute first-layer weights of the best trained model.",
+              )}
+            >
+              <div className="grid grid-cols-1 gap-5 lg:grid-cols-[minmax(0,1.4fr)_minmax(16rem,0.6fr)]">
+                <ResponsiveContainer width="100%" height={300}>
+                  <BarChart data={featureImportance} layout="vertical" margin={{ top: 5, right: 30, left: 90, bottom: 5 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                    <XAxis type="number" stroke="#64748b" unit="%" />
+                    <YAxis type="category" dataKey="feature" stroke="#64748b" width={90} />
+                    <Tooltip formatter={(v: number) => formatPercentValue(Number(v))} />
+                    <Bar dataKey="importance" radius={[0, 4, 4, 0]}>
+                      {featureImportance.map((row, idx) => (
+                        <Cell key={row.feature} fill={NEURAL_PALETTE[idx % NEURAL_PALETTE.length]} />
+                      ))}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+                <div className="space-y-3">
+                  {featureImportance.slice(0, 4).map((row, index) => (
+                    <div key={row.feature} className="ui-stat-card">
+                      <div className="text-xs text-slate-500 dark:text-slate-400">#{index + 1}</div>
+                      <div className="font-semibold text-slate-900 dark:text-slate-100">{row.feature}</div>
+                      <div className="text-sm text-slate-600 dark:text-slate-300">{formatPercentValue(row.importance)}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
             </SectionCard>
           )}
 

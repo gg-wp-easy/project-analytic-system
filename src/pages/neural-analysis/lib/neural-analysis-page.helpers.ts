@@ -1,6 +1,7 @@
 import type {
   NeuralFeatureImportanceItem as FeatureImportanceItem,
   NeuralMetricItem as MetricItem,
+  NeuralAnalysisResultRow as AnalysisResultRow,
   NeuralModelStatItem as ModelStatItem,
   NeuralPortfolioPosition as PortfolioPosition,
   NeuralPortfolioStrategy as PortfolioStrategy,
@@ -24,6 +25,82 @@ function formatMetricValue(value: unknown): string {
     return value;
   }
   return "-";
+}
+
+export function formatOptionalNumber(value: unknown, digits = 2): string {
+  const parsed = numberOr(value, NaN);
+  return Number.isFinite(parsed) ? parsed.toFixed(digits) : "-";
+}
+
+export function formatPercentValue(value: unknown, digits = 2): string {
+  const parsed = numberOr(value, NaN);
+  return Number.isFinite(parsed) ? parsed.toFixed(digits) + "%" : "-";
+}
+
+function normalizePercentLike(value: unknown): number {
+  const parsed = numberOr(value, NaN);
+  if (!Number.isFinite(parsed)) {
+    return NaN;
+  }
+  return Math.abs(parsed) <= 1 ? parsed * 100 : parsed;
+}
+
+function normalizeScoreLike(value: unknown): number {
+  const parsed = numberOr(value, NaN);
+  if (!Number.isFinite(parsed)) {
+    return NaN;
+  }
+  return Math.abs(parsed) <= 1 ? parsed * 100 : parsed;
+}
+
+export function extractAnalysisRows(parsed: Record<string, unknown>): AnalysisResultRow[] {
+  const raw =
+    parsed.undervalued_stocks ??
+    parsed.undervaluedStocks ??
+    parsed.analysis_rows ??
+    parsed.analysisRows ??
+    parsed.results ??
+    [];
+
+  if (!Array.isArray(raw)) {
+    return [];
+  }
+
+  return raw
+    .map((item, index) => {
+      const row = item as Record<string, unknown>;
+      const ticker = String(row.ticker ?? row.Ticker ?? row.symbol ?? "Asset " + (index + 1));
+      const name = String(row.name ?? row.Name ?? row.company ?? row.Company ?? ticker);
+      return {
+        figi: String(row.figi ?? row.FIGI ?? row.instrumentFigi ?? ""),
+        ticker,
+        name,
+        pe: numberOr(row.pe, numberOr(row.pe_ratio, numberOr(row.PE, numberOr(row["P/E"], NaN)))),
+        predictedPE: numberOr(row.predicted_pe, numberOr(row.predictedPE, numberOr(row.forecast_pe, NaN))),
+        residual: numberOr(row.residual, numberOr(row.pe_residual, NaN)),
+        undervaluationGap: normalizePercentLike(
+          row.undervaluation_gap ?? row.undervalued_score ?? row.undervaluationGap ?? row.gap,
+        ),
+        expectedReturn: normalizePercentLike(row.expected_return ?? row.expectedReturn),
+        portfolioSignal: normalizeScoreLike(row.portfolio_signal ?? row.portfolioSignal ?? row.signal),
+        valueScore: normalizeScoreLike(row.value_score ?? row.valueScore),
+        qualityScore: normalizeScoreLike(row.quality_score ?? row.qualityScore),
+        growthScore: normalizeScoreLike(row.growth_score ?? row.growthScore),
+        riskScore: normalizeScoreLike(row.risk_score ?? row.riskScore),
+        roe: normalizePercentLike(row.roe ?? row.ROE),
+        dividendYield: normalizePercentLike(row.dividend_yield ?? row.dividendYield),
+        beta: numberOr(row.beta, NaN),
+        marketCap: numberOr(row.market_cap, numberOr(row.market_cap_bn, numberOr(row.marketCap, NaN))),
+      } satisfies AnalysisResultRow;
+    })
+    .filter((row) => row.ticker && (Number.isFinite(row.portfolioSignal) || Number.isFinite(row.undervaluationGap)))
+    .sort((left, right) => {
+      const signalDiff = numberOr(right.portfolioSignal, -Infinity) - numberOr(left.portfolioSignal, -Infinity);
+      if (signalDiff !== 0) {
+        return signalDiff;
+      }
+      return numberOr(right.undervaluationGap, -Infinity) - numberOr(left.undervaluationGap, -Infinity);
+    });
 }
 
 export function extractFeatureImportance(parsed: Record<string, unknown>): FeatureImportanceItem[] {

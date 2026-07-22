@@ -1,4 +1,5 @@
 export type {
+  DecisionTreeAnalysisResultRow,
   DecisionTreeConfusionMatrixData,
   DecisionTreeFeatureImportanceItem,
   DecisionTreeMetricItem,

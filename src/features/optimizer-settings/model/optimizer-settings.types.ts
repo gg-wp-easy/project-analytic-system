@@ -13,4 +13,5 @@ export type OptimizerSettings = {
 export type OptimizerSettingsFieldsProps = {
   settings: OptimizerSettings;
   onChange: (next: OptimizerSettings) => void;
+  autoFitWeights?: boolean;
 };

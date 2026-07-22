@@ -2,6 +2,7 @@ import type {
   DecisionTreeConfusionMatrixData as ConfusionMatrixData,
   DecisionTreeFeatureImportanceItem as FeatureImportanceItem,
   DecisionTreeMetricItem as MetricItem,
+  DecisionTreeAnalysisResultRow as AnalysisResultRow,
   DecisionTreeNumericSummaryItem as NumericSummaryItem,
   DecisionTreePortfolioPosition as PortfolioPosition,
   DecisionTreePreviewNode as TreePreviewNode,
@@ -13,6 +14,24 @@ import { numberOr } from "../../../shared/lib/number/numberOr";
 
 function formatMetricPercentOrNumber(value: number): string {
   return formatPercentOrNumber(value);
+}
+
+export function formatOptionalNumber(value: unknown, digits = 2): string {
+  const parsed = numberOr(value, NaN);
+  return Number.isFinite(parsed) ? parsed.toFixed(digits) : "-";
+}
+
+export function formatPercentValue(value: unknown, digits = 2): string {
+  const parsed = numberOr(value, NaN);
+  return Number.isFinite(parsed) ? parsed.toFixed(digits) + "%" : "-";
+}
+
+function normalizePercentLike(value: unknown): number {
+  const parsed = numberOr(value, NaN);
+  if (!Number.isFinite(parsed)) {
+    return NaN;
+  }
+  return Math.abs(parsed) <= 1 ? parsed * 100 : parsed;
 }
 
 export function extractMetrics(parsed: Record<string, unknown>): MetricItem[] {
@@ -46,6 +65,69 @@ export function extractMetrics(parsed: Record<string, unknown>): MetricItem[] {
   }
 
   return result;
+}
+
+export function extractAnalysisRows(parsed: Record<string, unknown>): AnalysisResultRow[] {
+  const raw =
+    parsed.companies ??
+    parsed.analysis_rows ??
+    parsed.analysisRows ??
+    parsed.results ??
+    parsed.predictions ??
+    [];
+
+  if (!Array.isArray(raw)) {
+    return [];
+  }
+
+  return raw
+    .map((item, index) => {
+      const row = item as Record<string, unknown>;
+      const ticker = String(row.ticker ?? row.Ticker ?? row.symbol ?? "Asset " + (index + 1));
+      const name = String(row.name ?? row.Name ?? row.company ?? row.Company ?? ticker);
+      const confidence = normalizePercentLike(
+        row["Predicted_Уверенность"] ?? row.predicted_confidence ?? row.confidence ?? row.probability,
+      );
+      const expectedReturn = normalizePercentLike(
+        row["Ожидаемая_доходность"] ?? row.expected_return ?? row.expectedReturn ?? row.return,
+      );
+      const risk = normalizePercentLike(row["Риск"] ?? row.risk ?? row.volatility);
+
+      return {
+        figi: String(row.figi ?? row.FIGI ?? row.instrumentFigi ?? ""),
+        ticker,
+        name,
+        sector: String(row["Сектор"] ?? row.sector ?? row.Sector ?? "-"),
+        prediction: String(
+          row["Predicted_Оценка_текст"] ??
+            row.predicted_text ??
+            row.predictedText ??
+            row["Predicted_Оценка"] ??
+            row.prediction ??
+            "-",
+        ),
+        confidence,
+        expectedReturn,
+        risk,
+        pe: numberOr(row["P/E"], numberOr(row.pe, numberOr(row.pe_ratio, numberOr(row.PE, NaN)))),
+        pb: numberOr(row["P/BV"], numberOr(row.pb, numberOr(row.pb_ratio, numberOr(row.PB, NaN)))),
+        roe: normalizePercentLike(row.ROE ?? row.roe),
+        growth: normalizePercentLike(row.g ?? row.growth_rate ?? row.growthRate ?? row.growth),
+        marketCap: numberOr(
+          row["Рыночная капитализация"],
+          numberOr(row.market_cap, numberOr(row.market_cap_bn, numberOr(row.marketCap, NaN))),
+        ),
+        score: numberOr(row["Predicted_Оценка"], numberOr(row.score, NaN)),
+      } satisfies AnalysisResultRow;
+    })
+    .filter((row) => row.ticker && row.prediction && row.prediction !== "-")
+    .sort((left, right) => {
+      const confidenceDiff = numberOr(right.confidence, -Infinity) - numberOr(left.confidence, -Infinity);
+      if (confidenceDiff !== 0) {
+        return confidenceDiff;
+      }
+      return numberOr(right.expectedReturn, -Infinity) - numberOr(left.expectedReturn, -Infinity);
+    });
 }
 
 export function extractFeatureImportance(parsed: Record<string, unknown>): FeatureImportanceItem[] {

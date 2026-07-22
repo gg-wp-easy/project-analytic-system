@@ -64,8 +64,15 @@ export function AnalysisPageFrame({
   return (
     <div className="space-y-8">
       {hero}
-      <div className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,320px)_minmax(0,1fr)]">
-        <aside className={cn("xl:sticky xl:top-24 xl:self-start", sidebarClassName)}>{sidebar}</aside>
+      <div className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,320px)_minmax(0,1fr)] xl:items-start">
+        <aside
+          className={cn(
+            "xl:sticky xl:top-6 xl:max-h-[calc(100vh-3rem)] xl:self-start xl:overflow-y-auto xl:pr-1",
+            sidebarClassName,
+          )}
+        >
+          {sidebar}
+        </aside>
         <div className={cn("space-y-6", contentClassName)}>{children}</div>
       </div>
     </div>

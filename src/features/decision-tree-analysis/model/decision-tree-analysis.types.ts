@@ -3,6 +3,23 @@ export type DecisionTreeMetricItem = {
   value: string;
 };
 
+export type DecisionTreeAnalysisResultRow = {
+  figi?: string;
+  ticker: string;
+  name: string;
+  sector: string;
+  prediction: string;
+  confidence: number;
+  expectedReturn: number;
+  risk: number;
+  pe: number;
+  pb: number;
+  roe: number;
+  growth: number;
+  marketCap: number;
+  score: number;
+};
+
 export type DecisionTreeFeatureImportanceItem = {
   feature: string;
   importance: number;

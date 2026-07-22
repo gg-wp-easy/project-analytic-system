@@ -33,6 +33,10 @@ export const ANALYSIS_METRIC_LABELS: Record<string, MetricLocalizedText> = {
   assets: { ru: "Активов", en: "Assets" },
   clusters: { ru: "Кластеров", en: "Clusters" },
   companies: { ru: "Компаний", en: "Companies" },
+  "eligible companies": { ru: "Eligible Companies", en: "Eligible Companies" },
+  features: { ru: "Features", en: "Features" },
+  silhouette: { ru: "Silhouette", en: "Silhouette" },
+  inertia: { ru: "Inertia", en: "Inertia" },
   portfolios: { ru: "Портфелей", en: "Portfolios" },
 };
 
@@ -107,6 +111,8 @@ export const ANALYSIS_COUNT_METRIC_LABELS = new Set([
   "assets",
   "clusters",
   "companies",
+  "eligible companies",
+  "features",
   "portfolios",
 ]);
 

@@ -1,7 +1,7 @@
 import { useAppSettings } from "../../../app/context/AppSettingsContext";
 import type { OptimizerSettingsFieldsProps } from "../model";
 
-export function OptimizerSettingsFields({ settings, onChange }: OptimizerSettingsFieldsProps) {
+export function OptimizerSettingsFields({ settings, onChange, autoFitWeights = false }: OptimizerSettingsFieldsProps) {
   const { t } = useAppSettings();
 
   return (
@@ -21,29 +21,33 @@ export function OptimizerSettingsFields({ settings, onChange }: OptimizerSetting
         />
       </label>
 
-      <label className="block text-xs text-slate-600 dark:text-slate-400">
-        {t("Минимальный вес актива, %", "Min weight, %")}
-        <input
-          type="number"
-          min="0"
-          step="0.1"
-          className="ui-input mt-1"
-          value={settings.minWeight}
-          onChange={(e) => onChange({ ...settings, minWeight: e.target.value })}
-        />
-      </label>
+      {!autoFitWeights && (
+        <>
+          <label className="block text-xs text-slate-600 dark:text-slate-400">
+            {t("\u041c\u0438\u043d\u0438\u043c\u0430\u043b\u044c\u043d\u044b\u0439 \u0432\u0435\u0441 \u0430\u043a\u0442\u0438\u0432\u0430, %", "Min weight, %")}
+            <input
+              type="number"
+              min="0"
+              step="0.1"
+              className="ui-input mt-1"
+              value={settings.minWeight}
+              onChange={(e) => onChange({ ...settings, minWeight: e.target.value })}
+            />
+          </label>
 
-      <label className="block text-xs text-slate-600 dark:text-slate-400">
-        {t("Максимальный вес актива, %", "Max weight, %")}
-        <input
-          type="number"
-          min="0"
-          step="0.1"
-          className="ui-input mt-1"
-          value={settings.maxWeight}
-          onChange={(e) => onChange({ ...settings, maxWeight: e.target.value })}
-        />
-      </label>
+          <label className="block text-xs text-slate-600 dark:text-slate-400">
+            {t("\u041c\u0430\u043a\u0441\u0438\u043c\u0430\u043b\u044c\u043d\u044b\u0439 \u0432\u0435\u0441 \u0430\u043a\u0442\u0438\u0432\u0430, %", "Max weight, %")}
+            <input
+              type="number"
+              min="0"
+              step="0.1"
+              className="ui-input mt-1"
+              value={settings.maxWeight}
+              onChange={(e) => onChange({ ...settings, maxWeight: e.target.value })}
+            />
+          </label>
+        </>
+      )}
 
       <label className="block text-xs text-slate-600 dark:text-slate-400">
         {t("Цель построения портфеля", "Portfolio objective")}

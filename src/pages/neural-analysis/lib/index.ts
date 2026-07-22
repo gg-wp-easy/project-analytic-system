@@ -1,4 +1,5 @@
 export {
+  extractAnalysisRows,
   extractFeatureImportance,
   extractMetrics,
   extractModelStats,
@@ -6,4 +7,6 @@ export {
   extractPortfolioPositions,
   extractPortfolioStrategies,
   extractTrainingHistory,
+  formatOptionalNumber,
+  formatPercentValue,
 } from "./neural-analysis-page.helpers";

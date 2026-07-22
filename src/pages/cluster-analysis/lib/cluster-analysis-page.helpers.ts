@@ -103,23 +103,35 @@ export function extractPoints(parsed: Record<string, unknown>): ClusterPoint[] {
         ),
       );
       const color = getClusterColor(cluster);
+      const ticker = String(row.ticker ?? row.Ticker ?? row.symbol ?? "Asset " + (index + 1));
+      const name = String(row.name ?? row.Name ?? row.Company ?? row.company ?? ticker);
       return {
-        ticker: String(row.ticker ?? row.Ticker ?? row.name ?? row.Company ?? `Asset ${index + 1}`),
-        figi: String(row.figi ?? row.id ?? index),
+        ticker,
+        figi: String(row.figi ?? row.FIGI ?? row.id ?? index),
+        name,
         pe: numberOr(row.pe, numberOr(row.pe_ratio, numberOr(row.peRatio, numberOr(row.PE, numberOr(row["P/E"], 0))))),
         g: numberOr(
           row.g,
           numberOr(
-            row.roe,
+            row.growth_rate,
             numberOr(
-              row.ROE,
-              numberOr(row.growth, numberOr(row.Expected_Return, numberOr(row.dividend_yield, numberOr(row.dividendYield, 0)))),
+              row.growthRate,
+              numberOr(row.roe, numberOr(row.ROE, numberOr(row.growth, 0))),
             ),
           ),
         ),
         cluster,
         color,
-        label: String(row.label ?? `Кластер ${cluster + 1}`),
+        label: String(row.label ?? name ?? "Cluster " + (cluster + 1)),
+        expectedReturn: numberOr(row.expectedReturn, numberOr(row.Expected_Return, numberOr(row.expected_return, NaN))),
+        risk: numberOr(row.risk, numberOr(row.Risk, NaN)),
+        roe: numberOr(row.roe, numberOr(row.ROE, NaN)),
+        marketCap: numberOr(row.marketCap, numberOr(row.Market_Cap, numberOr(row.market_cap, numberOr(row.market_cap_bn, NaN)))),
+        valueScore: numberOr(row.valueScore, numberOr(row.Value_Score, NaN)),
+        qualityScore: numberOr(row.qualityScore, numberOr(row.Quality_Score, NaN)),
+        growthScore: numberOr(row.growthScore, numberOr(row.Growth_Score, NaN)),
+        incomeScore: numberOr(row.incomeScore, numberOr(row.Income_Score, NaN)),
+        compositeScore: numberOr(row.compositeScore, numberOr(row.Composite_Score, NaN)),
       } satisfies ClusterPoint;
     })
     .filter((p) => Number.isFinite(p.pe) && Number.isFinite(p.g));
@@ -139,14 +151,23 @@ export function extractGroups(parsed: Record<string, unknown>, points: ClusterPo
 
       const avgPE = numberOr(row.avg_pe, numberOr(row.avgPE, numberOr(row.mean_pe, numberOr(row.pe_mean, 0))));
       const avgG = numberOr(row.avg_g, numberOr(row.avg_roe, numberOr(row.avgROE, numberOr(row.g_mean, numberOr(row.mean_growth, 0)))));
+      const avgROE = numberOr(row.avg_roe, numberOr(row.avgROE, NaN));
+      const avgDividendYield = numberOr(row.avg_div_yield, numberOr(row.avgDividendYield, NaN));
+      const avgRisk = numberOr(row.avg_risk, numberOr(row.avgRisk, NaN));
 
       return {
-        name: String(row.name ?? row.label ?? `Кластер ${cluster + 1}`),
+        name: String(row.name ?? row.label ?? "Cluster " + (cluster + 1)),
         count,
         avgPE,
         avgG,
+        avgROE,
+        avgDividendYield,
+        avgRisk,
         color: getClusterColor(cluster),
-        description: String(row.description ?? "Результат серверной кластеризации (k-means)"),
+        description: String(row.description ?? "Server clustering profile"),
+        recommendation: typeof row.recommendation === "string" ? row.recommendation : undefined,
+        growthCategory: typeof row.growth_category === "string" ? row.growth_category : undefined,
+        valuationCategory: typeof row.valuation_category === "string" ? row.valuation_category : undefined,
       } satisfies ClusterGroup;
     });
   }
@@ -161,37 +182,42 @@ export function extractGroups(parsed: Record<string, unknown>, points: ClusterPo
   return Array.from(groupsMap.entries()).map(([cluster, pointsInCluster]) => {
     const avgPE = pointsInCluster.reduce((acc, p) => acc + p.pe, 0) / pointsInCluster.length;
     const avgG = pointsInCluster.reduce((acc, p) => acc + p.g, 0) / pointsInCluster.length;
+    const finiteRoe = pointsInCluster.map((p) => p.roe).filter((value): value is number => typeof value === "number" && Number.isFinite(value));
+    const finiteRisk = pointsInCluster.map((p) => p.risk).filter((value): value is number => typeof value === "number" && Number.isFinite(value));
     return {
-      name: `Кластер ${cluster + 1}`,
+      name: "Cluster " + (cluster + 1),
       count: pointsInCluster.length,
       avgPE,
       avgG,
+      avgROE: finiteRoe.length ? finiteRoe.reduce((acc, value) => acc + value, 0) / finiteRoe.length : undefined,
+      avgRisk: finiteRisk.length ? finiteRisk.reduce((acc, value) => acc + value, 0) / finiteRisk.length : undefined,
       color: getClusterColor(cluster),
-      description: "Результат серверной кластеризации (k-means)",
+      description: "Server clustering profile",
     };
   });
 }
 
 export function extractMetrics(parsed: Record<string, unknown>, points: ClusterPoint[], groups: ClusterGroup[]): MetricItem[] {
   const summaryObj = (parsed.summary as Record<string, unknown> | undefined) ?? {};
+  const statsObj = (parsed.stats as Record<string, unknown> | undefined) ?? {};
   const bestPortfolioObj = (summaryObj.best_portfolio as Record<string, unknown> | undefined) ?? {};
-  const bestMetrics = bestPortfolioObj.metrics as Record<string, unknown> | undefined;
-
-  const metricsObj =
-    bestMetrics ??
+  const bestMetrics = (bestPortfolioObj.metrics as Record<string, unknown> | undefined) ?? {};
+  const clusterMetrics =
     (parsed.metrics as Record<string, unknown> | undefined) ??
     (parsed.model_metrics as Record<string, unknown> | undefined) ??
-    (parsed.stats as Record<string, unknown> | undefined) ??
-    summaryObj ??
     {};
+  const metricsObj = { ...statsObj, ...clusterMetrics, ...bestMetrics };
 
   const collected: MetricItem[] = [];
   const candidates: Array<{ key: string; label: string }> = [
-    { key: "silhouette", label: "Качество кластеров" },
-    { key: "silhouette_score", label: "Качество кластеров" },
+    { key: "silhouette", label: "Silhouette" },
+    { key: "silhouette_score", label: "Silhouette" },
     { key: "davies_bouldin", label: "Davies-Bouldin" },
     { key: "calinski_harabasz", label: "Calinski-Harabasz" },
     { key: "inertia", label: "Inertia" },
+    { key: "clustered_companies", label: "Companies" },
+    { key: "eligible_companies", label: "Eligible companies" },
+    { key: "features_count", label: "Features" },
     { key: "score", label: "Model score" },
     { key: "expected_return", label: "Expected return" },
     { key: "risk", label: "Risk" },
@@ -207,7 +233,7 @@ export function extractMetrics(parsed: Record<string, unknown>, points: ClusterP
     }
   }
 
-  collected.unshift({ label: "Кластеров", value: String(groups.length) }, { label: "Активов", value: String(points.length) });
+  collected.unshift({ label: "Clusters", value: String(groups.length) }, { label: "Assets", value: String(points.length) });
 
   return collected;
 }
@@ -223,7 +249,7 @@ export function extractPortfolioStrategies(parsed: Record<string, unknown>): Str
       }
       const portfolio = rawValue as Record<string, unknown>;
       const metrics = (portfolio.metrics as Record<string, unknown> | undefined) ?? {};
-      const rows = extractPortfolioRowsFromTopPositions(portfolio.top_positions, metrics);
+      const rows = extractPortfolioRowsFromTopPositions(portfolio.positions ?? portfolio.top_positions, metrics);
       strategies.push({
         name: String(portfolio.name ?? name),
         expectedReturn: numberOr(metrics.expected_return, 0),
@@ -247,21 +273,28 @@ export function extractBestPortfolioAssetsCount(parsed: Record<string, unknown>)
 
 export function extractSummary(parsed: Record<string, unknown>): AnalysisSummary | null {
   const summary = (parsed.summary as Record<string, unknown> | undefined) ?? null;
+  const stats = (parsed.stats as Record<string, unknown> | undefined) ?? {};
   if (!summary) {
     return null;
   }
 
-  const rawDistribution = (summary.cluster_distribution as Record<string, unknown> | undefined) ?? {};
+  const rawDistribution =
+    (summary.cluster_distribution as Record<string, unknown> | undefined) ??
+    (stats.cluster_distribution as Record<string, unknown> | undefined) ??
+    {};
   const clusterDistribution = Object.entries(rawDistribution).map(([cluster, value], index) => ({
-    cluster: `Кластер ${Number(cluster) + 1}`,
+    cluster: "Cluster " + (Number(cluster) + 1),
     count: numberOr(value, 0),
     color: getClusterColor(numberOr(cluster, index)),
   }));
 
   return {
-    companiesCount: numberOr(summary.companies_count, 0),
-    clustersCount: numberOr(summary.clusters_count, clusterDistribution.length),
-    portfoliosCount: numberOr(summary.portfolios_count, 0),
+    companiesCount: numberOr(
+      summary.companies_count,
+      numberOr(stats.companies_count, Array.isArray(parsed.companies) ? parsed.companies.length : 0),
+    ),
+    clustersCount: numberOr(summary.clusters_count, numberOr(stats.clusters_count, clusterDistribution.length)),
+    portfoliosCount: numberOr(summary.portfolios_count, numberOr(stats.portfolios_count, 0)),
     clusterDistribution,
   };
 }
@@ -339,8 +372,11 @@ export function extractFeatureImportance(parsed: Record<string, unknown>): Featu
       .map((item, idx) => {
         const row = item as Record<string, unknown>;
         return {
-          feature: String(row.feature ?? row.name ?? row.column ?? `Feature ${idx + 1}`),
+          feature: String(row.feature ?? row.name ?? row.column ?? "Feature " + (idx + 1)),
           importance: numberOr(row.importance, numberOr(row.score, numberOr(row.weight, 0))),
+          featureKey: typeof row.feature_key === "string" ? row.feature_key : undefined,
+          sourceColumn: typeof row.source_column === "string" ? row.source_column : undefined,
+          modelFeature: typeof row.model_feature === "string" ? row.model_feature : undefined,
         };
       })
       .filter((row) => Number.isFinite(row.importance));

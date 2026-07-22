@@ -47,3 +47,24 @@ export type NeuralModelStatItem = {
   finalValMse: number;
   valR2Final: number;
 };
+
+
+export type NeuralAnalysisResultRow = {
+  figi?: string;
+  ticker: string;
+  name: string;
+  pe: number;
+  predictedPE: number;
+  residual: number;
+  undervaluationGap: number;
+  expectedReturn: number;
+  portfolioSignal: number;
+  valueScore: number;
+  qualityScore: number;
+  growthScore: number;
+  riskScore: number;
+  roe: number;
+  dividendYield: number;
+  beta: number;
+  marketCap: number;
+};

@@ -13,7 +13,19 @@ import {
   Square,
   X,
 } from "lucide-react";
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from "recharts";
+import {
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+  Cell,
+  ScatterChart,
+  Scatter,
+  ZAxis,
+} from "recharts";
 import { useFundamentals } from "../../../entities/fundamentals";
 import { useAppSettings } from "../../../app/context/AppSettingsContext";
 import { Checkbox } from "../../../app/components/ui/checkbox";
@@ -130,6 +142,33 @@ function formatTreeConfidence(value: number | string): string {
     return value || "-";
   }
   return Number.isFinite(value) ? (value * 100).toFixed(1) + "%" : "-";
+}
+
+const PORTFOLIO_METRIC_LABELS = new Set([
+  "expected return",
+  "expected_return",
+  "risk",
+  "volatility",
+  "sharpe",
+  "sharpe ratio",
+  "sharpe_ratio",
+  "diversification",
+  "sortino",
+  "value at risk",
+]);
+
+function isPortfolioMetric(label: string): boolean {
+  return PORTFOLIO_METRIC_LABELS.has(label.toLowerCase());
+}
+
+function averageFinite(values: number[]): number {
+  const finite = values.filter((value) => Number.isFinite(value));
+  return finite.length ? finite.reduce((sum, value) => sum + value, 0) / finite.length : NaN;
+}
+
+function isBuyPrediction(value: string): boolean {
+  const normalized = value.toLowerCase();
+  return normalized.includes("покуп") || normalized.includes("buy");
 }
 
 export function DecisionTreeAnalysis() {
@@ -272,6 +311,39 @@ export function DecisionTreeAnalysis() {
 
   const treeDiagramNodes = useMemo(() => (treePreview ? buildTreeDiagramNodes(treePreview) : []), [treePreview]);
   const treeDiagramNodeMap = useMemo(() => new Map(treeDiagramNodes.map((node) => [node.key, node])), [treeDiagramNodes]);
+  const decisionScatterRows = useMemo(
+    () =>
+      analysisRows
+        .filter((row) => Number.isFinite(row.confidence) && Number.isFinite(row.expectedReturn))
+        .slice(0, 50),
+    [analysisRows],
+  );
+  const predictionDistribution = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const row of analysisRows) {
+      counts.set(row.prediction, (counts.get(row.prediction) ?? 0) + 1);
+    }
+    return Array.from(counts.entries())
+      .map(([prediction, count], index) => ({
+        prediction,
+        count,
+        fill: TREE_PALETTE[index % TREE_PALETTE.length],
+      }))
+      .sort((left, right) => right.count - left.count);
+  }, [analysisRows]);
+  const analysisSummary = useMemo(
+    () => ({
+      sampleSize: selectedRequestData.length,
+      resultCount: analysisRows.length,
+      buyCount: analysisRows.filter((row) => isBuyPrediction(row.prediction)).length,
+      averageConfidence: averageFinite(analysisRows.map((row) => row.confidence)),
+      averageExpectedReturn: averageFinite(analysisRows.map((row) => row.expectedReturn)),
+      averageRisk: averageFinite(analysisRows.map((row) => row.risk)),
+      topTicker: analysisRows[0]?.ticker ?? "-",
+      topPrediction: analysisRows[0]?.prediction ?? "-",
+    }),
+    [analysisRows, selectedRequestData.length],
+  );
 
   const requestData = useMemo(
     () =>
@@ -490,6 +562,7 @@ export function DecisionTreeAnalysis() {
       }
 
       const parsedMetrics = [...extractMetrics(parsed), ...extractPortfolioMetrics(parsed)];
+      const parsedAnalysisRows = extractAnalysisRows(parsed);
       const parsedImportance = extractFeatureImportance(parsed);
       const parsedMatrix = extractConfusionMatrix(parsed);
       const parsedPositions = extractPortfolioPositions(parsed);
@@ -501,6 +574,7 @@ export function DecisionTreeAnalysis() {
       const parsedAssetsCount = extractPortfolioAssetsCount(parsed);
 
       setMetrics(parsedMetrics);
+      setAnalysisRows(parsedAnalysisRows);
       setFeatureImportance(parsedImportance);
       setConfusionMatrix(parsedMatrix);
       setPortfolioPositions(parsedPositions);
@@ -514,6 +588,7 @@ export function DecisionTreeAnalysis() {
       const message = e instanceof Error ? e.message : t("Не удалось выполнить анализ дерева решений", "Failed to run decision tree analysis");
       showErrorDialog(message);
       setMetrics([]);
+      setAnalysisRows([]);
       setFeatureImportance([]);
       setConfusionMatrix(null);
       setPortfolioPositions([]);
@@ -540,7 +615,7 @@ export function DecisionTreeAnalysis() {
         name: t("Акция", "Stock"),
         weight: t("Вес, %", "Weight, %"),
       }),
-      metrics: visibleMetrics.map((item) => ({
+      metrics: portfolioMetrics.map((item) => ({
         label: localizeMetricLabel(item.label, isEn),
         value: formatMetricDisplay(item.label, item.value),
       })),
@@ -573,7 +648,7 @@ export function DecisionTreeAnalysis() {
           name: t("Акция", "Stock"),
           weight: t("Вес, %", "Weight, %"),
         }),
-        metrics: visibleMetrics.map((item) => ({
+        metrics: portfolioMetrics.map((item) => ({
           label: localizeMetricLabel(item.label, isEn),
           value: formatMetricDisplay(item.label, item.value),
         })),
@@ -581,6 +656,109 @@ export function DecisionTreeAnalysis() {
       });
     } catch (e) {
       const message = e instanceof Error ? e.message : t("Не удалось сохранить PDF", "Failed to save PDF");
+      showErrorDialog(message);
+    }
+  };
+
+  const buildAnalysisExportMetrics = () => [
+    { label: t("Акций в анализе", "Stocks in analysis"), value: analysisSummary.sampleSize },
+    { label: t("Компаний с прогнозом", "Companies with prediction"), value: analysisSummary.resultCount },
+    { label: t("Сигналов покупки", "Buy signals"), value: analysisSummary.buyCount },
+    { label: t("Средняя уверенность", "Average confidence"), value: formatPercentValue(analysisSummary.averageConfidence) },
+    { label: t("Средняя ожидаемая доходность", "Average expected return"), value: formatPercentValue(analysisSummary.averageExpectedReturn) },
+    { label: t("Средний риск", "Average risk"), value: formatPercentValue(analysisSummary.averageRisk) },
+    { label: t("Лучший прогноз", "Top prediction"), value: analysisSummary.topTicker + " - " + analysisSummary.topPrediction },
+    {
+      label: t("Главный признак", "Top feature"),
+      value: featureImportance[0]
+        ? featureImportance[0].feature + " (" + formatPercentValue(featureImportance[0].importance) + ")"
+        : "-",
+    },
+    ...overviewMetrics.map((item) => ({
+      label: localizeMetricLabel(item.label, isEn),
+      value: formatMetricDisplay(item.label, item.value),
+    })),
+    ...portfolioMetrics.map((item) => ({
+      label: localizeMetricLabel(item.label, isEn),
+      value: formatMetricDisplay(item.label, item.value),
+    })),
+    ...modelParameterRows.map((row) => ({ label: row.label, value: row.value })),
+    ...decisionRules.slice(0, 5).map((row, index) => ({
+      label: t("Правило", "Rule") + " #" + (index + 1),
+      value: row.conditions + " => " + row.prediction + ", " + formatTreeConfidence(row.confidence),
+    })),
+  ];
+
+  const buildAnalysisResultColumns = () => [
+    { header: "Ticker", render: (row: AnalysisResultRow) => row.ticker },
+    { header: t("Компания", "Company"), render: (row: AnalysisResultRow) => row.name },
+    { header: t("Сектор", "Sector"), render: (row: AnalysisResultRow) => row.sector },
+    { header: t("Прогноз", "Prediction"), render: (row: AnalysisResultRow) => row.prediction },
+    { header: t("Уверенность, %", "Confidence, %"), render: (row: AnalysisResultRow) => formatPercentValue(row.confidence) },
+    { header: t("Ожидаемая доходность, %", "Expected return, %"), render: (row: AnalysisResultRow) => formatPercentValue(row.expectedReturn) },
+    { header: t("Риск, %", "Risk, %"), render: (row: AnalysisResultRow) => formatPercentValue(row.risk) },
+    { header: "P/E", render: (row: AnalysisResultRow) => formatOptionalNumber(row.pe, 2) },
+    { header: "P/BV", render: (row: AnalysisResultRow) => formatOptionalNumber(row.pb, 2) },
+    { header: "ROE, %", render: (row: AnalysisResultRow) => formatPercentValue(row.roe) },
+    { header: "g, %", render: (row: AnalysisResultRow) => formatPercentValue(row.growth) },
+    { header: t("Рыночная капитализация", "Market cap"), render: (row: AnalysisResultRow) => formatOptionalNumber(row.marketCap, 0) },
+    { header: t("Оценка", "Score"), render: (row: AnalysisResultRow) => formatOptionalNumber(row.score, 2) },
+  ];
+
+  const exportAnalysisToXlsx = async () => {
+    if (!analysisRows.length) {
+      return;
+    }
+    await downloadAnalysisResultsAsXlsx({
+      title: t("Результаты анализа дерева решений", "Decision Tree Analysis Results"),
+      filename: "tree-analysis-results.xlsx",
+      rows: analysisRows,
+      columns: buildAnalysisResultColumns(),
+      metrics: buildAnalysisExportMetrics(),
+    });
+  };
+
+  const exportAnalysisToPdf = async () => {
+    if (!analysisRows.length) {
+      return;
+    }
+    try {
+      await downloadAnalysisResultsAsPdf({
+        title: t("Результаты анализа дерева решений", "Decision Tree Analysis Results"),
+        filename: "tree-analysis-results.pdf",
+        rows: analysisRows,
+        columns: buildAnalysisResultColumns(),
+        metrics: buildAnalysisExportMetrics(),
+        chartSvg: decisionChartRef.current?.querySelector("svg"),
+      });
+    } catch (e) {
+      const message = e instanceof Error ? e.message : t("Не удалось сохранить PDF", "Failed to save PDF");
+      showErrorDialog(message);
+    }
+  };
+
+  const saveDecisionChartPng = async () => {
+    const svg = decisionChartRef.current?.querySelector("svg");
+    if (!svg) {
+      return;
+    }
+    try {
+      await downloadSvgAsPng(svg as SVGSVGElement, "tree-confidence-return.png");
+    } catch (e) {
+      const message = e instanceof Error ? e.message : t("Не удалось сохранить PNG", "Failed to save PNG");
+      showErrorDialog(message);
+    }
+  };
+
+  const saveTreeChartPng = async () => {
+    const svg = treeChartRef.current?.querySelector("svg");
+    if (!svg) {
+      return;
+    }
+    try {
+      await downloadSvgAsPng(svg as SVGSVGElement, "tree-compact-preview.png");
+    } catch (e) {
+      const message = e instanceof Error ? e.message : t("Не удалось сохранить PNG", "Failed to save PNG");
       showErrorDialog(message);
     }
   };
@@ -870,6 +1048,7 @@ export function DecisionTreeAnalysis() {
             <OptimizerSettingsFields
               settings={optimizerSettings}
               onChange={setOptimizerSettings}
+              autoFitWeights
             />
 
             {!hasData && (
@@ -1045,9 +1224,9 @@ export function DecisionTreeAnalysis() {
             />
           )}
 
-          {!!visibleMetrics.length && (
+          {!!overviewMetrics.length && (
             <MetricGrid>
-              {visibleMetrics.map((m) => (
+              {overviewMetrics.map((m) => (
                 <MetricCard
                   key={m.label}
                   label={(
@@ -1088,6 +1267,139 @@ export function DecisionTreeAnalysis() {
             </SectionCard>
           )}
 
+          {!!analysisRows.length && (
+            <SectionCard
+              title={t("Сводка по результату", "Result Summary")}
+              action={(
+                <div className="flex items-center gap-2">
+                  <button onClick={exportAnalysisToXlsx} disabled={!analysisRows.length} className="ui-secondary-button px-3 py-2 text-xs">
+                    <FileSpreadsheet className="h-4 w-4" />
+                    XLSX
+                  </button>
+                  <button onClick={exportAnalysisToPdf} disabled={!analysisRows.length} className="ui-secondary-button px-3 py-2 text-xs">
+                    <FileText className="h-4 w-4" />
+                    PDF
+                  </button>
+                </div>
+              )}
+            >
+              <div className="space-y-5">
+                <div className="grid grid-cols-1 gap-3 text-sm md:grid-cols-2 xl:grid-cols-4">
+                  <div className="ui-stat-card">
+                    <div className="text-slate-500 dark:text-slate-400">{t("Акций в анализе", "Stocks in analysis")}</div>
+                    <div className="text-xl font-semibold text-slate-900 dark:text-slate-100">{analysisSummary.sampleSize}</div>
+                  </div>
+                  <div className="ui-stat-card">
+                    <div className="text-slate-500 dark:text-slate-400">{t("Компаний с прогнозом", "Companies with prediction")}</div>
+                    <div className="text-xl font-semibold text-slate-900 dark:text-slate-100">{analysisSummary.resultCount}</div>
+                  </div>
+                  <div className="ui-stat-card">
+                    <div className="text-slate-500 dark:text-slate-400">{t("Средняя уверенность", "Average confidence")}</div>
+                    <div className="text-xl font-semibold text-slate-900 dark:text-slate-100">{formatPercentValue(analysisSummary.averageConfidence)}</div>
+                  </div>
+                  <div className="ui-stat-card">
+                    <div className="text-slate-500 dark:text-slate-400">{t("Лучший прогноз", "Top prediction")}</div>
+                    <div className="text-xl font-semibold text-slate-900 dark:text-slate-100">{analysisSummary.topTicker}</div>
+                    <div className="mt-1 text-xs text-slate-500 dark:text-slate-400">{analysisSummary.topPrediction}</div>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
+                  {!!predictionDistribution.length && (
+                    <div>
+                      <div className="mb-2 text-sm font-semibold text-slate-800 dark:text-slate-100">{t("Распределение прогнозов", "Prediction distribution")}</div>
+                      <div className="h-72">
+                        <ResponsiveContainer width="100%" height="100%">
+                          <BarChart data={predictionDistribution} margin={{ top: 10, right: 18, left: 16, bottom: 42 }}>
+                            <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                            <XAxis dataKey="prediction" stroke="#64748b" interval={0} angle={-18} textAnchor="end" height={62} label={{ value: t("Прогноз", "Prediction"), position: "insideBottom", offset: -18 }} />
+                            <YAxis allowDecimals={false} stroke="#64748b" label={{ value: t("Компаний", "Companies"), angle: -90, position: "insideLeft" }} />
+                            <Tooltip formatter={(value: number) => Number(value).toFixed(0)} />
+                            <Bar dataKey="count" name={t("Компаний", "Companies")} radius={[6, 6, 0, 0]}>
+                              {predictionDistribution.map((row) => (
+                                <Cell key={row.prediction} fill={row.fill} />
+                              ))}
+                            </Bar>
+                          </BarChart>
+                        </ResponsiveContainer>
+                      </div>
+                    </div>
+                  )}
+
+                  {!!decisionScatterRows.length && (
+                    <div className="xl:col-span-2">
+                      <div className="mb-2 flex items-center justify-between gap-3">
+                        <div className="text-sm font-semibold text-slate-800 dark:text-slate-100">{t("Уверенность vs ожидаемая доходность", "Confidence vs expected return")}</div>
+                        <button onClick={saveDecisionChartPng} disabled={!decisionScatterRows.length} className="ui-secondary-button px-3 py-2 text-xs">
+                          <ImageDown className="h-4 w-4" />
+                          PNG
+                        </button>
+                      </div>
+                      <div ref={decisionChartRef} className="h-72">
+                        <ResponsiveContainer width="100%" height="100%">
+                          <ScatterChart margin={{ top: 12, right: 24, left: 28, bottom: 42 }}>
+                            <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                            <XAxis type="number" dataKey="confidence" name={t("Уверенность", "Confidence")} unit="%" stroke="#64748b" label={{ value: t("Уверенность, %", "Confidence, %"), position: "insideBottom", offset: -14 }} />
+                            <YAxis type="number" dataKey="expectedReturn" name={t("Ожидаемая доходность", "Expected return")} unit="%" stroke="#64748b" label={{ value: t("Ожидаемая доходность, %", "Expected return, %"), angle: -90, position: "insideLeft" }} />
+                            <ZAxis dataKey="risk" range={[70, 230]} />
+                            <Tooltip formatter={(value: number, name: string) => [formatPercentValue(value), name]} cursor={{ strokeDasharray: "3 3" }} />
+                            <Scatter name={t("Акции", "Stocks")} data={decisionScatterRows} fill="#10b981" stroke="#047857" fillOpacity={0.82} />
+                          </ScatterChart>
+                        </ResponsiveContainer>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </SectionCard>
+          )}
+
+          {!!analysisRows.length && (
+            <SectionCard
+              title={t("Результаты анализа дерева решений", "Decision Tree Analysis Results")}
+              description={t("Таблица классифицированных акций, отсортированная по уверенности модели.", "Classified stocks sorted by model confidence.")}
+            >
+              <div className="ui-table-shell overflow-x-auto tree-analysis-results-table">
+                <table className="ui-data-table min-w-[78rem]">
+                  <thead>
+                    <tr>
+                      <th>Ticker</th>
+                      <th>{t("Компания", "Company")}</th>
+                      <th>{t("Сектор", "Sector")}</th>
+                      <th>{t("Прогноз", "Prediction")}</th>
+                      <th>{t("Уверенность", "Confidence")}</th>
+                      <th>{t("Ожид. доходность", "Expected return")}</th>
+                      <th>{t("Риск", "Risk")}</th>
+                      <th>P/E</th>
+                      <th>P/BV</th>
+                      <th>ROE</th>
+                      <th>g</th>
+                      <th>{t("Капитализация", "Market cap")}</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {analysisRows.slice(0, 50).map((row) => (
+                      <tr key={(row.figi || row.ticker) + "-tree-analysis"}>
+                        <td className="font-medium text-slate-900 dark:text-slate-100">{row.ticker}</td>
+                        <td className="ui-cell-name">{row.name}</td>
+                        <td>{row.sector}</td>
+                        <td className="font-semibold text-slate-900 dark:text-slate-100">{row.prediction}</td>
+                        <td className="ui-cell-number text-emerald-700 dark:text-emerald-300">{formatPercentValue(row.confidence)}</td>
+                        <td className="ui-cell-number">{formatPercentValue(row.expectedReturn)}</td>
+                        <td className="ui-cell-number">{formatPercentValue(row.risk)}</td>
+                        <td className="ui-cell-number">{formatOptionalNumber(row.pe, 2)}</td>
+                        <td className="ui-cell-number">{formatOptionalNumber(row.pb, 2)}</td>
+                        <td className="ui-cell-number">{formatPercentValue(row.roe)}</td>
+                        <td className="ui-cell-number">{formatPercentValue(row.growth)}</td>
+                        <td className="ui-cell-number">{formatOptionalNumber(row.marketCap, 0)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </SectionCard>
+          )}
+
           {!!treeDiagramNodes.length && (
             <SectionCard
               title={t("\u0421\u043e\u043a\u0440\u0430\u0449\u0435\u043d\u043d\u043e\u0435 \u0434\u0435\u0440\u0435\u0432\u043e \u0440\u0435\u0448\u0435\u043d\u0438\u0439", "Compact Decision Tree")}
@@ -1096,7 +1408,13 @@ export function DecisionTreeAnalysis() {
                 "Shows the top levels: split condition, predicted class, confidence, and samples per node.",
               )}
             >
-              <div className="overflow-x-auto rounded-md border border-slate-200 bg-white p-3 dark:border-slate-700 dark:bg-slate-950">
+              <div className="mb-4 flex justify-end">
+                <button onClick={saveTreeChartPng} disabled={!treeDiagramNodes.length} className="ui-secondary-button px-3 py-2 text-xs">
+                  <ImageDown className="h-4 w-4" />
+                  PNG
+                </button>
+              </div>
+              <div ref={treeChartRef} className="overflow-x-auto rounded-md border border-slate-200 bg-white p-3 dark:border-slate-700 dark:bg-slate-950">
                 <svg viewBox="0 0 1000 360" className="min-w-[900px]" role="img" aria-label={t("\u0421\u043e\u043a\u0440\u0430\u0449\u0435\u043d\u043d\u043e\u0435 \u0434\u0435\u0440\u0435\u0432\u043e \u0440\u0435\u0448\u0435\u043d\u0438\u0439", "Compact decision tree")}>
                   {treeDiagramNodes
                     .filter((node) => node.parentKey)
@@ -1162,16 +1480,6 @@ export function DecisionTreeAnalysis() {
             </SectionCard>
           )}
 
-          {portfolioAssetsCount > 0 && (
-            <MetricGrid className="xl:grid-cols-1">
-              <MetricCard
-                label={t("Активов в оптимальном портфеле", "Assets in optimal portfolio")}
-                value={portfolioAssetsCount}
-                className="max-w-xs"
-              />
-            </MetricGrid>
-          )}
-
           {!!portfolioPositions.length && (
             <SectionCard
               title={t("Оптимальный портфель из дерева решений", "Optimal Portfolio from Decision Tree")}
@@ -1204,6 +1512,28 @@ export function DecisionTreeAnalysis() {
                 </div>
               )}
             >
+              {(portfolioAssetsCount > 0 || !!portfolioMetrics.length) && (
+                <MetricGrid className="mb-5 xl:grid-cols-4">
+                  {portfolioAssetsCount > 0 && (
+                    <MetricCard label={t("Активов в портфеле", "Assets in portfolio")} value={portfolioAssetsCount} />
+                  )}
+                  {portfolioMetrics.map((metric) => (
+                    <MetricCard
+                      key={metric.label}
+                      label={(
+                        <>
+                          <span>{localizeMetricLabel(metric.label, isEn)}</span>
+                          {getMetricTooltip(metric.label, isEn) && (
+                            <MetricTooltip text={getMetricTooltip(metric.label, isEn) ?? ""} />
+                          )}
+                        </>
+                      )}
+                      value={formatMetricDisplay(metric.label, metric.value)}
+                    />
+                  ))}
+                </MetricGrid>
+              )}
+
               <PortfolioHoldingsPanel
                 rows={portfolioPositions}
                 palette={TREE_PALETTE}
@@ -1255,6 +1585,20 @@ export function DecisionTreeAnalysis() {
 
           {!!featureImportance.length && (
             <SectionCard title={t("Важность признаков", "Feature Importance")}>
+              <div className="mb-5 grid grid-cols-1 gap-3 md:grid-cols-3">
+                <div className="ui-stat-card">
+                  <div className="text-slate-500 dark:text-slate-400">{t("Главный признак", "Top feature")}</div>
+                  <div className="text-lg font-semibold text-slate-900 dark:text-slate-100">{featureImportance[0]?.feature ?? "-"}</div>
+                </div>
+                <div className="ui-stat-card">
+                  <div className="text-slate-500 dark:text-slate-400">{t("Значимость", "Importance")}</div>
+                  <div className="text-lg font-semibold text-slate-900 dark:text-slate-100">{formatPercentValue(featureImportance[0]?.importance)}</div>
+                </div>
+                <div className="ui-stat-card">
+                  <div className="text-slate-500 dark:text-slate-400">{t("Признаков в модели", "Model features")}</div>
+                  <div className="text-lg font-semibold text-slate-900 dark:text-slate-100">{featureImportance.length}</div>
+                </div>
+              </div>
               <ResponsiveContainer width="100%" height={300}>
                 <BarChart data={featureImportance} layout="vertical" margin={{ top: 5, right: 30, left: 90, bottom: 5 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
