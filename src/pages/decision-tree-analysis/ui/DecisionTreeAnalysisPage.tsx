@@ -44,6 +44,7 @@ import type {
   DecisionTreeConfusionMatrixData as ConfusionMatrixData,
   DecisionTreeFeatureImportanceItem as FeatureImportanceItem,
   DecisionTreeMetricItem as MetricItem,
+  DecisionTreeAnalysisResultRow as AnalysisResultRow,
   DecisionTreeNumericSummaryItem as NumericSummaryItem,
   DecisionTreePortfolioPosition as PortfolioPosition,
   DecisionTreePreviewNode as TreePreviewNode,
@@ -95,6 +96,7 @@ import type {
   TuningBudget,
 } from "../model";
 import {
+  extractAnalysisRows,
   extractConfusionMatrix,
   extractDecisionRules,
   extractFeatureImportance,
@@ -105,6 +107,8 @@ import {
   extractPortfolioPositions,
   extractSectorAllocation,
   extractTreePreview,
+  formatOptionalNumber,
+  formatPercentValue,
 } from "../lib";
 
 type TreeDiagramNode = {
@@ -168,7 +172,7 @@ function averageFinite(values: number[]): number {
 
 function isBuyPrediction(value: string): boolean {
   const normalized = value.toLowerCase();
-  return normalized.includes("покуп") || normalized.includes("buy");
+  return normalized.includes("покуп") || normalized.includes("buy") || normalized.includes("недооцен") || normalized === "0" || normalized === "1";
 }
 
 export function DecisionTreeAnalysis() {
@@ -180,6 +184,7 @@ export function DecisionTreeAnalysis() {
   const [error, setError] = useState<string | null>(null);
   const [errorDialogMessage, setErrorDialogMessage] = useState<string | null>(null);
   const [metrics, setMetrics] = useState<MetricItem[]>([]);
+  const [analysisRows, setAnalysisRows] = useState<AnalysisResultRow[]>([]);
   const [featureImportance, setFeatureImportance] = useState<FeatureImportanceItem[]>([]);
   const [confusionMatrix, setConfusionMatrix] = useState<ConfusionMatrixData | null>(null);
   const [portfolioPositions, setPortfolioPositions] = useState<PortfolioPosition[]>([]);
@@ -194,7 +199,11 @@ export function DecisionTreeAnalysis() {
   const [stockSearch, setStockSearch] = useState("");
   const [treeSettings, setTreeSettings] = useState<DecisionTreeSettings>(DEFAULT_TREE_SETTINGS);
   const portfolioChartRef = useRef<HTMLDivElement | null>(null);
+  const decisionChartRef = useRef<HTMLDivElement | null>(null);
+  const treeChartRef = useRef<HTMLDivElement | null>(null);
   const visibleMetrics = useMemo(() => metrics.filter((item) => isVisibleAnalysisMetric(item.label)), [metrics]);
+  const portfolioMetrics = useMemo(() => visibleMetrics.filter((item) => isPortfolioMetric(item.label)), [visibleMetrics]);
+  const overviewMetrics = useMemo(() => visibleMetrics.filter((item) => !isPortfolioMetric(item.label)), [visibleMetrics]);
   const showErrorDialog = (message: string) => {
     setError(message);
     setErrorDialogMessage(message);
@@ -208,6 +217,7 @@ export function DecisionTreeAnalysis() {
       const parsed = JSON.parse(raw) as {
         error?: string | null;
         metrics?: MetricItem[];
+        analysisRows?: AnalysisResultRow[];
         featureImportance?: FeatureImportanceItem[];
         confusionMatrix?: ConfusionMatrixData | null;
         portfolioPositions?: PortfolioPosition[];
@@ -223,6 +233,7 @@ export function DecisionTreeAnalysis() {
       };
       if (typeof parsed.error === "string" || parsed.error === null) setError(parsed.error);
       if (Array.isArray(parsed.metrics)) setMetrics(parsed.metrics.filter((item) => isVisibleAnalysisMetric(item.label)));
+      if (Array.isArray(parsed.analysisRows)) setAnalysisRows(parsed.analysisRows);
       if (Array.isArray(parsed.featureImportance)) setFeatureImportance(parsed.featureImportance);
       if (parsed.confusionMatrix && typeof parsed.confusionMatrix === "object") setConfusionMatrix(parsed.confusionMatrix);
       if (Array.isArray(parsed.portfolioPositions)) setPortfolioPositions(parsed.portfolioPositions);
@@ -257,6 +268,7 @@ export function DecisionTreeAnalysis() {
     const payload = {
       error,
       metrics,
+      analysisRows,
       featureImportance,
       confusionMatrix,
       portfolioPositions,
@@ -274,6 +286,7 @@ export function DecisionTreeAnalysis() {
   }, [
     error,
     metrics,
+    analysisRows,
     featureImportance,
     confusionMatrix,
     portfolioPositions,
@@ -331,20 +344,6 @@ export function DecisionTreeAnalysis() {
       }))
       .sort((left, right) => right.count - left.count);
   }, [analysisRows]);
-  const analysisSummary = useMemo(
-    () => ({
-      sampleSize: selectedRequestData.length,
-      resultCount: analysisRows.length,
-      buyCount: analysisRows.filter((row) => isBuyPrediction(row.prediction)).length,
-      averageConfidence: averageFinite(analysisRows.map((row) => row.confidence)),
-      averageExpectedReturn: averageFinite(analysisRows.map((row) => row.expectedReturn)),
-      averageRisk: averageFinite(analysisRows.map((row) => row.risk)),
-      topTicker: analysisRows[0]?.ticker ?? "-",
-      topPrediction: analysisRows[0]?.prediction ?? "-",
-    }),
-    [analysisRows, selectedRequestData.length],
-  );
-
   const requestData = useMemo(
     () =>
       cache.shares
@@ -397,6 +396,21 @@ export function DecisionTreeAnalysis() {
     () => (selectionMode === "all" ? requestData : requestData.filter((row) => selectedFigisSet.has(row.figi))),
     [requestData, selectedFigisSet, selectionMode],
   );
+
+  const analysisSummary = useMemo(
+    () => ({
+      sampleSize: selectedRequestData.length,
+      resultCount: analysisRows.length,
+      buyCount: analysisRows.filter((row) => isBuyPrediction(row.prediction)).length,
+      averageConfidence: averageFinite(analysisRows.map((row) => row.confidence)),
+      averageExpectedReturn: averageFinite(analysisRows.map((row) => row.expectedReturn)),
+      averageRisk: averageFinite(analysisRows.map((row) => row.risk)),
+      topTicker: analysisRows[0]?.ticker ?? "-",
+      topPrediction: analysisRows[0]?.prediction ?? "-",
+    }),
+    [analysisRows, selectedRequestData.length],
+  );
+
 
   const filteredStockRows = useMemo(() => {
     const normalizedSearch = stockSearch.trim().toLowerCase();

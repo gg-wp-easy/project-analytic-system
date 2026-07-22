@@ -1,4 +1,5 @@
 export {
+  extractAnalysisRows,
   extractConfusionMatrix,
   extractDecisionRules,
   extractFeatureImportance,
