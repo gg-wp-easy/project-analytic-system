@@ -25,6 +25,12 @@ export type CardGridSkeletonProps = {
   columnsClassName?: string;
 };
 
+export type ChartSkeletonVariant = "bars" | "scatter" | "line" | "network" | "tree";
+
 export type ChartSkeletonProps = {
   className?: string;
+  title?: string;
+  subtitle?: string;
+  variant?: ChartSkeletonVariant;
+  accentClassName?: string;
 };

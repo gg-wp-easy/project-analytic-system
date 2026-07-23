@@ -77,6 +77,7 @@ import {
   SectionCard,
 } from "../../../shared/ui/analysis-shell";
 import { AppErrorDialog } from "../../../shared/ui/app-error-dialog";
+import { AnalysisLoadingPreview } from "../../../shared/ui/analysis/AnalysisLoadingPreview";
 import { AnalysisRunningIndicator } from "../../../shared/ui/analysis/AnalysisRunningIndicator";
 import { InfoTooltip } from "../../../shared/ui/analysis/InfoTooltip";
 import { MetricTooltip } from "../../../shared/ui/analysis/MetricTooltip";
@@ -1231,11 +1232,48 @@ export function DecisionTreeAnalysis() {
           </SectionCard>
 
           {isRunning && (
-            <AnalysisRunningIndicator
-              title={t("Выполняем анализ дерева решений", "Running decision tree analysis")}
-              subtitle={t("Обучаем модель и формируем метрики портфеля", "Training model and generating portfolio metrics")}
-              accentClassName="text-emerald-600"
-            />
+            <>
+              <AnalysisRunningIndicator
+                title={t("Выполняем анализ дерева решений", "Running decision tree analysis")}
+                subtitle={t("Обучаем модель и формируем метрики портфеля", "Training model and generating portfolio metrics")}
+                accentClassName="text-emerald-600"
+              />
+              <AnalysisLoadingPreview
+                accentClassName="text-emerald-600"
+                metricCount={4}
+                metricsTitle={t("Готовим показатели дерева", "Preparing tree metrics")}
+                metricsDescription={t("Считаем качество классификации, прогнозы и портфельные метрики.", "Calculating classification quality, predictions, and portfolio metrics.")}
+                chartsTitle={t("Строим графики дерева", "Building tree charts")}
+                chartsDescription={t("Появятся распределение прогнозов, риск-карта, схема дерева и важность признаков.", "Prediction distribution, risk map, tree schema, and feature importance will appear here.")}
+                charts={[
+                  {
+                    title: t("Распределение прогнозов", "Prediction distribution"),
+                    subtitle: t("Собираем классы прогнозов по компаниям.", "Collecting prediction classes by company."),
+                    variant: "bars",
+                  },
+                  {
+                    title: t("Уверенность vs доходность", "Confidence vs return"),
+                    subtitle: t("Готовим точки риска и ожидаемой доходности.", "Preparing risk and expected return points."),
+                    variant: "scatter",
+                  },
+                  {
+                    title: t("Укороченное дерево", "Compact tree"),
+                    subtitle: t("Рисуем ключевые развилки модели.", "Drawing the model's key splits."),
+                    variant: "tree",
+                  },
+                  {
+                    title: t("Значимость признаков", "Feature significance"),
+                    subtitle: t("Оцениваем вклад параметров в решения дерева.", "Estimating parameter contribution to tree decisions."),
+                    variant: "bars",
+                  },
+                ]}
+                chartColumnsClassName="xl:grid-cols-2"
+                tableTitle={t("Готовим таблицу результатов", "Preparing result table")}
+                tableDescription={t("Скоро появятся прогнозы, уверенность и портфельные веса.", "Predictions, confidence, and portfolio weights will appear shortly.")}
+                tableRows={8}
+                tableColumns={8}
+              />
+            </>
           )}
 
           {!!overviewMetrics.length && (

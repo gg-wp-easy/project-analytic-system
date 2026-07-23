@@ -27,6 +27,13 @@ function formatMetricValue(value: unknown): string {
   return "-";
 }
 
+function isMinRiskObjective(parsed: Record<string, unknown>): boolean {
+  const summary = (parsed.summary as Record<string, unknown> | undefined) ?? {};
+  const stats = (parsed.stats as Record<string, unknown> | undefined) ?? {};
+  const objective = String(summary.optimization_objective ?? stats.optimization_objective ?? "").toLowerCase();
+  return objective === "min_risk" || objective === "min_volatility" || objective === "minimum_risk";
+}
+
 export function formatOptionalNumber(value: unknown, digits = 2): string {
   const parsed = numberOr(value, NaN);
   return Number.isFinite(parsed) ? parsed.toFixed(digits) : "-";
@@ -211,7 +218,11 @@ export function extractPortfolioStrategies(parsed: Record<string, unknown>): Por
     });
   }
 
-  return strategies.sort((a, b) => numberOr(b.sharpe, -Infinity) - numberOr(a.sharpe, -Infinity));
+  return strategies.sort((a, b) =>
+    isMinRiskObjective(parsed)
+      ? numberOr(a.risk, Infinity) - numberOr(b.risk, Infinity)
+      : numberOr(b.sharpe, -Infinity) - numberOr(a.sharpe, -Infinity),
+  );
 }
 
 export function extractPortfolioPositions(parsed: Record<string, unknown>): PortfolioPosition[] {

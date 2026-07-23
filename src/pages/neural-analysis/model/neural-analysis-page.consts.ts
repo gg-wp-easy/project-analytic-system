@@ -3,14 +3,14 @@ import type { NeuralAnalysisSettings, NeuralFeatureOption } from "./neural-analy
 export const NEURAL_STATE_KEY = "neural-analysis-state-v1";
 
 export const NEURAL_PALETTE = [
-  "#f97316",
-  "#ea580c",
-  "#fb923c",
-  "#f59e0b",
-  "#f43f5e",
-  "#ef4444",
-  "#facc15",
-  "#fdba74",
+  "#0f766e",
+  "#2563eb",
+  "#7c3aed",
+  "#0891b2",
+  "#16a34a",
+  "#db2777",
+  "#475569",
+  "#14b8a6",
 ];
 
 export const NEURAL_FEATURE_OPTIONS: NeuralFeatureOption[] = [
@@ -28,11 +28,11 @@ export const NEURAL_FEATURE_OPTIONS: NeuralFeatureOption[] = [
 ];
 
 export const DEFAULT_NEURAL_SETTINGS: NeuralAnalysisSettings = {
-  modelType: "mlp",
+  modelType: "auto",
   activation: "relu",
   optimizer: "adam",
   hiddenLayers: "64,32",
-  epochs: 120,
+  epochs: 180,
   batchSize: 32,
   learningRate: 0.001,
   dropout: 0.2,

@@ -41,7 +41,7 @@ import { AnalysisRunningIndicator } from "../../../shared/ui/analysis/AnalysisRu
 import { InfoTooltip } from "../../../shared/ui/analysis/InfoTooltip";
 import { PortfolioHoldingsPanel } from "../../../shared/ui/analysis/PortfolioHoldingsPanel";
 import { AppErrorDialog } from "../../../shared/ui/app-error-dialog";
-import { TableSkeleton } from "../../../shared/ui/loading-state";
+import { ChartSkeleton, MetricSkeletonGrid, TableSkeleton } from "../../../shared/ui/loading-state";
 import {
   BONDS_CHART_PALETTE,
   BONDS_PAGE_SIZE,
@@ -698,7 +698,16 @@ export function BondsAnalysisPage() {
               "Rows and the calculated portfolio will appear after loading.",
             )}
           >
-            <TableSkeleton rows={10} columns={8} />
+            <div className="space-y-5">
+              <MetricSkeletonGrid count={3} />
+              <ChartSkeleton
+                title={t("Строим пузырьковую диаграмму", "Building bubble chart")}
+                subtitle={t("Готовим доходность, дюрацию, риск и размер выпусков.", "Preparing yield, duration, risk, and issue size.")}
+                variant="scatter"
+                accentClassName="text-amber-600"
+              />
+              <TableSkeleton rows={10} columns={8} />
+            </div>
           </SectionCard>
         ) : null}
 

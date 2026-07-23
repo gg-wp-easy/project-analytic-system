@@ -1,23 +1,9 @@
-﻿import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { FileSpreadsheet, FileText, ImageDown, Layers, Play, Settings } from "lucide-react";
-import {
-  ResponsiveContainer,
-  BarChart,
-  Bar,
-  CartesianGrid,
-  XAxis,
-  YAxis,
-  Tooltip,
-  Cell,
-  LineChart,
-  Line,
-  Legend,
-} from "recharts";
 import { useFundamentals } from "../../../entities/fundamentals";
 import { useAppSettings } from "../../../app/context/AppSettingsContext";
 import { Checkbox } from "../../../app/components/ui/checkbox";
 import { OptimizerSettingsFields, submitOptimizerSettings, useOptimizerSettings } from "../../../features/optimizer-settings";
-import { PortfolioSimulationPanel } from "../../../features/portfolio-simulation";
 import { API_BASE_URL } from "../../../config";
 import type {
   HybridMetricItem as MetricItem,
@@ -48,6 +34,7 @@ import {
   SectionCard,
 } from "../../../shared/ui/analysis-shell";
 import { AppErrorDialog } from "../../../shared/ui/app-error-dialog";
+import { AnalysisLoadingPreview } from "../../../shared/ui/analysis/AnalysisLoadingPreview";
 import { AnalysisRunningIndicator } from "../../../shared/ui/analysis/AnalysisRunningIndicator";
 import { MetricTooltip } from "../../../shared/ui/analysis/MetricTooltip";
 import { PortfolioHoldingsPanel } from "../../../shared/ui/analysis/PortfolioHoldingsPanel";
@@ -72,6 +59,9 @@ import {
   safeParseJsonObject,
 } from "../lib";
 
+function formatPortfolioMetricValue(label: string, value: number): string {
+  return Number.isFinite(value) ? formatMetricDisplay(label, String(value)) : "-";
+}
 export function HybridAnalysis() {
   const { hasData, cache } = useFundamentals();
   const { locale, t } = useAppSettings();
@@ -95,17 +85,59 @@ export function HybridAnalysis() {
   const [portfolioAssetsCount, setPortfolioAssetsCount] = useState(0);
   const portfolioChartRef = useRef<HTMLDivElement | null>(null);
   const visibleMetrics = useMemo(() => metrics.filter((item) => isVisibleAnalysisMetric(item.label)), [metrics]);
+  const selectedPortfolioStrategy = useMemo(
+    () => portfolioStrategies.find((item) => item.key === "selected_portfolio") ?? portfolioStrategies[0] ?? null,
+    [portfolioStrategies],
+  );
+  const optimalPortfolioMetricCards = useMemo(() => {
+    if (selectedPortfolioStrategy) {
+      const assetsCount = selectedPortfolioStrategy.assetsCount || portfolioAssetsCount || portfolio.length;
+      return [
+        {
+          key: "expected-return",
+          label: localizeMetricLabel("Expected Return", isEn),
+          value: formatPortfolioMetricValue("Expected Return", selectedPortfolioStrategy.expectedReturn),
+          tooltip: getMetricTooltip("Expected Return", isEn),
+        },
+        {
+          key: "risk",
+          label: localizeMetricLabel("Risk", isEn),
+          value: formatPortfolioMetricValue("Risk", selectedPortfolioStrategy.risk),
+          tooltip: getMetricTooltip("Risk", isEn),
+        },
+        {
+          key: "sharpe",
+          label: localizeMetricLabel("Sharpe Ratio", isEn),
+          value: formatPortfolioMetricValue("Sharpe Ratio", selectedPortfolioStrategy.sharpe),
+          tooltip: getMetricTooltip("Sharpe Ratio", isEn),
+        },
+        {
+          key: "diversification",
+          label: localizeMetricLabel("Diversification", isEn),
+          value: formatPortfolioMetricValue("Diversification", selectedPortfolioStrategy.diversification),
+          tooltip: getMetricTooltip("Diversification", isEn),
+        },
+        {
+          key: "assets",
+          label: t("Позиций", "Positions"),
+          value: String(Math.max(Math.round(assetsCount), 0)),
+          tooltip: null,
+        },
+      ];
+    }
+
+    const portfolioMetricLabels = new Set(["expected return", "risk", "volatility", "sharpe", "sharpe ratio", "diversification"]);
+    return visibleMetrics
+      .filter((item) => portfolioMetricLabels.has(item.label.trim().toLowerCase()))
+      .map((item) => ({
+        key: item.label,
+        label: localizeMetricLabel(item.label, isEn),
+        value: formatMetricDisplay(item.label, item.value),
+        tooltip: getMetricTooltip(item.label, isEn),
+      }));
+  }, [isEn, portfolio.length, portfolioAssetsCount, selectedPortfolioStrategy, t, visibleMetrics]);
   const savedModelSettings = useMemo(() => readHybridModelSettings(), []);
   const savedAutoTuneCount = useMemo(() => countSavedAutoTuneModels(savedModelSettings), [savedModelSettings]);
-  const modelWeightChartData = useMemo(
-    () =>
-      modelComparison.map((row) => ({
-        model: row.model,
-        score: Number.isFinite(row.score) ? (Math.abs(row.score) <= 1 ? row.score * 100 : row.score) : 0,
-      })),
-    [modelComparison],
-  );
-
   const requestData = useMemo(
     () =>
       cache.shares
@@ -311,9 +343,9 @@ export function HybridAnalysis() {
         name: t("Акция", "Stock"),
         weight: t("Вес, %", "Weight, %"),
       }),
-      metrics: visibleMetrics.map((item) => ({
-        label: localizeMetricLabel(item.label, isEn),
-        value: formatMetricDisplay(item.label, item.value),
+      metrics: optimalPortfolioMetricCards.map((item) => ({
+        label: item.label,
+        value: item.value,
       })),
     });
   };
@@ -344,9 +376,9 @@ export function HybridAnalysis() {
           name: t("Акция", "Stock"),
           weight: t("Вес, %", "Weight, %"),
         }),
-        metrics: visibleMetrics.map((item) => ({
-          label: localizeMetricLabel(item.label, isEn),
-          value: formatMetricDisplay(item.label, item.value),
+        metrics: optimalPortfolioMetricCards.map((item) => ({
+          label: item.label,
+          value: item.value,
         })),
         chartSvg: portfolioChartRef.current?.querySelector("svg"),
       });
@@ -459,6 +491,7 @@ export function HybridAnalysis() {
               <OptimizerSettingsFields
                 settings={optimizerSettings}
                 onChange={setOptimizerSettings}
+                autoFitWeights
               />
               <button
                 type="button"
@@ -477,101 +510,32 @@ export function HybridAnalysis() {
         )}
       >
           {isRunning && (
-            <AnalysisRunningIndicator
-              title={t("Выполняем гибридный анализ", "Running hybrid analysis")}
-              subtitle={t("Собираем сигналы моделей и оптимизируем портфель", "Combining model signals and optimizing portfolio")}
-              accentClassName="text-cyan-700"
-            />
-          )}
-
-          {!!visibleMetrics.length && (
-            <MetricGrid>
-              {visibleMetrics.map((m) => (
-                <MetricCard
-                  key={m.label}
-                  label={(
-                    <>
-                      <span>{localizeMetricLabel(m.label, isEn)}</span>
-                      {getMetricTooltip(m.label, isEn) && (
-                        <MetricTooltip text={getMetricTooltip(m.label, isEn) ?? ""} />
-                      )}
-                    </>
-                  )}
-                  value={formatMetricDisplay(m.label, m.value)}
-                />
-              ))}
-            </MetricGrid>
-          )}
-
-          {!!modelWeightChartData.length && (
-            <SectionCard
-              title={t("Вклад анализов в гибрид", "Analysis Contribution Weights")}
-              description={t(
-                "Нормализованные коэффициенты, по которым усреднялись сигналы моделей.",
-                "Normalized coefficients used to average model signals.",
-              )}
-            >
-              <ResponsiveContainer width="100%" height={260}>
-                <BarChart data={modelWeightChartData} layout="vertical" margin={{ left: 16, right: 20 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                  <XAxis type="number" domain={[0, 100]} tickFormatter={(value) => `${Number(value).toFixed(0)}%`} stroke="#64748b" />
-                  <YAxis dataKey="model" type="category" width={110} stroke="#64748b" />
-                  <Tooltip formatter={(value: number) => `${Number(value).toFixed(1)}%`} />
-                  <Bar dataKey="score" radius={[0, 6, 6, 0]}>
-                    {modelWeightChartData.map((entry, index) => (
-                      <Cell key={entry.model} fill={HYBRID_PALETTE[index % HYBRID_PALETTE.length]} />
-                    ))}
-                  </Bar>
-                </BarChart>
-              </ResponsiveContainer>
-            </SectionCard>
-          )}
-
-          {!!trainingHistory.length && (
-            <SectionCard title={t("История обучения", "Training History")}>
-              <ResponsiveContainer width="100%" height={320}>
-                <LineChart data={trainingHistory}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                  <XAxis dataKey="epoch" stroke="#64748b" />
-                  <YAxis stroke="#64748b" />
-                  <Tooltip formatter={(v: number) => Number(v).toFixed(4)} />
-                  <Legend />
-                  <Line type="monotone" dataKey="trainLoss" name="Train Loss" stroke="#0ea5e9" dot={false} strokeWidth={2} />
-                  <Line type="monotone" dataKey="valLoss" name="Val Loss" stroke="#f97316" dot={false} strokeWidth={2} />
-                </LineChart>
-              </ResponsiveContainer>
-            </SectionCard>
-          )}
-
-          {!!portfolioStrategies.length && (
-            <SectionCard title={t("Стратегии портфеля", "Portfolio Strategies")}>
-              <div className="ui-table-shell overflow-x-auto">
-                <table className="ui-data-table">
-                  <thead>
-                    <tr>
-                      <th>{t("Стратегия", "Strategy")}</th>
-                      <th>Expected return</th>
-                      <th>Volatility</th>
-                      <th>Sharpe</th>
-                      <th>Diversification</th>
-                      <th>{t("Позиций", "Positions")}</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {portfolioStrategies.map((s) => (
-                      <tr key={s.key}>
-                        <td className="font-medium text-slate-900 dark:text-slate-100">{s.name}</td>
-                        <td>{Number.isFinite(s.expectedReturn) ? s.expectedReturn.toFixed(4) : "-"}</td>
-                        <td>{Number.isFinite(s.risk) ? s.risk.toFixed(4) : "-"}</td>
-                        <td>{Number.isFinite(s.sharpe) ? s.sharpe.toFixed(4) : "-"}</td>
-                        <td>{Number.isFinite(s.diversification) ? s.diversification.toFixed(4) : "-"}</td>
-                        <td>{s.assetsCount}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </SectionCard>
+            <>
+              <AnalysisRunningIndicator
+                title={t("Выполняем гибридный анализ", "Running hybrid analysis")}
+                subtitle={t("Собираем сигналы моделей и оптимизируем портфель", "Combining model signals and optimizing portfolio")}
+                accentClassName="text-cyan-700"
+              />
+              <AnalysisLoadingPreview
+                accentClassName="text-cyan-700"
+                metricCount={4}
+                metricsTitle={t("Готовим метрики портфеля", "Preparing portfolio metrics")}
+                metricsDescription={t("Считаем ожидаемую доходность, риск, коэффициент Шарпа и диверсификацию.", "Calculating expected return, risk, Sharpe ratio, and diversification.")}
+                chartsTitle={t("Готовим оптимальный портфель", "Preparing optimal portfolio")}
+                chartsDescription={t("Появятся портфельные метрики и итоговое распределение бумаг.", "Portfolio metrics and final allocation will appear here.")}
+                charts={[
+                  {
+                    title: t("Распределение портфеля", "Portfolio allocation"),
+                    subtitle: t("Готовим веса акций выбранного оптимального портфеля.", "Preparing stock weights for the selected optimal portfolio."),
+                    variant: "bars",
+                  },
+                ]}
+                tableTitle={t("Готовим состав оптимального портфеля", "Preparing optimal portfolio holdings")}
+                tableDescription={t("Скоро появятся выбранные бумаги, веса и портфельные показатели.", "Selected stocks, weights, and portfolio metrics will appear shortly.")}
+                tableRows={8}
+                tableColumns={4}
+              />
+            </>
           )}
 
           {(!!portfolio.length || portfolioAssetsCount > 0) && (
@@ -581,7 +545,7 @@ export function HybridAnalysis() {
                 portfolioAssetsCount > 0
                   ? (
                       <>
-                        {t("Количество активов в портфеле", "Assets in portfolio")}:{" "}
+                        {t("Количество активов в портфеле", "Assets in portfolio")}: {" "}
                         <span className="font-semibold text-slate-900 dark:text-slate-100">{portfolioAssetsCount}</span>
                       </>
                     )
@@ -616,26 +580,35 @@ export function HybridAnalysis() {
                 </div>
               )}
             >
-              {!!portfolio.length && (
-                <PortfolioHoldingsPanel
-                  rows={portfolio}
-                  palette={HYBRID_PALETTE}
-                  chartRef={portfolioChartRef}
-                  companyLabel={t("Акция", "Stock")}
-                  weightLabel={t("Вес, %", "Weight, %")}
-                />
-              )}
-            </SectionCard>
-          )}
+              <div className="space-y-5">
+                {!!optimalPortfolioMetricCards.length && (
+                  <MetricGrid>
+                    {optimalPortfolioMetricCards.map((metric) => (
+                      <MetricCard
+                        key={metric.key}
+                        label={(
+                          <>
+                            <span>{metric.label}</span>
+                            {metric.tooltip ? <MetricTooltip text={metric.tooltip} /> : null}
+                          </>
+                        )}
+                        value={metric.value}
+                      />
+                    ))}
+                  </MetricGrid>
+                )}
 
-          {!!portfolio.length && (
-            <PortfolioSimulationPanel
-              holdings={portfolio}
-              shares={cache.shares}
-              fundamentalsByFigi={cache.fundamentalsByFigi}
-              analysisName={t("Гибридный анализ", "Hybrid Analysis")}
-              filenamePrefix="hybrid-portfolio"
-            />
+                {!!portfolio.length && (
+                  <PortfolioHoldingsPanel
+                    rows={portfolio}
+                    palette={HYBRID_PALETTE}
+                    chartRef={portfolioChartRef}
+                    companyLabel={t("Акция", "Stock")}
+                    weightLabel={t("Вес, %", "Weight, %")}
+                  />
+                )}
+              </div>
+            </SectionCard>
           )}
       </AnalysisPageFrame>
 

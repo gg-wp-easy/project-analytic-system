@@ -9,6 +9,7 @@ export {
 export type {
   CardGridSkeletonProps,
   ChartSkeletonProps,
+  ChartSkeletonVariant,
   InlineLoaderProps,
   MetricSkeletonGridProps,
   PageLoadingStateProps,

@@ -15,6 +15,7 @@ import { useAppSettings } from "../../../app/context/AppSettingsContext";
 import { createTBankInstrumentsApi } from "../../../shared/api/tbank";
 import { numberOr } from "../../../shared/lib/number/numberOr";
 import { MetricCard, MetricGrid, SectionCard } from "../../../shared/ui/analysis-shell";
+import { ChartSkeleton, MetricSkeletonGrid, TableSkeleton } from "../../../shared/ui/loading-state";
 import {
   appendSheet,
   buildMonthlyReturns,
@@ -304,7 +305,7 @@ export function PortfolioSimulationPanel({
         <button
           type="button"
           onClick={exportToXlsx}
-          disabled={!result}
+          disabled={!result || isLoading}
           className="ui-secondary-button px-3 py-2 text-xs"
         >
           <FileSpreadsheet className="h-4 w-4" />
@@ -365,7 +366,19 @@ export function PortfolioSimulationPanel({
         </p>
       )}
 
-      {result && (
+      {isLoading && (
+        <div className="space-y-5" role="status" aria-live="polite">
+          <MetricSkeletonGrid count={5} />
+          <ChartSkeleton
+            title={t("Считаем динамику портфеля", "Calculating portfolio dynamics")}
+            subtitle={t("Загружаем свечи, собираем месячные доходности и сравнение с активами.", "Loading candles, monthly returns, and asset comparison.")}
+            variant="line"
+            accentClassName="text-sky-600"
+          />
+          <TableSkeleton rows={8} columns={7} />
+        </div>
+      )}
+      {!isLoading && result && (
         <div className="space-y-5">
           <p className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-xs leading-5 text-slate-600 dark:border-slate-700 dark:bg-slate-900/60 dark:text-slate-300">
             {includeDividendGap

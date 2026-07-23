@@ -74,6 +74,7 @@ import {
   SectionCard,
 } from "../../../shared/ui/analysis-shell";
 import { AppErrorDialog } from "../../../shared/ui/app-error-dialog";
+import { AnalysisLoadingPreview } from "../../../shared/ui/analysis/AnalysisLoadingPreview";
 import { AnalysisRunningIndicator } from "../../../shared/ui/analysis/AnalysisRunningIndicator";
 import { InfoTooltip } from "../../../shared/ui/analysis/InfoTooltip";
 import { MetricTooltip } from "../../../shared/ui/analysis/MetricTooltip";
@@ -1114,11 +1115,37 @@ export function ClusterAnalysis() {
           </SectionCard>
 
           {isRunning && (
-            <AnalysisRunningIndicator
-              title={t("Выполняем кластеризацию", "Running clustering")}
-              subtitle={t("Подбираем структуру кластеров и оптимальный портфель", "Estimating clusters and optimal portfolio")}
-              accentClassName="text-purple-600"
-            />
+            <>
+              <AnalysisRunningIndicator
+                title={t("Выполняем кластеризацию", "Running clustering")}
+                subtitle={t("Подбираем структуру кластеров и оптимальный портфель", "Estimating clusters and optimal portfolio")}
+                accentClassName="text-purple-600"
+              />
+              <AnalysisLoadingPreview
+                accentClassName="text-purple-600"
+                metricCount={4}
+                metricsTitle={t("Готовим сводку", "Preparing summary")}
+                metricsDescription={t("Считаем метрики качества кластеров и портфеля.", "Calculating cluster quality and portfolio metrics.")}
+                chartsTitle={t("Строим визуализации", "Building visualizations")}
+                chartsDescription={t("Появятся значимость признаков и карта кластеров P/E vs g.", "Feature significance and the P/E vs g cluster map will appear here.")}
+                charts={[
+                  {
+                    title: t("Значимость признаков", "Feature significance"),
+                    subtitle: t("Оцениваем вклад признаков в разделение компаний.", "Estimating feature contribution to company separation."),
+                    variant: "bars",
+                  },
+                  {
+                    title: t("Карта кластеров P/E vs g", "Cluster map P/E vs g"),
+                    subtitle: t("Готовим точки компаний и подписи осей.", "Preparing company points and axis labels."),
+                    variant: "scatter",
+                  },
+                ]}
+                tableTitle={t("Готовим таблицу компаний", "Preparing company table")}
+                tableDescription={t("Скоро здесь появятся кластеры, признаки и портфельные веса.", "Clusters, features, and portfolio weights will appear here shortly.")}
+                tableRows={8}
+                tableColumns={7}
+              />
+            </>
           )}
 
           {!!overviewMetrics.length && (

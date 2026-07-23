@@ -25,6 +25,13 @@ export function formatMetric(value: unknown): string {
   return String(value);
 }
 
+function isMinRiskObjective(parsed: Record<string, unknown>): boolean {
+  const summary = (parsed.summary as Record<string, unknown> | undefined) ?? {};
+  const stats = (parsed.stats as Record<string, unknown> | undefined) ?? {};
+  const objective = String(summary.optimization_objective ?? stats.optimization_objective ?? "").toLowerCase();
+  return objective === "min_risk" || objective === "min_volatility" || objective === "minimum_risk";
+}
+
 function firstObject(source: unknown[]): Record<string, unknown> {
   const found = source.find((item) => item && typeof item === "object");
   return (found as Record<string, unknown>) ?? {};
@@ -262,7 +269,11 @@ export function extractPortfolioStrategies(parsed: Record<string, unknown>): Str
     }
   }
 
-  return strategies.sort((a, b) => b.sharpe - a.sharpe);
+  return strategies.sort((a, b) =>
+    isMinRiskObjective(parsed)
+      ? numberOr(a.risk, Infinity) - numberOr(b.risk, Infinity)
+      : numberOr(b.sharpe, -Infinity) - numberOr(a.sharpe, -Infinity),
+  );
 }
 
 export function extractBestPortfolioAssetsCount(parsed: Record<string, unknown>): number {

@@ -19,6 +19,13 @@ function formatMetric(value: number): string {
   return value.toFixed(4);
 }
 
+function isMinRiskObjective(parsed: Record<string, unknown>): boolean {
+  const summary = (parsed.summary as Record<string, unknown> | undefined) ?? {};
+  const stats = (parsed.stats as Record<string, unknown> | undefined) ?? {};
+  const objective = String(summary.optimization_objective ?? stats.optimization_objective ?? "").toLowerCase();
+  return objective === "min_risk" || objective === "min_volatility" || objective === "minimum_risk";
+}
+
 export function extractModelScores(parsed: Record<string, unknown>, fallbackWeights: HybridModelWeights): ModelScore[] {
   const rawArray = Array.isArray(parsed.model_scores) ? parsed.model_scores : Array.isArray(parsed.models) ? parsed.models : [];
   if (rawArray.length) {
@@ -129,7 +136,11 @@ export function extractPortfolioStrategies(parsed: Record<string, unknown>): Str
         assetsCount: numberOr(row.assets_count, 0),
       } satisfies StrategyPortfolio;
     })
-    .sort((a, b) => numberOr(b.sharpe, -Infinity) - numberOr(a.sharpe, -Infinity));
+    .sort((a, b) =>
+      isMinRiskObjective(parsed)
+        ? numberOr(a.risk, Infinity) - numberOr(b.risk, Infinity)
+        : numberOr(b.sharpe, -Infinity) - numberOr(a.sharpe, -Infinity),
+    );
 }
 
 export function extractPortfolioPositions(parsed: Record<string, unknown>): PortfolioPosition[] {

@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Brain,
+  ChevronLeft,
+  ChevronRight,
   CheckSquare,
   FileSpreadsheet,
   FileText,
@@ -78,6 +80,7 @@ import {
   SectionCard,
 } from "../../../shared/ui/analysis-shell";
 import { AppErrorDialog } from "../../../shared/ui/app-error-dialog";
+import { AnalysisLoadingPreview } from "../../../shared/ui/analysis/AnalysisLoadingPreview";
 import { AnalysisRunningIndicator } from "../../../shared/ui/analysis/AnalysisRunningIndicator";
 import { InfoTooltip } from "../../../shared/ui/analysis/InfoTooltip";
 import { MetricTooltip } from "../../../shared/ui/analysis/MetricTooltip";
@@ -111,8 +114,16 @@ import {
 } from "../lib";
 
 const PORTFOLIO_METRIC_LABELS = new Set(["expected return", "risk", "volatility", "sharpe", "sharpe ratio", "diversification"]);
-const ARCHITECTURE_DIAGRAM_WIDTH = 760;
-const ARCHITECTURE_DIAGRAM_HEIGHT = 280;
+const ARCHITECTURE_DIAGRAM_WIDTH = 1080;
+const ARCHITECTURE_DIAGRAM_HEIGHT = 420;
+const MODEL_STATS_PAGE_SIZE = 8;
+const ANALYSIS_ROWS_PAGE_SIZE = 12;
+const ARCHITECTURE_INPUT_COLOR = "#0f766e";
+const ARCHITECTURE_INPUT_DARK_COLOR = "#5eead4";
+const ARCHITECTURE_HIDDEN_COLORS = ["#2563eb", "#7c3aed", "#0891b2", "#4f46e5", "#db2777"];
+const ARCHITECTURE_HIDDEN_DARK_COLORS = ["#93c5fd", "#c4b5fd", "#67e8f9", "#a5b4fc", "#f9a8d4"];
+const ARCHITECTURE_OUTPUT_COLOR = "#16a34a";
+const ARCHITECTURE_OUTPUT_DARK_COLOR = "#86efac";
 
 function isPortfolioMetric(label: string): boolean {
   return PORTFOLIO_METRIC_LABELS.has(label.trim().toLowerCase());
@@ -138,9 +149,27 @@ function getArchitectureNodeY(index: number, count: number): number {
   if (count <= 1) {
     return ARCHITECTURE_DIAGRAM_HEIGHT / 2;
   }
-  const top = 74;
-  const bottom = ARCHITECTURE_DIAGRAM_HEIGHT - 74;
+  const top = 118;
+  const bottom = ARCHITECTURE_DIAGRAM_HEIGHT - 132;
   return top + (index * (bottom - top)) / (count - 1);
+}
+
+function getArchitectureLayerX(index: number, count: number): number {
+  return 92 + (index * (ARCHITECTURE_DIAGRAM_WIDTH - 184)) / Math.max(count - 1, 1);
+}
+
+function getArchitectureBandWidth(count: number): number {
+  const step = (ARCHITECTURE_DIAGRAM_WIDTH - 184) / Math.max(count - 1, 1);
+  return Math.max(58, Math.min(96, step - 36));
+}
+
+function truncateSvgLabel(value: string, maxLength: number): string {
+  return value.length > maxLength ? value.slice(0, maxLength - 3) + "..." : value;
+}
+
+function formatModelValue(value: unknown, fallback = "-"): string {
+  const text = String(value ?? "").trim();
+  return text || fallback;
 }
 
 export function NeuralNetworkAnalysis() {
@@ -158,6 +187,8 @@ export function NeuralNetworkAnalysis() {
   const [portfolioPositions, setPortfolioPositions] = useState<PortfolioPosition[]>([]);
   const [trainingHistory, setTrainingHistory] = useState<TrainingPoint[]>([]);
   const [modelStats, setModelStats] = useState<ModelStatItem[]>([]);
+  const [modelStatsPage, setModelStatsPage] = useState(1);
+  const [analysisRowsPage, setAnalysisRowsPage] = useState(1);
   const [modelParameters, setModelParameters] = useState<Record<string, unknown>>({});
   const [portfolioAssetsCount, setPortfolioAssetsCount] = useState(0);
   const [selectionMode, setSelectionMode] = useState<SelectionMode>("all");
@@ -272,11 +303,14 @@ export function NeuralNetworkAnalysis() {
           validation_split: t("\u0412\u0430\u043b\u0438\u0434\u0430\u0446\u0438\u043e\u043d\u043d\u0430\u044f \u0434\u043e\u043b\u044f", "Validation split"),
           random_state: t("Random state", "Random state"),
           selection_metric: t("\u041c\u0435\u0442\u0440\u0438\u043a\u0430 \u043f\u043e\u0434\u0431\u043e\u0440\u0430", "Selection metric"),
+          selection_rule: t("\u041f\u0440\u0430\u0432\u0438\u043b\u043e \u0432\u044b\u0431\u043e\u0440\u0430", "Selection rule"),
           auto_tune: t("\u0410\u0432\u0442\u043e\u043f\u043e\u0434\u0431\u043e\u0440", "Auto tune"),
+          tuning_budget: t("\u0411\u044e\u0434\u0436\u0435\u0442 \u043f\u043e\u0434\u0431\u043e\u0440\u0430", "Tuning budget"),
           features: t("\u041f\u0440\u0438\u0437\u043d\u0430\u043a\u0438", "Features"),
           variants_count: t("\u041a\u043e\u043d\u0444\u0438\u0433\u0443\u0440\u0430\u0446\u0438\u0439", "Variants"),
+          grid_hidden_layers: t("\u0421\u0435\u0442\u043a\u0430 \u0441\u043b\u043e\u0451\u0432", "Layer grid"),
         },
-        ["model_type", "best_model", "epochs", "validation_split", "random_state", "selection_metric", "auto_tune", "features", "variants_count"],
+        ["model_type", "best_model", "epochs", "validation_split", "random_state", "selection_metric", "selection_rule", "auto_tune", "tuning_budget", "features", "variants_count", "grid_hidden_layers"],
       ),
     [modelParameters, t],
   );
@@ -369,7 +403,54 @@ export function NeuralNetworkAnalysis() {
     [analysisRows],
   );
 
+  const analysisRowsPageCount = useMemo(
+    () => Math.max(1, Math.ceil(analysisRows.length / ANALYSIS_ROWS_PAGE_SIZE)),
+    [analysisRows.length],
+  );
+  const activeAnalysisRowsPage = Math.min(Math.max(analysisRowsPage, 1), analysisRowsPageCount);
+
+  useEffect(() => {
+    setAnalysisRowsPage((current) => Math.min(Math.max(current, 1), analysisRowsPageCount));
+  }, [analysisRowsPageCount]);
+
+  const paginatedAnalysisRows = useMemo(() => {
+    const start = (activeAnalysisRowsPage - 1) * ANALYSIS_ROWS_PAGE_SIZE;
+    return analysisRows.slice(start, start + ANALYSIS_ROWS_PAGE_SIZE);
+  }, [activeAnalysisRowsPage, analysisRows]);
+
+  const analysisRowsRangeLabel = useMemo(() => {
+    if (!analysisRows.length) {
+      return "0 / 0";
+    }
+    const start = (activeAnalysisRowsPage - 1) * ANALYSIS_ROWS_PAGE_SIZE + 1;
+    const end = Math.min(analysisRows.length, activeAnalysisRowsPage * ANALYSIS_ROWS_PAGE_SIZE);
+    return start + "-" + end + " / " + analysisRows.length;
+  }, [activeAnalysisRowsPage, analysisRows.length]);
   const bestModelStat = modelStats[0] ?? null;
+
+  const modelStatsPageCount = useMemo(
+    () => Math.max(1, Math.ceil(modelStats.length / MODEL_STATS_PAGE_SIZE)),
+    [modelStats.length],
+  );
+  const activeModelStatsPage = Math.min(Math.max(modelStatsPage, 1), modelStatsPageCount);
+
+  useEffect(() => {
+    setModelStatsPage((current) => Math.min(Math.max(current, 1), modelStatsPageCount));
+  }, [modelStatsPageCount]);
+
+  const paginatedModelStats = useMemo(() => {
+    const start = (activeModelStatsPage - 1) * MODEL_STATS_PAGE_SIZE;
+    return modelStats.slice(start, start + MODEL_STATS_PAGE_SIZE);
+  }, [activeModelStatsPage, modelStats]);
+
+  const modelStatsRangeLabel = useMemo(() => {
+    if (!modelStats.length) {
+      return "0 / 0";
+    }
+    const start = (activeModelStatsPage - 1) * MODEL_STATS_PAGE_SIZE + 1;
+    const end = Math.min(modelStats.length, activeModelStatsPage * MODEL_STATS_PAGE_SIZE);
+    return start + "-" + end + " / " + modelStats.length;
+  }, [activeModelStatsPage, modelStats.length]);
 
   const resolvedHiddenLayerSizes = useMemo(() => {
     const fromBestModel = parseLayerSizesFromValue(bestModelStat?.hiddenLayers);
@@ -380,6 +461,27 @@ export function NeuralNetworkAnalysis() {
     return fromParameters.length ? fromParameters : hiddenLayerSizes;
   }, [bestModelStat?.hiddenLayers, hiddenLayerSizes, modelParameters]);
 
+  const resolvedActivation = useMemo(
+    () => formatModelValue(bestModelStat?.activation ?? modelParameters.activation ?? neuralSettings.activation),
+    [bestModelStat?.activation, modelParameters.activation, neuralSettings.activation],
+  );
+
+  const resolvedOptimizer = useMemo(
+    () => formatModelValue(bestModelStat?.solver ?? modelParameters.solver ?? neuralSettings.optimizer),
+    [bestModelStat?.solver, modelParameters.solver, neuralSettings.optimizer],
+  );
+
+  const architectureSignature = useMemo(
+    () => [neuralSettings.features.length, ...resolvedHiddenLayerSizes, 1].join(" -> "),
+    [neuralSettings.features.length, resolvedHiddenLayerSizes],
+  );
+
+  const architectureFeaturePreview = useMemo(() => {
+    const visible = selectedFeatureLabels.slice(0, 5);
+    const suffix = selectedFeatureLabels.length > visible.length ? " +" + (selectedFeatureLabels.length - visible.length) : "";
+    return truncateSvgLabel(visible.join(", ") + suffix, 86);
+  }, [selectedFeatureLabels]);
+
   const architectureLayers = useMemo(
     () => [
       {
@@ -387,21 +489,24 @@ export function NeuralNetworkAnalysis() {
         title: t("Вход", "Input"),
         subtitle: t("Признаки", "Features"),
         count: Math.max(neuralSettings.features.length, 1),
-        color: "#f97316",
+        color: ARCHITECTURE_INPUT_COLOR,
+        darkColor: ARCHITECTURE_INPUT_DARK_COLOR,
       },
       ...resolvedHiddenLayerSizes.map((size, index) => ({
         key: "hidden-" + index,
         title: t("Слой", "Layer") + " " + (index + 1),
         subtitle: t("Нейроны", "Neurons"),
         count: size,
-        color: index % 2 === 0 ? "#fb923c" : "#ef4444",
+        color: ARCHITECTURE_HIDDEN_COLORS[index % ARCHITECTURE_HIDDEN_COLORS.length],
+        darkColor: ARCHITECTURE_HIDDEN_DARK_COLORS[index % ARCHITECTURE_HIDDEN_DARK_COLORS.length],
       })),
       {
         key: "output",
         title: t("Выход", "Output"),
         subtitle: "P/E",
         count: 1,
-        color: "#14b8a6",
+        color: ARCHITECTURE_OUTPUT_COLOR,
+        darkColor: ARCHITECTURE_OUTPUT_DARK_COLOR,
       },
     ],
     [neuralSettings.features.length, resolvedHiddenLayerSizes, t],
@@ -421,7 +526,7 @@ export function NeuralNetworkAnalysis() {
   );
 
   const neuralHelp = useMemo(() => {
-    if (neuralSettings.modelType === "deep_mlp") {
+    if (!neuralSettings.autoTune && neuralSettings.modelType === "deep_mlp") {
       return {
         title: t("Глубокий MLP", "Deep MLP"),
         text: t(
@@ -434,7 +539,7 @@ export function NeuralNetworkAnalysis() {
         ),
       };
     }
-    if (neuralSettings.modelType === "auto") {
+    if (neuralSettings.autoTune || neuralSettings.modelType === "auto") {
       return {
         title: t("Автоподбор", "Auto selection"),
         text: t(
@@ -458,7 +563,7 @@ export function NeuralNetworkAnalysis() {
         "Layers are entered comma-separated, for example 64,32.",
       ),
     };
-  }, [neuralSettings.modelType, t]);
+  }, [neuralSettings.autoTune, neuralSettings.modelType, t]);
 
   const hasValidNeuralInput =
     hasData &&
@@ -534,7 +639,7 @@ export function NeuralNetworkAnalysis() {
         body: JSON.stringify({
           data: selectedRequestData,
           parameters: {
-            model_type: neuralSettings.modelType,
+            model_type: neuralSettings.autoTune ? "auto" : neuralSettings.modelType,
             activation: neuralSettings.activation,
             optimizer: neuralSettings.optimizer,
             hidden_layers: hiddenLayerSizes,
@@ -581,11 +686,13 @@ export function NeuralNetworkAnalysis() {
 
       setMetrics(parsedMetrics);
       setAnalysisRows(parsedAnalysisRows);
+      setAnalysisRowsPage(1);
       setFeatureImportance(parsedImportance);
       setPortfolioStrategies(parsedStrategies);
       setPortfolioPositions(parsedPositions);
       setTrainingHistory(parsedHistory);
       setModelStats(parsedModelStats);
+      setModelStatsPage(1);
       setModelParameters(parsedModelParameters);
       setPortfolioAssetsCount(parsedAssetsCount);
     } catch (e) {
@@ -595,11 +702,13 @@ export function NeuralNetworkAnalysis() {
       showErrorDialog(message);
       setMetrics([]);
       setAnalysisRows([]);
+      setAnalysisRowsPage(1);
       setFeatureImportance([]);
       setPortfolioStrategies([]);
       setPortfolioPositions([]);
       setTrainingHistory([]);
       setModelStats([]);
+      setModelStatsPage(1);
       setModelParameters({});
       setPortfolioAssetsCount(0);
     } finally {
@@ -875,7 +984,7 @@ export function NeuralNetworkAnalysis() {
                 <Input
                   value={neuralSettings.hiddenLayers}
                   onChange={(event) => updateNeuralSettings({ hiddenLayers: event.target.value })}
-                  placeholder="64,32"
+                  placeholder="128,64,32"
                 />
               </label>
 
@@ -1272,11 +1381,48 @@ export function NeuralNetworkAnalysis() {
           </SectionCard>
 
           {isRunning && (
-            <AnalysisRunningIndicator
-              title={t("Выполняем нейросетевой анализ", "Running neural network analysis")}
-              subtitle={t("Обучаем сеть и рассчитываем стратегии портфеля", "Training network and calculating portfolio strategies")}
-              accentClassName="text-orange-600"
-            />
+            <>
+              <AnalysisRunningIndicator
+                title={t("Выполняем нейросетевой анализ", "Running neural network analysis")}
+                subtitle={t("Обучаем сеть и рассчитываем стратегии портфеля", "Training network and calculating portfolio strategies")}
+                accentClassName="text-orange-600"
+              />
+              <AnalysisLoadingPreview
+                accentClassName="text-orange-600"
+                metricCount={4}
+                metricsTitle={t("Готовим метрики нейросети", "Preparing neural metrics")}
+                metricsDescription={t("Считаем ошибку, качество валидации и портфельные показатели.", "Calculating error, validation quality, and portfolio metrics.")}
+                chartsTitle={t("Строим нейросетевые визуализации", "Building neural visualizations")}
+                chartsDescription={t("Появятся архитектура модели, значимость признаков, история обучения и сигналы по компаниям.", "Model architecture, feature significance, training history, and company signals will appear here.")}
+                charts={[
+                  {
+                    title: t("Схема нейросети", "Neural network schema"),
+                    subtitle: t("Готовим входы, скрытые слои и выход прогноза.", "Preparing inputs, hidden layers, and prediction output."),
+                    variant: "network",
+                  },
+                  {
+                    title: t("Значимость параметров", "Parameter significance"),
+                    subtitle: t("Оцениваем вклад входных признаков.", "Estimating input feature contribution."),
+                    variant: "bars",
+                  },
+                  {
+                    title: t("История обучения", "Training history"),
+                    subtitle: t("Ждем значения train/validation loss по эпохам.", "Waiting for train/validation loss by epoch."),
+                    variant: "line",
+                  },
+                  {
+                    title: t("Сигналы P/E vs прогноз", "P/E vs prediction signals"),
+                    subtitle: t("Готовим точки компаний для итоговой карты.", "Preparing company points for the final map."),
+                    variant: "scatter",
+                  },
+                ]}
+                chartColumnsClassName="xl:grid-cols-2"
+                tableTitle={t("Готовим сравнение и таблицу компаний", "Preparing comparison and company table")}
+                tableDescription={t("Скоро появятся конфигурации моделей, прогнозы и веса портфеля.", "Model configurations, predictions, and portfolio weights will appear shortly.")}
+                tableRows={8}
+                tableColumns={8}
+              />
+            </>
           )}
 
           {!!overviewMetrics.length && (
@@ -1322,6 +1468,41 @@ export function NeuralNetworkAnalysis() {
             </SectionCard>
           )}
 
+          {!!featureImportance.length && (
+            <SectionCard
+              title={t("Значимость параметров нейросети", "Neural Feature Significance")}
+              description={t(
+                "Оценка построена по абсолютным весам первого слоя лучшей обученной модели.",
+                "The estimate is based on absolute first-layer weights of the best trained model.",
+              )}
+            >
+              <div className="grid grid-cols-1 gap-5 lg:grid-cols-[minmax(0,1.4fr)_minmax(16rem,0.6fr)]">
+                <ResponsiveContainer width="100%" height={300}>
+                  <BarChart data={featureImportance} layout="vertical" margin={{ top: 5, right: 30, left: 90, bottom: 5 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                    <XAxis type="number" stroke="#64748b" unit="%" />
+                    <YAxis type="category" dataKey="feature" stroke="#64748b" width={90} />
+                    <Tooltip formatter={(v: number) => formatPercentValue(Number(v))} />
+                    <Bar dataKey="importance" radius={[0, 4, 4, 0]}>
+                      {featureImportance.map((row, idx) => (
+                        <Cell key={row.feature} fill={NEURAL_PALETTE[idx % NEURAL_PALETTE.length]} />
+                      ))}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+                <div className="space-y-3">
+                  {featureImportance.slice(0, 4).map((row, index) => (
+                    <div key={row.feature} className="ui-stat-card">
+                      <div className="text-xs text-slate-500 dark:text-slate-400">#{index + 1}</div>
+                      <div className="font-semibold text-slate-900 dark:text-slate-100">{row.feature}</div>
+                      <div className="text-sm text-slate-600 dark:text-slate-300">{formatPercentValue(row.importance)}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </SectionCard>
+          )}
+
           {(!!modelParameterRows.length || !!modelStats.length) && (
             <SectionCard
               title={t("Мини-схема нейросети", "Neural Network Mini Schema")}
@@ -1339,81 +1520,242 @@ export function NeuralNetworkAnalysis() {
                 </button>
               )}
             >
-              <div className="grid grid-cols-1 gap-5 xl:grid-cols-[minmax(0,1.35fr)_minmax(16rem,0.65fr)]">
-                <div ref={architectureChartRef} className="overflow-x-auto">
+              <div className="space-y-4">
+                <div ref={architectureChartRef} className="overflow-hidden rounded-md border border-slate-200 bg-slate-50/70 p-4 dark:border-slate-700 dark:bg-slate-950/40">
                   <svg
                     viewBox={"0 0 " + ARCHITECTURE_DIAGRAM_WIDTH + " " + ARCHITECTURE_DIAGRAM_HEIGHT}
-                    className="h-auto w-full min-w-[42rem]"
+                    className="h-auto w-full max-w-full"
                     role="img"
-                    aria-label={t("Мини-схема нейросети", "Neural network mini schema")}
+                    aria-label={t("Схема обученной нейросети", "Trained neural network schema")}
                   >
-                    <rect width={ARCHITECTURE_DIAGRAM_WIDTH} height={ARCHITECTURE_DIAGRAM_HEIGHT} rx="24" fill="rgba(255, 247, 237, 0.55)" />
-                    {architectureLayers.slice(0, -1).map((_, index) => {
-                      const x1 = 84 + (index * (ARCHITECTURE_DIAGRAM_WIDTH - 168)) / Math.max(architectureLayers.length - 1, 1);
-                      const x2 = 84 + ((index + 1) * (ARCHITECTURE_DIAGRAM_WIDTH - 168)) / Math.max(architectureLayers.length - 1, 1);
+                    <defs>
+                      <filter id="nn-node-shadow" x="-40%" y="-40%" width="180%" height="180%">
+                        <feDropShadow dx="0" dy="3" stdDeviation="3" floodColor="#0f172a" floodOpacity="0.16" />
+                      </filter>
+                    </defs>
+                    <rect
+                      width={ARCHITECTURE_DIAGRAM_WIDTH}
+                      height={ARCHITECTURE_DIAGRAM_HEIGHT}
+                      rx="22"
+                      className="fill-white stroke-sky-100 dark:fill-slate-950 dark:stroke-slate-700"
+                    />
+                    <text x="28" y="38" className="fill-slate-950 dark:fill-slate-100" fontSize="20" fontWeight="800">
+                      {t("Модель", "Model")}: {architectureSignature}
+                    </text>
+                    <text x="28" y="66" className="fill-slate-600 dark:fill-slate-300" fontSize="13" fontWeight="600">
+                      {t("Входы", "Inputs")}: {architectureFeaturePreview || "-"}
+                    </text>
+                    <text x={ARCHITECTURE_DIAGRAM_WIDTH - 28} y="38" textAnchor="end" className="fill-slate-600 dark:fill-slate-300" fontSize="13" fontWeight="700">
+                      {resolvedActivation} / {resolvedOptimizer}
+                    </text>
+                    {architectureLayers.slice(0, -1).map((layer, index) => {
+                      const nextLayer = architectureLayers[index + 1];
+                      const x1 = getArchitectureLayerX(index, architectureLayers.length);
+                      const x2 = getArchitectureLayerX(index + 1, architectureLayers.length);
+                      const leftCount = Math.min(layer.count, 7);
+                      const rightCount = Math.min(nextLayer.count, 7);
                       return (
                         <g key={"connection-" + index}>
-                          {[92, 140, 188].map((y) => (
-                            <line
-                              key={"connection-" + index + "-" + y}
-                              x1={x1 + 18}
-                              y1={y}
-                              x2={x2 - 18}
-                              y2={y}
-                              stroke="#fdba74"
-                              strokeOpacity="0.45"
-                              strokeWidth="2"
-                            />
-                          ))}
+                          {Array.from({ length: leftCount }).map((_, leftIndex) =>
+                            Array.from({ length: rightCount }).map((__, rightIndex) => (
+                              <line
+                                key={"connection-" + index + "-" + leftIndex + "-" + rightIndex}
+                                x1={x1 + 14}
+                                y1={getArchitectureNodeY(leftIndex, leftCount)}
+                                x2={x2 - 14}
+                                y2={getArchitectureNodeY(rightIndex, rightCount)}
+                                stroke="currentColor"
+                                className={index % 2 === 0 ? "text-sky-400 dark:text-cyan-300" : "text-violet-400 dark:text-fuchsia-300"}
+                                strokeOpacity="0.18"
+                                strokeWidth="1.2"
+                              />
+                            )),
+                          )}
                         </g>
                       );
                     })}
                     {architectureLayers.map((layer, layerIndex) => {
-                      const x = 84 + (layerIndex * (ARCHITECTURE_DIAGRAM_WIDTH - 168)) / Math.max(architectureLayers.length - 1, 1);
+                      const x = getArchitectureLayerX(layerIndex, architectureLayers.length);
+                      const architectureBandWidth = getArchitectureBandWidth(architectureLayers.length);
                       const visibleNodeCount = Math.min(layer.count, 7);
                       return (
                         <g key={layer.key}>
-                          <text x={x} y="34" textAnchor="middle" fill="#334155" fontSize="16" fontWeight="700">
+                          <rect
+                            x={x - architectureBandWidth / 2}
+                            y="92"
+                            width={architectureBandWidth}
+                            height="246"
+                            rx="18"
+                            fill={layer.color}
+                            className="dark:hidden"
+                            fillOpacity="0.075"
+                            stroke={layer.color}
+                            strokeOpacity="0.28"
+                          />
+                          <rect
+                            x={x - architectureBandWidth / 2}
+                            y="92"
+                            width={architectureBandWidth}
+                            height="246"
+                            rx="18"
+                            fill={layer.darkColor}
+                            className="hidden dark:block"
+                            fillOpacity="0.11"
+                            stroke={layer.darkColor}
+                            strokeOpacity="0.34"
+                          />
+                          <text x={x} y="104" textAnchor="middle" className="fill-slate-700 dark:fill-slate-100" fontSize="15" fontWeight="800">
                             {layer.title}
                           </text>
-                          <text x={x} y="54" textAnchor="middle" fill="#64748b" fontSize="12">
+                          <text x={x} y="358" textAnchor="middle" className="fill-slate-600 dark:fill-slate-300" fontSize="12" fontWeight="700">
                             {layer.count} {layer.subtitle}
                           </text>
-                          {Array.from({ length: visibleNodeCount }).map((_, nodeIndex) => (
-                            <circle
-                              key={layer.key + "-node-" + nodeIndex}
-                              cx={x}
-                              cy={getArchitectureNodeY(nodeIndex, visibleNodeCount)}
-                              r="10"
-                              fill={layer.color}
-                              fillOpacity="0.9"
-                              stroke="#ffffff"
-                              strokeWidth="3"
-                            />
-                          ))}
+                          {Array.from({ length: visibleNodeCount }).map((_, nodeIndex) => {
+                            const nodeY = getArchitectureNodeY(nodeIndex, visibleNodeCount);
+                            const inputLabel = layer.key === "input"
+                              ? truncateSvgLabel(selectedFeatureLabels[nodeIndex] ?? "x" + (nodeIndex + 1), 10)
+                              : "";
+                            return (
+                              <g key={layer.key + "-node-" + nodeIndex}>
+                                {layer.key === "input" && (
+                                  <text
+                                    x={x - 24}
+                                    y={nodeY + 4}
+                                    textAnchor="end"
+                                    className="fill-slate-500 dark:fill-slate-300"
+                                    fontSize="10"
+                                    fontWeight="700"
+                                  >
+                                    {inputLabel}
+                                  </text>
+                                )}
+                                <circle
+                                  cx={x}
+                                  cy={nodeY}
+                                  r="12"
+                                  fill={layer.color}
+                                  className="dark:hidden"
+                                  fillOpacity="0.96"
+                                  stroke="#ffffff"
+                                  strokeWidth="3"
+                                  filter="url(#nn-node-shadow)"
+                                />
+                                <circle
+                                  cx={x}
+                                  cy={nodeY}
+                                  r="12"
+                                  fill={layer.darkColor}
+                                  className="hidden dark:block"
+                                  fillOpacity="0.98"
+                                  stroke="#020617"
+                                  strokeWidth="3"
+                                  filter="url(#nn-node-shadow)"
+                                />
+                                {layer.key === "output" && (
+                                  <text
+                                    x={x + 24}
+                                    y={nodeY + 4}
+                                    textAnchor="start"
+                                    className="fill-slate-500 dark:fill-slate-300"
+                                    fontSize="10"
+                                    fontWeight="800"
+                                  >
+                                    P/E
+                                  </text>
+                                )}
+                              </g>
+                            );
+                          })}
                           {layer.count > visibleNodeCount && (
-                            <text x={x} y={ARCHITECTURE_DIAGRAM_HEIGHT - 38} textAnchor="middle" fill="#64748b" fontSize="18" fontWeight="700">
+                            <text x={x} y="332" textAnchor="middle" className="fill-slate-500 dark:fill-slate-300" fontSize="18" fontWeight="800">
                               ...
                             </text>
                           )}
                         </g>
                       );
                     })}
+                    <text x="28" y={ARCHITECTURE_DIAGRAM_HEIGHT - 24} className="fill-slate-500 dark:fill-slate-300" fontSize="12" fontWeight="600">
+                      {t("Лучшая конфигурация", "Best configuration")}: {analysisSummary.bestModel}
+                    </text>
                   </svg>
                 </div>
-                <div className="grid gap-3 sm:grid-cols-3 xl:grid-cols-1">
-                  <div className="ui-stat-card">
-                    <div className="text-slate-500 dark:text-slate-400">{t("Входов", "Inputs")}</div>
-                    <div className="text-xl font-semibold text-slate-900 dark:text-slate-100">{neuralSettings.features.length}</div>
+                <div className="border-t border-slate-200 pt-4 dark:border-slate-700">
+                  <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+                    {[
+                      {
+                        label: t("Входов", "Inputs"),
+                        value: neuralSettings.features.length,
+                        hint: t(
+                          "Количество выбранных фундаментальных признаков, которые подаются в сеть для каждой компании.",
+                          "Number of selected fundamental features passed into the network for each company.",
+                        ),
+                      },
+                      {
+                        label: t("Скрытых слоев", "Hidden layers"),
+                        value: resolvedHiddenLayerSizes.length,
+                        hint: t(
+                          "Промежуточные слои между входами и прогнозом. Автоподбор выбирает конфигурацию с меньшей ошибкой валидации.",
+                          "Intermediate layers between inputs and prediction. Auto-tuning selects the configuration with lower validation error.",
+                        ),
+                      },
+                      {
+                        label: t("Нейронов", "Neurons"),
+                        value: resolvedHiddenLayerSizes.reduce((sum, value) => sum + value, 0),
+                        hint: t(
+                          "Суммарное число нейронов во всех скрытых слоях лучшей конфигурации.",
+                          "Total number of neurons across all hidden layers in the best configuration.",
+                        ),
+                      },
+                      {
+                        label: "Activation",
+                        value: resolvedActivation,
+                        hint: t(
+                          "Функция активации задает нелинейность нейронов и помогает модели находить сложные зависимости между признаками.",
+                          "Activation function adds non-linearity and helps the model capture complex relationships between features.",
+                        ),
+                      },
+                      {
+                        label: "Optimizer",
+                        value: resolvedOptimizer,
+                        hint: t(
+                          "Алгоритм, который обновляет веса сети во время обучения и снижает ошибку прогноза.",
+                          "Algorithm that updates network weights during training and reduces prediction error.",
+                        ),
+                      },
+                      {
+                        label: "Best val MSE",
+                        value: formatOptionalNumber(bestModelStat?.bestValMse, 5),
+                        hint: t(
+                          "Минимальная среднеквадратичная ошибка на валидации: чем меньше, тем точнее модель на отложенных данных.",
+                          "Minimum validation mean squared error: lower values mean better accuracy on held-out data.",
+                        ),
+                      },
+                    ].map((item) => (
+                      <div key={item.label} className="min-w-0">
+                        <div className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-[0.08em] text-slate-500 dark:text-slate-400">
+                          <span className="truncate">{item.label}</span>
+                          <InfoTooltip label={item.label} side="top">{item.hint}</InfoTooltip>
+                        </div>
+                        <div className="mt-1 truncate text-2xl font-semibold text-slate-900 dark:text-slate-100">{item.value}</div>
+                      </div>
+                    ))}
                   </div>
-                  <div className="ui-stat-card">
-                    <div className="text-slate-500 dark:text-slate-400">{t("Скрытых слоев", "Hidden layers")}</div>
-                    <div className="text-xl font-semibold text-slate-900 dark:text-slate-100">{resolvedHiddenLayerSizes.length}</div>
-                  </div>
-                  <div className="ui-stat-card">
-                    <div className="text-slate-500 dark:text-slate-400">{t("Нейронов", "Neurons")}</div>
-                    <div className="text-xl font-semibold text-slate-900 dark:text-slate-100">
-                      {resolvedHiddenLayerSizes.reduce((sum, value) => sum + value, 0)}
+                  <div className="mt-4 border-t border-slate-200 pt-3 dark:border-slate-700">
+                    <div className="mb-2 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-[0.08em] text-slate-500 dark:text-slate-400">
+                      <span>{t("Входные признаки", "Input features")}</span>
+                      <InfoTooltip label={t("Входные признаки", "Input features")} side="top">
+                        {t(
+                          "Эти признаки нормализуются и становятся входным вектором сети; их веса используются для оценки значимости параметров.",
+                          "These features are normalized into the network input vector; their weights are used to estimate feature significance.",
+                        )}
+                      </InfoTooltip>
+                    </div>
+                    <div className="flex flex-wrap gap-1.5">
+                      {selectedFeatureLabels.map((label) => (
+                        <span key={label} className="rounded-md border border-sky-200 bg-sky-50 px-2 py-1 text-xs font-medium text-sky-800 dark:border-sky-900 dark:bg-sky-950/30 dark:text-sky-200">
+                          {label}
+                        </span>
+                      ))}
                     </div>
                   </div>
                 </div>
@@ -1422,23 +1764,87 @@ export function NeuralNetworkAnalysis() {
           )}
 
           {!!modelStats.length && (
-            <SectionCard title={t("\u0421\u0440\u0430\u0432\u043d\u0435\u043d\u0438\u0435 \u043c\u043e\u0434\u0435\u043b\u0435\u0439", "Model Comparison")}>
+            <SectionCard
+              title={t("\u0421\u0440\u0430\u0432\u043d\u0435\u043d\u0438\u0435 \u043c\u043e\u0434\u0435\u043b\u0435\u0439", "Model Comparison")}
+              action={
+                modelStats.length > MODEL_STATS_PAGE_SIZE ? (
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setModelStatsPage((current) => Math.max(1, current - 1))}
+                      disabled={activeModelStatsPage <= 1}
+                      aria-label={t("\u041f\u0440\u0435\u0434\u044b\u0434\u0443\u0449\u0430\u044f \u0441\u0442\u0440\u0430\u043d\u0438\u0446\u0430", "Previous page")}
+                      className="ui-secondary-button px-2 py-2 text-xs disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      <ChevronLeft className="h-4 w-4" />
+                    </button>
+                    <span className="min-w-[6.5rem] text-center text-xs font-semibold text-slate-500 dark:text-slate-400">
+                      {modelStatsRangeLabel}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setModelStatsPage((current) => Math.min(modelStatsPageCount, current + 1))}
+                      disabled={activeModelStatsPage >= modelStatsPageCount}
+                      aria-label={t("\u0421\u043b\u0435\u0434\u0443\u044e\u0449\u0430\u044f \u0441\u0442\u0440\u0430\u043d\u0438\u0446\u0430", "Next page")}
+                      className="ui-secondary-button px-2 py-2 text-xs disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      <ChevronRight className="h-4 w-4" />
+                    </button>
+                  </div>
+                ) : undefined
+              }
+            >
               <div className="ui-table-shell overflow-x-auto">
                 <table className="ui-data-table">
                   <thead>
                     <tr>
                       <th>{t("\u041c\u043e\u0434\u0435\u043b\u044c", "Model")}</th>
                       <th>{t("\u0421\u043b\u043e\u0438", "Layers")}</th>
-                      <th>Activation</th>
-                      <th>Solver</th>
+                      <th>
+                        <span className="inline-flex items-center gap-1">
+                          Activation
+                          <InfoTooltip label="Activation" side="top">
+                            {t("Нелинейная функция скрытых нейронов: влияет на то, какие зависимости сеть может выучить.", "Non-linear function of hidden neurons: affects which relationships the network can learn.")}
+                          </InfoTooltip>
+                        </span>
+                      </th>
+                      <th>
+                        <span className="inline-flex items-center gap-1">
+                          Solver
+                          <InfoTooltip label="Solver" side="top">
+                            {t("Оптимизатор обучения: способ, которым модель обновляет веса на каждой итерации.", "Training optimizer: how the model updates weights on each iteration.")}
+                          </InfoTooltip>
+                        </span>
+                      </th>
                       <th>{t("\u041b\u0443\u0447\u0448\u0430\u044f \u044d\u043f\u043e\u0445\u0430", "Best epoch")}</th>
-                      <th>Best val MSE</th>
-                      <th>Final val MSE</th>
-                      <th>Val R2</th>
+                      <th>
+                        <span className="inline-flex items-center gap-1">
+                          Best val MSE
+                          <InfoTooltip label="Best val MSE" side="top">
+                            {t("Лучшая ошибка на валидационной выборке. Основной ориентир при выборе конфигурации: меньше лучше.", "Best validation error. Main signal for choosing a configuration: lower is better.")}
+                          </InfoTooltip>
+                        </span>
+                      </th>
+                      <th>
+                        <span className="inline-flex items-center gap-1">
+                          Final val MSE
+                          <InfoTooltip label="Final val MSE" side="top">
+                            {t("Ошибка на валидации в последнюю эпоху; помогает увидеть, не ухудшилась ли модель к концу обучения.", "Validation error at the final epoch; helps detect whether the model worsened near the end of training.")}
+                          </InfoTooltip>
+                        </span>
+                      </th>
+                      <th>
+                        <span className="inline-flex items-center gap-1">
+                          Val R2
+                          <InfoTooltip label="Val R2" side="top">
+                            {t("Доля объясненной вариации на валидации. Ближе к 1 лучше, отрицательные значения говорят о слабом прогнозе.", "Share of variance explained on validation. Closer to 1 is better; negative values indicate weak prediction.")}
+                          </InfoTooltip>
+                        </span>
+                      </th>
                     </tr>
                   </thead>
                   <tbody>
-                    {modelStats.map((row) => (
+                    {paginatedModelStats.map((row) => (
                       <tr key={row.modelName}>
                         <td className="font-medium text-slate-900 dark:text-slate-100">{row.modelName}</td>
                         <td>{row.hiddenLayers}</td>
@@ -1627,6 +2033,33 @@ export function NeuralNetworkAnalysis() {
                 "Таблица кандидатов, отсортированная по итоговому сигналу модели.",
                 "Candidate table sorted by the final model signal.",
               )}
+              action={
+                analysisRows.length > ANALYSIS_ROWS_PAGE_SIZE ? (
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setAnalysisRowsPage((current) => Math.max(1, current - 1))}
+                      disabled={activeAnalysisRowsPage <= 1}
+                      aria-label={t("Предыдущая страница", "Previous page")}
+                      className="ui-secondary-button px-2 py-2 text-xs disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      <ChevronLeft className="h-4 w-4" />
+                    </button>
+                    <span className="min-w-[6.5rem] text-center text-xs font-semibold text-slate-500 dark:text-slate-400">
+                      {analysisRowsRangeLabel}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setAnalysisRowsPage((current) => Math.min(analysisRowsPageCount, current + 1))}
+                      disabled={activeAnalysisRowsPage >= analysisRowsPageCount}
+                      aria-label={t("Следующая страница", "Next page")}
+                      className="ui-secondary-button px-2 py-2 text-xs disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      <ChevronRight className="h-4 w-4" />
+                    </button>
+                  </div>
+                ) : undefined
+              }
             >
               <div className="ui-table-shell overflow-x-auto">
                 <table className="ui-data-table min-w-[72rem]">
@@ -1646,7 +2079,7 @@ export function NeuralNetworkAnalysis() {
                     </tr>
                   </thead>
                   <tbody>
-                    {analysisRows.slice(0, 40).map((row) => (
+                    {paginatedAnalysisRows.map((row) => (
                       <tr key={(row.figi || row.ticker) + "-analysis"}>
                         <td className="font-medium text-slate-900 dark:text-slate-100">{row.ticker}</td>
                         <td className="ui-cell-name">{row.name}</td>
@@ -1666,7 +2099,6 @@ export function NeuralNetworkAnalysis() {
               </div>
             </SectionCard>
           )}
-
           {!!portfolioStrategies.length && (
             <SectionCard title={t("Стратегии портфеля", "Portfolio Strategies")}>
               <div className="ui-table-shell overflow-x-auto">
@@ -1772,40 +2204,7 @@ export function NeuralNetworkAnalysis() {
             />
           )}
 
-          {!!featureImportance.length && (
-            <SectionCard
-              title={t("Значимость параметров нейросети", "Neural Feature Significance")}
-              description={t(
-                "Оценка построена по абсолютным весам первого слоя лучшей обученной модели.",
-                "The estimate is based on absolute first-layer weights of the best trained model.",
-              )}
-            >
-              <div className="grid grid-cols-1 gap-5 lg:grid-cols-[minmax(0,1.4fr)_minmax(16rem,0.6fr)]">
-                <ResponsiveContainer width="100%" height={300}>
-                  <BarChart data={featureImportance} layout="vertical" margin={{ top: 5, right: 30, left: 90, bottom: 5 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                    <XAxis type="number" stroke="#64748b" unit="%" />
-                    <YAxis type="category" dataKey="feature" stroke="#64748b" width={90} />
-                    <Tooltip formatter={(v: number) => formatPercentValue(Number(v))} />
-                    <Bar dataKey="importance" radius={[0, 4, 4, 0]}>
-                      {featureImportance.map((row, idx) => (
-                        <Cell key={row.feature} fill={NEURAL_PALETTE[idx % NEURAL_PALETTE.length]} />
-                      ))}
-                    </Bar>
-                  </BarChart>
-                </ResponsiveContainer>
-                <div className="space-y-3">
-                  {featureImportance.slice(0, 4).map((row, index) => (
-                    <div key={row.feature} className="ui-stat-card">
-                      <div className="text-xs text-slate-500 dark:text-slate-400">#{index + 1}</div>
-                      <div className="font-semibold text-slate-900 dark:text-slate-100">{row.feature}</div>
-                      <div className="text-sm text-slate-600 dark:text-slate-300">{formatPercentValue(row.importance)}</div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </SectionCard>
-          )}
+
 
       </AnalysisPageFrame>
 
