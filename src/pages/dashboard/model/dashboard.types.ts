@@ -3,7 +3,7 @@ export type DashboardLocalizedText = {
   en: string;
 };
 
-export type DashboardIconKey = "activity" | "database" | "landmark" | "layers";
+export type DashboardIconKey = "activity" | "briefcase" | "database" | "landmark" | "layers";
 
 export type DashboardSectionConfig = {
   title: DashboardLocalizedText;

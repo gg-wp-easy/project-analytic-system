@@ -3,6 +3,7 @@ import { Link, Outlet, useLocation } from "react-router-dom";
 import type { LucideIcon } from "lucide-react";
 import {
   Activity,
+  BriefcaseBusiness,
   Database,
   Landmark,
   Layers,
@@ -18,6 +19,7 @@ import { MarketIndicativesTicker } from "../../features/market-indicatives";
 
 const appNavigationIcons: Record<AppNavigationIconKey, LucideIcon> = {
   activity: Activity,
+  briefcase: BriefcaseBusiness,
   database: Database,
   landmark: Landmark,
   layers: Layers,

@@ -38,6 +38,8 @@ import {
 } from "../../../app/components/ui/select";
 import { OptimizerSettingsFields, submitOptimizerSettings, useOptimizerSettings } from "../../../features/optimizer-settings";
 import { PortfolioSimulationPanel } from "../../../features/portfolio-simulation";
+
+import { SavePortfolioButton } from "../../../features/saved-portfolios";
 import { API_BASE_URL } from "../../../config";
 import type {
   ClusterAnalysisSummary as AnalysisSummary,
@@ -1223,7 +1225,7 @@ export function ClusterAnalysis() {
             <SectionCard
               title={t("\u0421\u0432\u043e\u0434\u043a\u0430 \u043f\u043e \u0440\u0435\u0437\u0443\u043b\u044c\u0442\u0430\u0442\u0443", "Result Summary")}
               action={(
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2">
                   <button
                     onClick={exportAnalysisToXlsx}
                     disabled={!clusterData.length}
@@ -1425,7 +1427,7 @@ export function ClusterAnalysis() {
                   : undefined
               }
               action={(
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2">
                   <button
                     onClick={exportPortfolioToXlsx}
                     disabled={!displayPortfolio.length}
@@ -1450,6 +1452,21 @@ export function ClusterAnalysis() {
                     <ImageDown className="h-4 w-4" />
                     PNG
                   </button>
+                  <SavePortfolioButton
+                    holdings={displayPortfolio}
+                    metrics={portfolioMetrics.map((metric) => ({
+                      label: localizeMetricLabel(metric.label, isEn),
+                      value: formatMetricDisplay(metric.label, metric.value),
+                      rawValue: metric.value,
+                    }))}
+                    sourceKey="cluster"
+                    sourceLabel={t("Кластерный анализ", "Cluster Analysis")}
+                    assetClass="stock"
+                    defaultName={t("Портфель кластерного анализа", "Cluster Analysis Portfolio")}
+                    shares={cache.shares}
+                    fundamentalsByFigi={cache.fundamentalsByFigi}
+                    disabled={!displayPortfolio.length}
+                  />
                 </div>
               )}
             >

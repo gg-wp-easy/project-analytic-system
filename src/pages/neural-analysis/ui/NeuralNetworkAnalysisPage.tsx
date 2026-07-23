@@ -44,6 +44,8 @@ import {
 } from "../../../app/components/ui/select";
 import { OptimizerSettingsFields, submitOptimizerSettings, useOptimizerSettings } from "../../../features/optimizer-settings";
 import { PortfolioSimulationPanel } from "../../../features/portfolio-simulation";
+
+import { SavePortfolioButton } from "../../../features/saved-portfolios";
 import { API_BASE_URL } from "../../../config";
 import type {
   NeuralFeatureImportanceItem as FeatureImportanceItem,
@@ -1768,7 +1770,7 @@ export function NeuralNetworkAnalysis() {
               title={t("\u0421\u0440\u0430\u0432\u043d\u0435\u043d\u0438\u0435 \u043c\u043e\u0434\u0435\u043b\u0435\u0439", "Model Comparison")}
               action={
                 modelStats.length > MODEL_STATS_PAGE_SIZE ? (
-                  <div className="flex items-center gap-2">
+                  <div className="flex flex-wrap items-center gap-2">
                     <button
                       type="button"
                       onClick={() => setModelStatsPage((current) => Math.max(1, current - 1))}
@@ -1889,7 +1891,7 @@ export function NeuralNetworkAnalysis() {
             <SectionCard
               title={t("Сводка по результату", "Result Summary")}
               action={(
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2">
                   <button
                     onClick={exportAnalysisToXlsx}
                     disabled={!analysisRows.length}
@@ -2035,7 +2037,7 @@ export function NeuralNetworkAnalysis() {
               )}
               action={
                 analysisRows.length > ANALYSIS_ROWS_PAGE_SIZE ? (
-                  <div className="flex items-center gap-2">
+                  <div className="flex flex-wrap items-center gap-2">
                     <button
                       type="button"
                       onClick={() => setAnalysisRowsPage((current) => Math.max(1, current - 1))}
@@ -2144,7 +2146,7 @@ export function NeuralNetworkAnalysis() {
                   : undefined
               }
               action={(
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2">
                   <button
                     onClick={exportPortfolioToXlsx}
                     disabled={!portfolioPositions.length}
@@ -2169,6 +2171,21 @@ export function NeuralNetworkAnalysis() {
                     <ImageDown className="h-4 w-4" />
                     PNG
                   </button>
+                  <SavePortfolioButton
+                    holdings={portfolioPositions}
+                    metrics={portfolioMetrics.map((metric) => ({
+                      label: localizeMetricLabel(metric.label, isEn),
+                      value: formatMetricDisplay(metric.label, metric.value),
+                      rawValue: metric.value,
+                    }))}
+                    sourceKey="neural-network"
+                    sourceLabel={t("Нейросетевой анализ", "Neural Network Analysis")}
+                    assetClass="stock"
+                    defaultName={t("Портфель нейросетевого анализа", "Neural Network Portfolio")}
+                    shares={cache.shares}
+                    fundamentalsByFigi={cache.fundamentalsByFigi}
+                    disabled={!portfolioPositions.length}
+                  />
                 </div>
               )}
             >

@@ -41,6 +41,16 @@ export const DASHBOARD_SECTIONS: DashboardSectionConfig[] = [
     color: "from-cyan-600 to-blue-700",
   },
   {
+    title: { ru: "Анализ портфелей", en: "Portfolio Analysis" },
+    description: {
+      ru: "Сохранённые портфели из моделей, текущая динамика, доходность, риск, Шарп и пассивный доход.",
+      en: "Saved model portfolios with current dynamics, return, risk, Sharpe, and passive income.",
+    },
+    path: "/portfolio-analysis",
+    icon: "briefcase",
+    color: "from-teal-600 to-emerald-700",
+  },
+  {
     title: { ru: "Анализ облигаций", en: "Bond Analysis" },
     description: {
       ru: "Загрузка облигаций, расчёт локальных метрик, подбор и выгрузка портфеля.",

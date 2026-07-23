@@ -19,6 +19,7 @@ export const APP_NAVIGATION_ITEMS: AppNavigationItem[] = [
       APP_ABSOLUTE_ROUTE_PATHS.hybrid,
     ],
   },
+  { title: { ru: "Анализ портфелей", en: "Portfolio Analysis" }, path: APP_ABSOLUTE_ROUTE_PATHS.portfolioAnalysis, icon: "briefcase" },
   { title: { ru: "Анализ облигаций", en: "Bond Analysis" }, path: APP_ABSOLUTE_ROUTE_PATHS.bonds, icon: "landmark" },
   { title: { ru: "Анализ опционов", en: "Options Analysis" }, path: APP_ABSOLUTE_ROUTE_PATHS.options, icon: "activity" },
   { title: { ru: "Настройки", en: "Settings" }, path: APP_ABSOLUTE_ROUTE_PATHS.settings, icon: "settings" },

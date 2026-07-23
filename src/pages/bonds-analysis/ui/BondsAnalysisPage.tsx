@@ -13,6 +13,8 @@ import {
 } from "recharts";
 import { useAppSettings } from "../../../app/context/AppSettingsContext";
 import { analyzeBondSource, loadBondSourceFromClient } from "../../../features/bonds-analysis";
+
+import { SavePortfolioButton } from "../../../features/saved-portfolios";
 import type {
   BondAnalysisBond,
   BondAnalysisPreferences,
@@ -920,7 +922,7 @@ export function BondsAnalysisPage() {
               `The portfolio is built with ${analysisPreferences.selectionMethod === "immunization" ? "immunization" : "matching"} for a ${analysisPreferences.targetYield}% target yield, ${analysisPreferences.targetDuration} duration, ${selectedRiskDescription}, and ${analysisPreferences.portfolioBondsCount} bonds.`,
             )}
             action={(
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2">
                 <button onClick={exportPortfolioToXlsx} className="ui-secondary-button px-3 py-2 text-xs">
                   <FileSpreadsheet className="h-4 w-4" />
                   XLSX
@@ -933,6 +935,23 @@ export function BondsAnalysisPage() {
                   <ImageDown className="h-4 w-4" />
                   PNG
                 </button>
+                <SavePortfolioButton
+                  holdings={positions.map((position) => ({
+                    ...position,
+                    annualDividendYield: position.currentYield,
+                    currentYield: position.currentYield,
+                  }))}
+                  metrics={exportMetrics.map((metric) => ({
+                    label: metric.label,
+                    value: String(metric.value),
+                    rawValue: typeof metric.value === "number" ? metric.value : null,
+                  }))}
+                  sourceKey="bonds"
+                  sourceLabel={t("Анализ облигаций", "Bond Analysis")}
+                  assetClass="bond"
+                  defaultName={t("Облигационный портфель", "Bond Portfolio")}
+                  disabled={!positions.length}
+                />
               </div>
             )}
           >

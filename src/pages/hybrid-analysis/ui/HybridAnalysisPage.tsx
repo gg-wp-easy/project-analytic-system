@@ -4,6 +4,8 @@ import { useFundamentals } from "../../../entities/fundamentals";
 import { useAppSettings } from "../../../app/context/AppSettingsContext";
 import { Checkbox } from "../../../app/components/ui/checkbox";
 import { OptimizerSettingsFields, submitOptimizerSettings, useOptimizerSettings } from "../../../features/optimizer-settings";
+
+import { SavePortfolioButton } from "../../../features/saved-portfolios";
 import { API_BASE_URL } from "../../../config";
 import type {
   HybridMetricItem as MetricItem,
@@ -552,7 +554,7 @@ export function HybridAnalysis() {
                   : undefined
               }
               action={(
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2">
                   <button
                     onClick={exportPortfolioToXlsx}
                     disabled={!portfolio.length}
@@ -577,6 +579,21 @@ export function HybridAnalysis() {
                     <ImageDown className="h-4 w-4" />
                     PNG
                   </button>
+                  <SavePortfolioButton
+                    holdings={portfolio}
+                    metrics={optimalPortfolioMetricCards.map((metric) => ({
+                      label: metric.label,
+                      value: metric.value,
+                      rawValue: metric.value,
+                    }))}
+                    sourceKey="hybrid"
+                    sourceLabel={t("Гибридный анализ", "Hybrid Analysis")}
+                    assetClass="stock"
+                    defaultName={t("Портфель гибридного анализа", "Hybrid Analysis Portfolio")}
+                    shares={cache.shares}
+                    fundamentalsByFigi={cache.fundamentalsByFigi}
+                    disabled={!portfolio.length}
+                  />
                 </div>
               )}
             >

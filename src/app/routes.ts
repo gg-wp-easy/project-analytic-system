@@ -8,6 +8,7 @@ import { DecisionTreeAnalysis } from "../pages/decision-tree-analysis";
 import { NeuralNetworkAnalysis } from "../pages/neural-analysis";
 import { HybridAnalysis } from "../pages/hybrid-analysis";
 import { StockAnalysisPage } from "../pages/stock-analysis";
+import { PortfolioAnalysisPage } from "../pages/portfolio-analysis";
 import { BondsAnalysis } from "../pages/bonds-analysis";
 import { FundamentalsDetailsPage, FundamentalsPage } from "../pages/fundamentals";
 import { OptionsPage, UnderlyingOptionsPage } from "../pages/options";
@@ -28,6 +29,7 @@ const routes = [
       { path: APP_ROUTE_PATHS.fundamentalsPreprocessing, Component: DataPreprocessingPage },
       { path: APP_ROUTE_PATHS.fundamentalsDetails, Component: FundamentalsDetailsPage },
       { path: APP_ROUTE_PATHS.stockAnalysis, Component: StockAnalysisPage },
+      { path: APP_ROUTE_PATHS.portfolioAnalysis, Component: PortfolioAnalysisPage },
       {
         path: APP_ROUTE_PATHS.legacyPreprocessing,
         element: createElement(Navigate, { to: APP_ABSOLUTE_ROUTE_PATHS.fundamentalsPreprocessing, replace: true }),
