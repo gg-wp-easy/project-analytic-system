@@ -1,0 +1,170 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="980" viewBox="0 0 1600 980" role="img" aria-labelledby="title desc">
+  <title id="title">Блок-схема работы кластерного анализа</title>
+  <desc id="desc">Условная блок-схема процесса кластерного анализа акций: от загрузки данных и выбора параметров до кластеров, оценки качества и формирования портфеля.</desc>
+  <defs>
+    <style>
+      .bg { fill: #f7fafc; }
+      .panel { fill: #ffffff; stroke: #d7e0ea; stroke-width: 2; }
+      .step { fill: #ffffff; stroke: #93a8bd; stroke-width: 2.4; }
+      .step-accent { fill: #eef6ff; stroke: #3b82f6; stroke-width: 2.6; }
+      .step-green { fill: #edfdf5; stroke: #10b981; stroke-width: 2.6; }
+      .step-amber { fill: #fff8e6; stroke: #f59e0b; stroke-width: 2.6; }
+      .step-red { fill: #fff1f2; stroke: #f43f5e; stroke-width: 2.6; }
+      .side { fill: #f8fafc; stroke: #b9c7d6; stroke-width: 2; stroke-dasharray: 8 8; }
+      .arrow { stroke: #64748b; stroke-width: 3.2; fill: none; marker-end: url(#arrowhead); }
+      .arrow-soft { stroke: #94a3b8; stroke-width: 2.4; fill: none; marker-end: url(#arrowhead-soft); stroke-dasharray: 8 8; }
+      .title { fill: #0f172a; font: 800 42px Arial, sans-serif; }
+      .subtitle { fill: #475569; font: 400 22px Arial, sans-serif; }
+      .h { fill: #0f172a; font: 700 24px Arial, sans-serif; }
+      .t { fill: #334155; font: 400 19px Arial, sans-serif; }
+      .small { fill: #64748b; font: 400 16px Arial, sans-serif; }
+      .badge { fill: #0f172a; font: 700 18px Arial, sans-serif; }
+      .badge-bg { fill: #e2e8f0; }
+      .num { fill: #ffffff; font: 800 18px Arial, sans-serif; }
+      .num-bg { fill: #2563eb; }
+      .cluster-a { fill: #60a5fa; }
+      .cluster-b { fill: #34d399; }
+      .cluster-c { fill: #fbbf24; }
+      .cluster-d { fill: #fb7185; }
+    </style>
+    <marker id="arrowhead" markerWidth="14" markerHeight="14" refX="11" refY="7" orient="auto">
+      <path d="M 0 0 L 14 7 L 0 14 z" fill="#64748b"/>
+    </marker>
+    <marker id="arrowhead-soft" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto">
+      <path d="M 0 0 L 12 6 L 0 12 z" fill="#94a3b8"/>
+    </marker>
+    <filter id="shadow" x="-10%" y="-10%" width="120%" height="130%">
+      <feDropShadow dx="0" dy="8" stdDeviation="8" flood-color="#0f172a" flood-opacity="0.10"/>
+    </filter>
+  </defs>
+
+  <rect class="bg" x="0" y="0" width="1600" height="980"/>
+  <rect class="panel" x="60" y="60" width="1480" height="860" rx="28" filter="url(#shadow)"/>
+
+  <text class="title" x="100" y="130">Условная блок-схема кластерного анализа акций</text>
+  <text class="subtitle" x="100" y="170">Путь от исходных данных и пользовательских настроек до групп компаний и портфельного отбора</text>
+
+  <!-- Row 1 -->
+  <g transform="translate(100 230)">
+    <rect class="step-accent" width="290" height="150" rx="18"/>
+    <circle class="num-bg" cx="34" cy="34" r="18"/>
+    <text class="num" x="29" y="41">1</text>
+    <text class="h" x="70" y="42">Загрузка данных</text>
+    <text class="t" x="28" y="82">Котировки, мультипликаторы,</text>
+    <text class="t" x="28" y="110">дивиденды, капитализация,</text>
+    <text class="t" x="28" y="138">сектор компании</text>
+  </g>
+
+  <g transform="translate(455 230)">
+    <rect class="step" width="290" height="150" rx="18"/>
+    <circle class="num-bg" cx="34" cy="34" r="18"/>
+    <text class="num" x="29" y="41">2</text>
+    <text class="h" x="70" y="42">Выбор акций</text>
+    <text class="t" x="28" y="82">Пользователь вручную</text>
+    <text class="t" x="28" y="110">отбирает нужные бумаги</text>
+    <text class="small" x="28" y="138">или оставляет весь список</text>
+  </g>
+
+  <g transform="translate(810 230)">
+    <rect class="step" width="290" height="150" rx="18"/>
+    <circle class="num-bg" cx="34" cy="34" r="18"/>
+    <text class="num" x="29" y="41">3</text>
+    <text class="h" x="70" y="42">Параметры анализа</text>
+    <text class="t" x="28" y="82">Метрики: P/E, P/B, ROE,</text>
+    <text class="t" x="28" y="110">долг, дивиденды, g-темпы</text>
+    <text class="small" x="28" y="138">алгоритм и настройки</text>
+  </g>
+
+  <g transform="translate(1165 230)">
+    <rect class="step-amber" width="290" height="150" rx="18"/>
+    <circle class="num-bg" cx="34" cy="34" r="18"/>
+    <text class="num" x="29" y="41">4</text>
+    <text class="h" x="70" y="42">Предобработка</text>
+    <text class="t" x="28" y="82">Очистка пропусков,</text>
+    <text class="t" x="28" y="110">масштабирование метрик,</text>
+    <text class="small" x="28" y="138">работа с выбросами</text>
+  </g>
+
+  <!-- Row arrows -->
+  <path class="arrow" d="M 390 305 H 438"/>
+  <path class="arrow" d="M 745 305 H 793"/>
+  <path class="arrow" d="M 1100 305 H 1148"/>
+
+  <!-- Row 2 -->
+  <g transform="translate(1165 515)">
+    <rect class="step-green" width="290" height="155" rx="18"/>
+    <circle class="num-bg" cx="34" cy="34" r="18"/>
+    <text class="num" x="29" y="41">5</text>
+    <text class="h" x="70" y="42">Построение кластеров</text>
+    <text class="t" x="28" y="82">K-Means, DBSCAN</text>
+    <text class="t" x="28" y="110">или иерархический метод</text>
+    <text class="small" x="28" y="140">группировка похожих акций</text>
+  </g>
+
+  <g transform="translate(810 515)">
+    <rect class="step" width="290" height="155" rx="18"/>
+    <circle class="num-bg" cx="34" cy="34" r="18"/>
+    <text class="num" x="29" y="41">6</text>
+    <text class="h" x="70" y="42">Оценка качества</text>
+    <text class="t" x="28" y="82">Silhouette, распределение,</text>
+    <text class="t" x="28" y="110">размеры групп, средние</text>
+    <text class="small" x="28" y="140">значения по кластерам</text>
+  </g>
+
+  <g transform="translate(455 515)">
+    <rect class="step" width="290" height="155" rx="18"/>
+    <circle class="num-bg" cx="34" cy="34" r="18"/>
+    <text class="num" x="29" y="41">7</text>
+    <text class="h" x="70" y="42">Отбор в портфель</text>
+    <text class="t" x="28" y="82">Выбор лучших бумаг</text>
+    <text class="t" x="28" y="110">из разных кластеров</text>
+    <text class="small" x="28" y="140">с учётом ограничений веса</text>
+  </g>
+
+  <g transform="translate(100 515)">
+    <rect class="step-red" width="290" height="155" rx="18"/>
+    <circle class="num-bg" cx="34" cy="34" r="18"/>
+    <text class="num" x="29" y="41">8</text>
+    <text class="h" x="70" y="42">Результат</text>
+    <text class="t" x="28" y="82">Карта кластеров,</text>
+    <text class="t" x="28" y="110">таблица акций, портфель</text>
+    <text class="small" x="28" y="140">и моделирование доходности</text>
+  </g>
+
+  <path class="arrow" d="M 1310 380 V 498"/>
+  <path class="arrow" d="M 1165 592 H 1117"/>
+  <path class="arrow" d="M 810 592 H 762"/>
+  <path class="arrow" d="M 455 592 H 407"/>
+
+  <!-- Side inputs -->
+  <g transform="translate(100 735)">
+    <rect class="side" width="645" height="125" rx="18"/>
+    <text class="badge" x="28" y="42">Ручные настройки пользователя</text>
+    <text class="t" x="28" y="78">Количество кластеров, метрика расстояния, масштабирование,</text>
+    <text class="t" x="28" y="106">включение выбросов, автоподбор и список выбранных акций</text>
+  </g>
+
+  <g transform="translate(810 735)">
+    <rect class="side" width="645" height="125" rx="18"/>
+    <text class="badge" x="28" y="42">Параметры портфеля</text>
+    <text class="t" x="28" y="78">Количество активов, минимальный и максимальный вес,</text>
+    <text class="t" x="28" y="106">ограничения риска, дивидендность и итоговые веса</text>
+  </g>
+
+  <path class="arrow-soft" d="M 420 735 C 460 690, 520 675, 600 675"/>
+  <path class="arrow-soft" d="M 1120 735 C 1060 700, 730 705, 600 680"/>
+
+  <!-- Cluster sketch -->
+  <g transform="translate(1185 86)">
+    <rect class="badge-bg" x="0" y="0" width="310" height="86" rx="16"/>
+    <text class="small" x="22" y="30">Визуализация кластеров</text>
+    <circle class="cluster-a" cx="50" cy="60" r="10"/>
+    <circle class="cluster-a" cx="82" cy="50" r="7"/>
+    <circle class="cluster-a" cx="100" cy="68" r="8"/>
+    <circle class="cluster-b" cx="152" cy="56" r="9"/>
+    <circle class="cluster-b" cx="178" cy="70" r="7"/>
+    <circle class="cluster-c" cx="224" cy="50" r="9"/>
+    <circle class="cluster-c" cx="250" cy="66" r="7"/>
+    <circle class="cluster-d" cx="280" cy="53" r="8"/>
+  </g>
+</svg>

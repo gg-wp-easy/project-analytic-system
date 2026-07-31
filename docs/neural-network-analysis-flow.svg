@@ -1,0 +1,175 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="980" viewBox="0 0 1600 980" role="img" aria-labelledby="title desc">
+  <title id="title">Блок-схема работы нейросетевого анализа</title>
+  <desc id="desc">Условная блок-схема процесса нейросетевого анализа акций: от подготовки данных и выбора параметров до обучения, прогноза и формирования портфеля.</desc>
+  <defs>
+    <style>
+      .bg { fill: #f7fafc; }
+      .panel { fill: #ffffff; stroke: #d7e0ea; stroke-width: 2; }
+      .step { fill: #ffffff; stroke: #93a8bd; stroke-width: 2.4; }
+      .step-blue { fill: #eef6ff; stroke: #3b82f6; stroke-width: 2.6; }
+      .step-violet { fill: #f5f3ff; stroke: #8b5cf6; stroke-width: 2.6; }
+      .step-green { fill: #edfdf5; stroke: #10b981; stroke-width: 2.6; }
+      .step-amber { fill: #fff8e6; stroke: #f59e0b; stroke-width: 2.6; }
+      .step-red { fill: #fff1f2; stroke: #f43f5e; stroke-width: 2.6; }
+      .side { fill: #f8fafc; stroke: #b9c7d6; stroke-width: 2; stroke-dasharray: 8 8; }
+      .arrow { stroke: #64748b; stroke-width: 3.2; fill: none; marker-end: url(#arrowhead); }
+      .arrow-soft { stroke: #94a3b8; stroke-width: 2.4; fill: none; marker-end: url(#arrowhead-soft); stroke-dasharray: 8 8; }
+      .title { fill: #0f172a; font: 800 42px Arial, sans-serif; }
+      .subtitle { fill: #475569; font: 400 22px Arial, sans-serif; }
+      .h { fill: #0f172a; font: 700 24px Arial, sans-serif; }
+      .t { fill: #334155; font: 400 19px Arial, sans-serif; }
+      .small { fill: #64748b; font: 400 16px Arial, sans-serif; }
+      .badge { fill: #0f172a; font: 700 18px Arial, sans-serif; }
+      .badge-bg { fill: #e2e8f0; }
+      .num { fill: #ffffff; font: 800 18px Arial, sans-serif; }
+      .num-bg { fill: #2563eb; }
+      .node { fill: #60a5fa; stroke: #2563eb; stroke-width: 2; }
+      .node-hidden { fill: #a78bfa; stroke: #7c3aed; stroke-width: 2; }
+      .node-out { fill: #34d399; stroke: #059669; stroke-width: 2; }
+      .link { stroke: #64748b; stroke-width: 1.7; opacity: 0.75; }
+      .loss { stroke: #8b5cf6; stroke-width: 3; fill: none; }
+    </style>
+    <marker id="arrowhead" markerWidth="14" markerHeight="14" refX="11" refY="7" orient="auto">
+      <path d="M 0 0 L 14 7 L 0 14 z" fill="#64748b"/>
+    </marker>
+    <marker id="arrowhead-soft" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto">
+      <path d="M 0 0 L 12 6 L 0 12 z" fill="#94a3b8"/>
+    </marker>
+    <filter id="shadow" x="-10%" y="-10%" width="120%" height="130%">
+      <feDropShadow dx="0" dy="8" stdDeviation="8" flood-color="#0f172a" flood-opacity="0.10"/>
+    </filter>
+  </defs>
+
+  <rect class="bg" x="0" y="0" width="1600" height="980"/>
+  <rect class="panel" x="60" y="60" width="1480" height="860" rx="28" filter="url(#shadow)"/>
+
+  <text class="title" x="100" y="130">Условная блок-схема нейросетевого анализа акций</text>
+  <text class="subtitle" x="100" y="170">Путь от признаков и архитектуры сети до прогноза привлекательности акций и портфеля</text>
+
+  <!-- Row 1 -->
+  <g transform="translate(100 230)">
+    <rect class="step-blue" width="290" height="150" rx="18"/>
+    <circle class="num-bg" cx="34" cy="34" r="18"/>
+    <text class="num" x="29" y="41">1</text>
+    <text class="h" x="70" y="42">Исходные данные</text>
+    <text class="t" x="28" y="82">Акции, котировки,</text>
+    <text class="t" x="28" y="110">мультипликаторы, сектор,</text>
+    <text class="t" x="28" y="138">дивиденды и риск</text>
+  </g>
+
+  <g transform="translate(455 230)">
+    <rect class="step" width="290" height="150" rx="18"/>
+    <circle class="num-bg" cx="34" cy="34" r="18"/>
+    <text class="num" x="29" y="41">2</text>
+    <text class="h" x="70" y="42">Выбор акций</text>
+    <text class="t" x="28" y="82">Пользователь вручную</text>
+    <text class="t" x="28" y="110">отбирает бумаги</text>
+    <text class="small" x="28" y="138">или запускает весь список</text>
+  </g>
+
+  <g transform="translate(810 230)">
+    <rect class="step" width="290" height="150" rx="18"/>
+    <circle class="num-bg" cx="34" cy="34" r="18"/>
+    <text class="num" x="29" y="41">3</text>
+    <text class="h" x="70" y="42">Признаки и цель</text>
+    <text class="t" x="28" y="82">P/E, ROE, долг,</text>
+    <text class="t" x="28" y="110">g-темпы, дивиденды,</text>
+    <text class="small" x="28" y="138">ожидаемая доходность</text>
+  </g>
+
+  <g transform="translate(1165 230)">
+    <rect class="step-amber" width="290" height="150" rx="18"/>
+    <circle class="num-bg" cx="34" cy="34" r="18"/>
+    <text class="num" x="29" y="41">4</text>
+    <text class="h" x="70" y="42">Подготовка данных</text>
+    <text class="t" x="28" y="82">Очистка пропусков,</text>
+    <text class="t" x="28" y="110">масштабирование,</text>
+    <text class="small" x="28" y="138">train / validation split</text>
+  </g>
+
+  <path class="arrow" d="M 390 305 H 438"/>
+  <path class="arrow" d="M 745 305 H 793"/>
+  <path class="arrow" d="M 1100 305 H 1148"/>
+
+  <!-- Row 2 -->
+  <g transform="translate(1165 515)">
+    <rect class="step-violet" width="290" height="155" rx="18"/>
+    <circle class="num-bg" cx="34" cy="34" r="18"/>
+    <text class="num" x="29" y="41">5</text>
+    <text class="h" x="70" y="42">Обучение сети</text>
+    <text class="t" x="28" y="82">Слои, активация,</text>
+    <text class="t" x="28" y="110">оптимизатор, эпохи,</text>
+    <text class="small" x="28" y="140">ранняя остановка</text>
+  </g>
+
+  <g transform="translate(810 515)">
+    <rect class="step" width="290" height="155" rx="18"/>
+    <circle class="num-bg" cx="34" cy="34" r="18"/>
+    <text class="num" x="29" y="41">6</text>
+    <text class="h" x="70" y="42">Проверка качества</text>
+    <text class="t" x="28" y="82">Train / validation loss,</text>
+    <text class="t" x="28" y="110">ошибка прогноза,</text>
+    <text class="small" x="28" y="140">важность признаков</text>
+  </g>
+
+  <g transform="translate(455 515)">
+    <rect class="step-green" width="290" height="155" rx="18"/>
+    <circle class="num-bg" cx="34" cy="34" r="18"/>
+    <text class="num" x="29" y="41">7</text>
+    <text class="h" x="70" y="42">Прогноз и отбор</text>
+    <text class="t" x="28" y="82">Модель оценивает</text>
+    <text class="t" x="28" y="110">акции по скору</text>
+    <text class="small" x="28" y="140">и выбирает кандидатов</text>
+  </g>
+
+  <g transform="translate(100 515)">
+    <rect class="step-red" width="290" height="155" rx="18"/>
+    <circle class="num-bg" cx="34" cy="34" r="18"/>
+    <text class="num" x="29" y="41">8</text>
+    <text class="h" x="70" y="42">Результат</text>
+    <text class="t" x="28" y="82">Скор акций, график</text>
+    <text class="t" x="28" y="110">обучения, портфель</text>
+    <text class="small" x="28" y="140">и моделирование доходности</text>
+  </g>
+
+  <path class="arrow" d="M 1310 380 V 498"/>
+  <path class="arrow" d="M 1165 592 H 1117"/>
+  <path class="arrow" d="M 810 592 H 762"/>
+  <path class="arrow" d="M 455 592 H 407"/>
+
+  <!-- Side inputs -->
+  <g transform="translate(100 735)">
+    <rect class="side" width="645" height="125" rx="18"/>
+    <text class="badge" x="28" y="42">Параметры нейросети</text>
+    <text class="t" x="28" y="78">Тип модели, скрытые слои, activation, optimizer, epochs,</text>
+    <text class="t" x="28" y="106">batch size, learning rate, dropout, validation split, автоподбор</text>
+  </g>
+
+  <g transform="translate(810 735)">
+    <rect class="side" width="645" height="125" rx="18"/>
+    <text class="badge" x="28" y="42">Параметры портфеля</text>
+    <text class="t" x="28" y="78">Количество активов, минимальный и максимальный вес,</text>
+    <text class="t" x="28" y="106">ограничения риска, дивидендность и итоговые веса</text>
+  </g>
+
+  <path class="arrow-soft" d="M 420 735 C 465 690, 520 675, 600 675"/>
+  <path class="arrow-soft" d="M 1120 735 C 1055 700, 730 705, 600 680"/>
+
+  <!-- Neural sketch -->
+  <g transform="translate(1185 86)">
+    <rect class="badge-bg" x="0" y="0" width="310" height="96" rx="16"/>
+    <text class="small" x="22" y="30">Схема нейросети</text>
+    <line class="link" x1="56" y1="48" x2="145" y2="42"/>
+    <line class="link" x1="56" y1="48" x2="145" y2="64"/>
+    <line class="link" x1="56" y1="70" x2="145" y2="42"/>
+    <line class="link" x1="56" y1="70" x2="145" y2="64"/>
+    <line class="link" x1="145" y1="42" x2="232" y2="56"/>
+    <line class="link" x1="145" y1="64" x2="232" y2="56"/>
+    <circle class="node" cx="56" cy="48" r="8"/>
+    <circle class="node" cx="56" cy="70" r="8"/>
+    <circle class="node-hidden" cx="145" cy="42" r="8"/>
+    <circle class="node-hidden" cx="145" cy="64" r="8"/>
+    <circle class="node-out" cx="232" cy="56" r="9"/>
+    <path class="loss" d="M 254 76 C 266 60, 278 78, 292 46"/>
+  </g>
+</svg>

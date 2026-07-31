@@ -1,0 +1,175 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="980" viewBox="0 0 1600 980" role="img" aria-labelledby="title desc">
+  <title id="title">Блок-схема работы гибридного анализа</title>
+  <desc id="desc">Условная блок-схема процесса гибридного анализа акций: запуск трёх моделей, объединение их оценок по весам важности и формирование итогового портфеля.</desc>
+  <defs>
+    <style>
+      .bg { fill: #f7fafc; }
+      .panel { fill: #ffffff; stroke: #d7e0ea; stroke-width: 2; }
+      .step { fill: #ffffff; stroke: #93a8bd; stroke-width: 2.4; }
+      .step-blue { fill: #eef6ff; stroke: #3b82f6; stroke-width: 2.6; }
+      .step-green { fill: #edfdf5; stroke: #10b981; stroke-width: 2.6; }
+      .step-amber { fill: #fff8e6; stroke: #f59e0b; stroke-width: 2.6; }
+      .step-violet { fill: #f5f3ff; stroke: #8b5cf6; stroke-width: 2.6; }
+      .step-red { fill: #fff1f2; stroke: #f43f5e; stroke-width: 2.6; }
+      .side { fill: #f8fafc; stroke: #b9c7d6; stroke-width: 2; stroke-dasharray: 8 8; }
+      .arrow { stroke: #64748b; stroke-width: 3.2; fill: none; marker-end: url(#arrowhead); }
+      .arrow-soft { stroke: #94a3b8; stroke-width: 2.4; fill: none; marker-end: url(#arrowhead-soft); stroke-dasharray: 8 8; }
+      .title { fill: #0f172a; font: 800 42px Arial, sans-serif; }
+      .subtitle { fill: #475569; font: 400 22px Arial, sans-serif; }
+      .h { fill: #0f172a; font: 700 24px Arial, sans-serif; }
+      .t { fill: #334155; font: 400 19px Arial, sans-serif; }
+      .small { fill: #64748b; font: 400 16px Arial, sans-serif; }
+      .badge { fill: #0f172a; font: 700 18px Arial, sans-serif; }
+      .badge-bg { fill: #e2e8f0; }
+      .num { fill: #ffffff; font: 800 18px Arial, sans-serif; }
+      .num-bg { fill: #2563eb; }
+      .model-a { fill: #60a5fa; }
+      .model-b { fill: #34d399; }
+      .model-c { fill: #a78bfa; }
+      .bar-bg { fill: #cbd5e1; }
+      .bar-a { fill: #3b82f6; }
+      .bar-b { fill: #10b981; }
+      .bar-c { fill: #8b5cf6; }
+    </style>
+    <marker id="arrowhead" markerWidth="14" markerHeight="14" refX="11" refY="7" orient="auto">
+      <path d="M 0 0 L 14 7 L 0 14 z" fill="#64748b"/>
+    </marker>
+    <marker id="arrowhead-soft" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto">
+      <path d="M 0 0 L 12 6 L 0 12 z" fill="#94a3b8"/>
+    </marker>
+    <filter id="shadow" x="-10%" y="-10%" width="120%" height="130%">
+      <feDropShadow dx="0" dy="8" stdDeviation="8" flood-color="#0f172a" flood-opacity="0.10"/>
+    </filter>
+  </defs>
+
+  <rect class="bg" x="0" y="0" width="1600" height="980"/>
+  <rect class="panel" x="60" y="60" width="1480" height="860" rx="28" filter="url(#shadow)"/>
+
+  <text class="title" x="100" y="130">Условная блок-схема гибридного анализа акций</text>
+  <text class="subtitle" x="100" y="170">Объединение кластерного анализа, дерева решений и нейросети в единый портфельный вывод</text>
+
+  <!-- Row 1 -->
+  <g transform="translate(100 230)">
+    <rect class="step-blue" width="290" height="150" rx="18"/>
+    <circle class="num-bg" cx="34" cy="34" r="18"/>
+    <text class="num" x="29" y="41">1</text>
+    <text class="h" x="70" y="42">Исходные данные</text>
+    <text class="t" x="28" y="82">Акции, фундаментальные</text>
+    <text class="t" x="28" y="110">показатели, доходность,</text>
+    <text class="t" x="28" y="138">риск и сектор</text>
+  </g>
+
+  <g transform="translate(455 230)">
+    <rect class="step" width="290" height="150" rx="18"/>
+    <circle class="num-bg" cx="34" cy="34" r="18"/>
+    <text class="num" x="29" y="41">2</text>
+    <text class="h" x="70" y="42">Выбор акций</text>
+    <text class="t" x="28" y="82">Пользователь задаёт</text>
+    <text class="t" x="28" y="110">список бумаг для</text>
+    <text class="small" x="28" y="138">общего анализа</text>
+  </g>
+
+  <g transform="translate(810 230)">
+    <rect class="step-amber" width="290" height="150" rx="18"/>
+    <circle class="num-bg" cx="34" cy="34" r="18"/>
+    <text class="num" x="29" y="41">3</text>
+    <text class="h" x="70" y="42">Параметры портфеля</text>
+    <text class="t" x="28" y="82">Количество активов,</text>
+    <text class="t" x="28" y="110">мин. и макс. вес,</text>
+    <text class="small" x="28" y="138">цель оптимизации</text>
+  </g>
+
+  <g transform="translate(1165 230)">
+    <rect class="step-violet" width="290" height="150" rx="18"/>
+    <circle class="num-bg" cx="34" cy="34" r="18"/>
+    <text class="num" x="29" y="41">4</text>
+    <text class="h" x="70" y="42">Запуск моделей</text>
+    <text class="t" x="28" y="82">Кластерный анализ,</text>
+    <text class="t" x="28" y="110">дерево решений,</text>
+    <text class="small" x="28" y="138">нейросеть</text>
+  </g>
+
+  <path class="arrow" d="M 390 305 H 438"/>
+  <path class="arrow" d="M 745 305 H 793"/>
+  <path class="arrow" d="M 1100 305 H 1148"/>
+
+  <!-- Row 2 -->
+  <g transform="translate(1165 515)">
+    <rect class="step" width="290" height="155" rx="18"/>
+    <circle class="num-bg" cx="34" cy="34" r="18"/>
+    <text class="num" x="29" y="41">5</text>
+    <text class="h" x="70" y="42">Оценки моделей</text>
+    <text class="t" x="28" y="82">Каждая модель отдаёт</text>
+    <text class="t" x="28" y="110">свои кандидаты, скор</text>
+    <text class="small" x="28" y="140">и веса активов</text>
+  </g>
+
+  <g transform="translate(810 515)">
+    <rect class="step-green" width="290" height="155" rx="18"/>
+    <circle class="num-bg" cx="34" cy="34" r="18"/>
+    <text class="num" x="29" y="41">6</text>
+    <text class="h" x="70" y="42">Объединение</text>
+    <text class="h" x="70" y="70">результатов</text>
+    <text class="t" x="28" y="104">Средневзвешенный скор</text>
+    <text class="small" x="28" y="132">по важности моделей</text>
+  </g>
+
+  <g transform="translate(455 515)">
+    <rect class="step" width="290" height="155" rx="18"/>
+    <circle class="num-bg" cx="34" cy="34" r="18"/>
+    <text class="num" x="29" y="41">7</text>
+    <text class="h" x="70" y="42">Итоговый отбор</text>
+    <text class="t" x="28" y="82">Акции ранжируются</text>
+    <text class="t" x="28" y="110">по общему скору</text>
+    <text class="small" x="28" y="140">и ограничениям портфеля</text>
+  </g>
+
+  <g transform="translate(100 515)">
+    <rect class="step-red" width="290" height="155" rx="18"/>
+    <circle class="num-bg" cx="34" cy="34" r="18"/>
+    <text class="num" x="29" y="41">8</text>
+    <text class="h" x="70" y="42">Результат</text>
+    <text class="t" x="28" y="82">Гибридный портфель,</text>
+    <text class="t" x="28" y="110">метрики риска, доходности</text>
+    <text class="small" x="28" y="140">и вклад каждой модели</text>
+  </g>
+
+  <path class="arrow" d="M 1310 380 V 498"/>
+  <path class="arrow" d="M 1165 592 H 1117"/>
+  <path class="arrow" d="M 810 592 H 762"/>
+  <path class="arrow" d="M 455 592 H 407"/>
+
+  <!-- Side inputs -->
+  <g transform="translate(100 735)">
+    <rect class="side" width="645" height="125" rx="18"/>
+    <text class="badge" x="28" y="42">Вес моделей и автоподбор</text>
+    <text class="t" x="28" y="78">Кластерный анализ, дерево решений и нейросеть получают</text>
+    <text class="t" x="28" y="106">свои настройки, затем объединяются по заданной важности</text>
+  </g>
+
+  <g transform="translate(810 735)">
+    <rect class="side" width="645" height="125" rx="18"/>
+    <text class="badge" x="28" y="42">Портфельные ограничения</text>
+    <text class="t" x="28" y="78">Количество активов, минимальный и максимальный вес,</text>
+    <text class="t" x="28" y="106">риск, дивидендность, диверсификация и итоговые веса</text>
+  </g>
+
+  <path class="arrow-soft" d="M 420 735 C 470 690, 530 675, 600 675"/>
+  <path class="arrow-soft" d="M 1120 735 C 1050 700, 730 705, 600 680"/>
+
+  <!-- Hybrid sketch -->
+  <g transform="translate(1185 86)">
+    <rect class="badge-bg" x="0" y="0" width="310" height="96" rx="16"/>
+    <text class="small" x="22" y="30">Веса моделей</text>
+    <circle class="model-a" cx="42" cy="62" r="10"/>
+    <text class="small" x="60" y="67">Cluster</text>
+    <circle class="model-b" cx="134" cy="62" r="10"/>
+    <text class="small" x="152" y="67">Tree</text>
+    <circle class="model-c" cx="210" cy="62" r="10"/>
+    <text class="small" x="228" y="67">NN</text>
+    <rect class="bar-bg" x="40" y="78" width="220" height="8" rx="4"/>
+    <rect class="bar-a" x="40" y="78" width="82" height="8" rx="4"/>
+    <rect class="bar-b" x="122" y="78" width="66" height="8" rx="4"/>
+    <rect class="bar-c" x="188" y="78" width="72" height="8" rx="4"/>
+  </g>
+</svg>
