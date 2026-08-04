@@ -1278,6 +1278,8 @@ export function DecisionTreeAnalysis() {
             </>
           )}
 
+          {!isRunning && (
+            <>
           {!optimizerSettings.hideAnalysisDetails && (
             <>
           {!!overviewMetrics.length && (
@@ -1721,6 +1723,8 @@ export function DecisionTreeAnalysis() {
                 </table>
               </div>
             </SectionCard>
+          )}
+            </>
           )}
             </>
           )}

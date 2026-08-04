@@ -1150,6 +1150,8 @@ export function ClusterAnalysis() {
             </>
           )}
 
+          {!isRunning && (
+            <>
           {!optimizerSettings.hideAnalysisDetails && (
             <>
           {!!overviewMetrics.length && (
@@ -1505,6 +1507,8 @@ export function ClusterAnalysis() {
               analysisName={t("Кластерный анализ", "Cluster Analysis")}
               filenamePrefix="cluster-portfolio"
             />
+          )}
+            </>
           )}
 
       </AnalysisPageFrame>

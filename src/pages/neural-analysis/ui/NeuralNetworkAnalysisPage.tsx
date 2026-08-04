@@ -1427,6 +1427,8 @@ export function NeuralNetworkAnalysis() {
             </>
           )}
 
+          {!isRunning && (
+            <>
           {!optimizerSettings.hideAnalysisDetails && (
             <>
           {!!overviewMetrics.length && (
@@ -2224,6 +2226,8 @@ export function NeuralNetworkAnalysis() {
               analysisName={t("Нейросетевой анализ", "Neural Network Analysis")}
               filenamePrefix="neural-portfolio"
             />
+          )}
+            </>
           )}
 
 

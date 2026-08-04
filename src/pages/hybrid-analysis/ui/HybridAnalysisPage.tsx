@@ -540,6 +540,8 @@ export function HybridAnalysis() {
             </>
           )}
 
+          {!isRunning && (
+            <>
           {(!!portfolio.length || portfolioAssetsCount > 0) && (
             <SectionCard
               title={t("Оптимальный портфель гибрида", "Hybrid Optimal Portfolio")}
@@ -627,6 +629,8 @@ export function HybridAnalysis() {
                 )}
               </div>
             </SectionCard>
+          )}
+            </>
           )}
       </AnalysisPageFrame>
 

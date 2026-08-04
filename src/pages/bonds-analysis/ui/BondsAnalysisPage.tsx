@@ -620,6 +620,29 @@ export function BondsAnalysisPage() {
           />
         ) : null}
 
+        {isBusy ? (
+          <SectionCard
+            title={t("Готовим список облигаций", "Preparing bond list")}
+            description={t(
+              "После загрузки появятся строки облигаций и рассчитанный портфель.",
+              "Rows and the calculated portfolio will appear after loading.",
+            )}
+          >
+            <div className="space-y-5">
+              <MetricSkeletonGrid count={3} />
+              <ChartSkeleton
+                title={t("Строим пузырьковую диаграмму", "Building bubble chart")}
+                subtitle={t("Готовим доходность, дюрацию, риск и размер выпусков.", "Preparing yield, duration, risk, and issue size.")}
+                variant="scatter"
+                accentClassName="text-amber-600"
+              />
+              <TableSkeleton rows={10} columns={8} />
+            </div>
+          </SectionCard>
+        ) : null}
+
+        {!isBusy && (
+          <>
         <SectionCard
           title={t("Данные и просмотр", "Data and View")}
           description={t(
@@ -691,27 +714,6 @@ export function BondsAnalysisPage() {
             </div>
           </div>
         </SectionCard>
-
-        {isBusy && !allBonds.length && !summary ? (
-          <SectionCard
-            title={t("Готовим список облигаций", "Preparing bond list")}
-            description={t(
-              "После загрузки появятся строки облигаций и рассчитанный портфель.",
-              "Rows and the calculated portfolio will appear after loading.",
-            )}
-          >
-            <div className="space-y-5">
-              <MetricSkeletonGrid count={3} />
-              <ChartSkeleton
-                title={t("Строим пузырьковую диаграмму", "Building bubble chart")}
-                subtitle={t("Готовим доходность, дюрацию, риск и размер выпусков.", "Preparing yield, duration, risk, and issue size.")}
-                variant="scatter"
-                accentClassName="text-amber-600"
-              />
-              <TableSkeleton rows={10} columns={8} />
-            </div>
-          </SectionCard>
-        ) : null}
 
         {!isBusy && !allBonds.length && !summary ? (
           <SectionCard
@@ -964,6 +966,8 @@ export function BondsAnalysisPage() {
             />
           </SectionCard>
         ) : null}
+          </>
+        )}
 
       </AnalysisPageFrame>
 
