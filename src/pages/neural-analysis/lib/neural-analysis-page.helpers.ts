@@ -31,7 +31,7 @@ function isMinRiskObjective(parsed: Record<string, unknown>): boolean {
   const summary = (parsed.summary as Record<string, unknown> | undefined) ?? {};
   const stats = (parsed.stats as Record<string, unknown> | undefined) ?? {};
   const objective = String(summary.optimization_objective ?? stats.optimization_objective ?? "").toLowerCase();
-  return objective === "min_risk" || objective === "min_volatility" || objective === "minimum_risk";
+  return ["min_risk", "min_volatility", "minimum_risk", "min_risk_target_return"].includes(objective);
 }
 
 export function formatOptionalNumber(value: unknown, digits = 2): string {

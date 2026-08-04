@@ -1,4 +1,5 @@
 import { useAppSettings } from "../../../app/context/AppSettingsContext";
+import { Checkbox } from "../../../app/components/ui/checkbox";
 import type { OptimizerSettingsFieldsProps } from "../model";
 
 export function OptimizerSettingsFields({ settings, onChange, autoFitWeights = false }: OptimizerSettingsFieldsProps) {
@@ -57,14 +58,47 @@ export function OptimizerSettingsFields({ settings, onChange, autoFitWeights = f
           onChange={(e) =>
             onChange({
               ...settings,
-              optimizationObjective: e.target.value === "min_risk" ? "min_risk" : "max_sharpe",
+              optimizationObjective:
+                e.target.value === "max_return_target_risk"
+                  ? "max_return_target_risk"
+                  : "min_risk_target_return",
             })
           }
         >
-          <option value="max_sharpe">{t("Максимальный коэффициент Шарпа", "Maximum Sharpe ratio")}</option>
-          <option value="min_risk">{t("Минимизация риска", "Risk minimization")}</option>
+          <option value="min_risk_target_return">
+            {t("Минимальный риск при заданной доходности", "Minimum risk at a target return")}
+          </option>
+          <option value="max_return_target_risk">
+            {t("Максимальная доходность при заданном риске", "Maximum return at a target risk")}
+          </option>
         </select>
       </label>
+
+      {settings.optimizationObjective === "min_risk_target_return" ? (
+        <label className="block text-xs text-slate-600 dark:text-slate-400">
+          {t("Минимальная ожидаемая доходность, %", "Minimum expected return, %")}
+          <input
+            type="number"
+            min="0"
+            step="0.1"
+            className="ui-input mt-1"
+            value={settings.targetReturn}
+            onChange={(e) => onChange({ ...settings, targetReturn: e.target.value })}
+          />
+        </label>
+      ) : (
+        <label className="block text-xs text-slate-600 dark:text-slate-400">
+          {t("Максимальный допустимый риск, %", "Maximum allowed risk, %")}
+          <input
+            type="number"
+            min="0.1"
+            step="0.1"
+            className="ui-input mt-1"
+            value={settings.targetRisk}
+            onChange={(e) => onChange({ ...settings, targetRisk: e.target.value })}
+          />
+        </label>
+      )}
 
       <label className="block text-xs text-slate-600 dark:text-slate-400">
         {t("Количество активов в портфеле", "Portfolio assets count")}
@@ -76,6 +110,14 @@ export function OptimizerSettingsFields({ settings, onChange, autoFitWeights = f
           value={settings.portfolioAssetsCount}
           onChange={(e) => onChange({ ...settings, portfolioAssetsCount: e.target.value })}
         />
+      </label>
+
+      <label className="flex items-center gap-2 text-xs font-medium text-slate-700 dark:text-slate-300">
+        <Checkbox
+          checked={settings.hideAnalysisDetails}
+          onCheckedChange={(checked) => onChange({ ...settings, hideAnalysisDetails: checked === true })}
+        />
+        <span>{t("Скрыть подробности анализа и показать только портфель", "Hide analysis details and show only the portfolio")}</span>
       </label>
     </div>
   );

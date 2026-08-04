@@ -8,6 +8,9 @@ export const DEFAULT_OPTIMIZER_SETTINGS: OptimizerSettings = {
   maxWeight: "100",
   sharpeBlendWeight: "0",
   minRiskBlendWeight: "0",
-  optimizationObjective: "max_sharpe",
+  optimizationObjective: "min_risk_target_return",
+  targetReturn: "20",
+  targetRisk: "20",
   portfolioAssetsCount: "0",
+  hideAnalysisDetails: true,
 };

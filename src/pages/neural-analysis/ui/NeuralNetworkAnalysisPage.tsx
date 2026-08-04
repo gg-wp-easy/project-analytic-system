@@ -42,7 +42,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "../../../app/components/ui/select";
-import { OptimizerSettingsFields, submitOptimizerSettings, useOptimizerSettings } from "../../../features/optimizer-settings";
+import { getOptimizationSummary, OptimizerSettingsFields, submitOptimizerSettings, useOptimizerSettings } from "../../../features/optimizer-settings";
 import { PortfolioSimulationPanel } from "../../../features/portfolio-simulation";
 
 import { SavePortfolioButton } from "../../../features/saved-portfolios";
@@ -1427,6 +1427,8 @@ export function NeuralNetworkAnalysis() {
             </>
           )}
 
+          {!optimizerSettings.hideAnalysisDetails && (
+            <>
           {!!overviewMetrics.length && (
             <MetricGrid>
               {overviewMetrics.map((m) => (
@@ -2131,20 +2133,23 @@ export function NeuralNetworkAnalysis() {
               </div>
             </SectionCard>
           )}
+            </>
+          )}
 
           {(!!portfolioPositions.length || portfolioAssetsCount > 0) && (
             <SectionCard
               title={t("Оптимальный портфель из нейросетевого анализа", "Optimal Portfolio from Neural Analysis")}
-              description={
-                portfolioAssetsCount > 0
-                  ? (
-                      <>
-                        {t("Количество активов в портфеле", "Assets in portfolio")}:{" "}
-                        <span className="font-semibold text-slate-900 dark:text-slate-100">{portfolioAssetsCount}</span>
-                      </>
-                    )
-                  : undefined
-              }
+              description={(
+                <div className="space-y-1">
+                  <div>{getOptimizationSummary(optimizerSettings, isEn)}</div>
+                  {portfolioAssetsCount > 0 && (
+                    <div>
+                      {t("Количество активов в портфеле", "Assets in portfolio")}:{" "}
+                      <span className="font-semibold text-slate-900 dark:text-slate-100">{portfolioAssetsCount}</span>
+                    </div>
+                  )}
+                </div>
+              )}
               action={(
                 <div className="flex flex-wrap items-center gap-2">
                   <button

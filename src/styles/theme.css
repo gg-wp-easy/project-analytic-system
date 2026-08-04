@@ -5,26 +5,26 @@
   --font-sans: var(--app-font-sans);
   --font-display: var(--app-font-display);
   --font-mono: var(--app-font-mono);
-  --background: #f4f7f5;
+  --background: #edf3f1;
   --foreground: #243044;
-  --card: #fbfcfa;
+  --card: #ffffff;
   --card-foreground: #243044;
-  --popover: #fbfcfa;
+  --popover: #ffffff;
   --popover-foreground: #243044;
   --primary: #0f766e;
   --primary-foreground: oklch(1 0 0);
-  --secondary: #eef4f1;
+  --secondary: #e7efeb;
   --secondary-foreground: #2f3b4f;
-  --muted: #edf2ef;
-  --muted-foreground: #6f7a89;
+  --muted: #e3ece8;
+  --muted-foreground: #5f6c7b;
   --accent: #e6f0f4;
   --accent-foreground: #2d4658;
   --destructive: #d4183d;
   --destructive-foreground: #ffffff;
-  --border: rgba(69, 82, 102, 0.13);
-  --input: transparent;
-  --input-background: #fbfcfa;
-  --switch-background: #d4ddd9;
+  --border: rgba(69, 82, 102, 0.22);
+  --input: #b8c7c1;
+  --input-background: #ffffff;
+  --switch-background: #c3d0cb;
   --font-weight-medium: 600;
   --font-weight-normal: 400;
   --ring: rgba(15, 118, 110, 0.24);
@@ -44,8 +44,8 @@
   --sidebar-ring: oklch(0.708 0 0);
   --page-highlight: rgba(15, 118, 110, 0.08);
   --page-highlight-secondary: rgba(37, 99, 235, 0.055);
-  --surface-shadow: 0 22px 52px -36px rgba(69, 82, 102, 0.18);
-  --surface-shadow-strong: 0 32px 84px -48px rgba(69, 82, 102, 0.26);
+  --surface-shadow: 0 20px 46px -32px rgba(46, 63, 76, 0.28);
+  --surface-shadow-strong: 0 30px 78px -44px rgba(46, 63, 76, 0.34);
   --scrollbar-size: 12px;
   --scrollbar-track: rgba(229, 236, 232, 0.72);
   --scrollbar-track-strong: rgba(211, 221, 217, 0.82);
@@ -292,19 +292,19 @@
   }
 
   :root:not(.dark) .bg-white {
-    background-color: rgb(251 252 250 / var(--tw-bg-opacity, 1)) !important;
+    background-color: rgb(255 255 255 / var(--tw-bg-opacity, 1)) !important;
   }
 
   :root:not(.dark) .bg-slate-50 {
-    background-color: rgb(243 247 245 / var(--tw-bg-opacity, 1)) !important;
+    background-color: rgb(240 246 243 / var(--tw-bg-opacity, 1)) !important;
   }
 
   :root:not(.dark) .border-slate-200 {
-    border-color: rgb(222 229 225 / var(--tw-border-opacity, 1)) !important;
+    border-color: rgb(199 212 206 / var(--tw-border-opacity, 1)) !important;
   }
 
   :root:not(.dark) .border-slate-300 {
-    border-color: rgb(204 213 211 / var(--tw-border-opacity, 1)) !important;
+    border-color: rgb(181 198 191 / var(--tw-border-opacity, 1)) !important;
   }
 
   :root:not(.dark) .text-slate-900 {
@@ -320,7 +320,7 @@
   }
 
   :root:not(.dark) .text-slate-500 {
-    color: rgb(112 124 139 / var(--tw-text-opacity, 1)) !important;
+    color: rgb(96 110 125 / var(--tw-text-opacity, 1)) !important;
   }
 
   :root:not(.dark) .hover\:bg-slate-50:hover {
@@ -353,17 +353,17 @@
 @layer components {
   .ui-surface {
     @apply rounded-3xl border p-6 backdrop-blur-sm dark:border-slate-800/90 dark:bg-slate-900/78 dark:text-slate-100;
-    border-color: rgb(222 229 225 / 0.8);
-    background-color: rgb(251 252 250 / 0.88);
+    border-color: rgb(199 212 206 / 0.92);
+    background-color: rgb(255 255 255 / 0.96);
     color: #243044;
     box-shadow: var(--surface-shadow);
   }
 
   .ui-surface-muted {
     @apply rounded-2xl border p-4 dark:border-slate-700/70 dark:bg-slate-800/50 dark:text-slate-300;
-    border-color: rgb(222 229 225 / 0.78);
-    background-color: rgb(243 247 245 / 0.82);
-    color: #4c5868;
+    border-color: rgb(193 207 201 / 0.92);
+    background-color: rgb(236 243 240 / 0.94);
+    color: #435163;
   }
 
   .ui-page-hero {
@@ -406,22 +406,22 @@
 
   .ui-metric-card {
     @apply rounded-2xl border p-4 backdrop-blur-sm dark:border-slate-800 dark:bg-slate-900/76;
-    border-color: rgb(222 229 225 / 0.78);
-    background-color: rgb(251 252 250 / 0.9);
-    box-shadow: 0 14px 30px -26px rgba(69, 82, 102, 0.22);
+    border-color: rgb(199 212 206 / 0.9);
+    background-color: rgb(255 255 255 / 0.96);
+    box-shadow: 0 14px 30px -24px rgba(46, 63, 76, 0.3);
   }
 
   .ui-stat-card {
     @apply rounded-2xl border p-4 backdrop-blur-sm dark:border-slate-800 dark:bg-slate-900/76;
-    border-color: rgb(222 229 225 / 0.76);
-    background-color: rgb(247 250 248 / 0.84);
+    border-color: rgb(199 212 206 / 0.9);
+    background-color: rgb(244 248 246 / 0.96);
   }
 
   .ui-pill {
     @apply inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-semibold dark:border-slate-700 dark:bg-slate-900/70 dark:text-slate-300;
-    border-color: rgb(222 229 225 / 0.76);
-    background-color: rgb(251 252 250 / 0.78);
-    color: #5d6a79;
+    border-color: rgb(193 207 201 / 0.92);
+    background-color: rgb(255 255 255 / 0.94);
+    color: #4c5b6b;
     box-shadow: 0 8px 18px -16px rgba(69, 82, 102, 0.22);
   }
 
@@ -431,20 +431,21 @@
 
   .ui-secondary-button {
     @apply inline-flex items-center justify-center gap-2 rounded-xl border px-4 py-2.5 text-sm font-semibold shadow-sm dark:border-slate-700 dark:bg-slate-900/70 dark:text-slate-200 dark:hover:bg-slate-900;
-    border-color: rgb(204 213 211 / 0.82);
-    background-color: rgb(251 252 250 / 0.78);
-    color: #4c5868;
+    border-color: rgb(181 198 191 / 0.96);
+    background-color: rgb(255 255 255 / 0.96);
+    color: #3f4d5d;
     box-shadow: 0 10px 24px -22px rgba(69, 82, 102, 0.3);
   }
 
   .ui-secondary-button:hover {
-    background-color: rgb(255 255 252 / 0.94);
+    border-color: rgb(134 157 148 / 0.96);
+    background-color: rgb(240 246 243 / 0.98);
   }
 
   .ui-input {
     @apply w-full rounded-xl border px-3.5 py-2.5 text-sm shadow-sm outline-none placeholder:text-slate-400 focus:ring-4 dark:border-slate-700 dark:bg-slate-950/80 dark:text-slate-100 dark:focus:border-teal-400 dark:focus:ring-teal-500/20;
-    border-color: rgb(204 213 211 / 0.82);
-    background-color: rgb(251 252 250 / 0.86);
+    border-color: rgb(174 193 185 / 0.98);
+    background-color: rgb(255 255 255 / 0.98);
     color: #243044;
   }
 
@@ -455,8 +456,8 @@
 
   .ui-table-shell {
     @apply overflow-x-auto rounded-2xl border dark:border-slate-800 dark:bg-slate-950/40;
-    border-color: rgb(222 229 225 / 0.78);
-    background-color: rgb(251 252 250 / 0.76);
+    border-color: rgb(193 207 201 / 0.92);
+    background-color: rgb(255 255 255 / 0.96);
     box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
   }
 
@@ -473,7 +474,7 @@
 
   .ui-data-table thead tr {
     @apply border-b dark:border-slate-800;
-    border-color: rgb(222 229 225 / 0.78);
+    border-color: rgb(193 207 201 / 0.94);
   }
 
   .ui-data-table th {
@@ -492,7 +493,7 @@
 
   .ui-data-table tbody tr {
     @apply border-b dark:border-slate-800/80;
-    border-color: rgb(232 237 234 / 0.9);
+    border-color: rgb(218 228 223 / 0.96);
   }
 
   .ui-data-table tbody tr:last-child {

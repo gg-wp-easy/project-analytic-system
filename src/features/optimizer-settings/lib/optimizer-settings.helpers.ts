@@ -2,7 +2,11 @@ import { numberOr } from "../../../shared/lib/number/numberOr";
 import { DEFAULT_OPTIMIZER_SETTINGS, type OptimizationObjective, type OptimizerSettings } from "../model";
 
 export function normalizeOptimizationObjective(value: unknown): OptimizationObjective {
-  return value === "min_risk" ? "min_risk" : "max_sharpe";
+  const normalized = String(value ?? "").trim().toLowerCase();
+  if (["max_return_target_risk", "max_return", "max_sharpe", "sharpe"].includes(normalized)) {
+    return "max_return_target_risk";
+  }
+  return "min_risk_target_return";
 }
 
 export function normalizeOptimizerSettings(value: Partial<OptimizerSettings>): OptimizerSettings {
@@ -23,7 +27,10 @@ export function normalizeOptimizerSettings(value: Partial<OptimizerSettings>): O
     sharpeBlendWeight: String(value.sharpeBlendWeight ?? DEFAULT_OPTIMIZER_SETTINGS.sharpeBlendWeight),
     minRiskBlendWeight: String(value.minRiskBlendWeight ?? DEFAULT_OPTIMIZER_SETTINGS.minRiskBlendWeight),
     optimizationObjective: normalizeOptimizationObjective(value.optimizationObjective ?? legacyObjective),
+    targetReturn: String(value.targetReturn ?? DEFAULT_OPTIMIZER_SETTINGS.targetReturn),
+    targetRisk: String(value.targetRisk ?? DEFAULT_OPTIMIZER_SETTINGS.targetRisk),
     portfolioAssetsCount: String(value.portfolioAssetsCount ?? DEFAULT_OPTIMIZER_SETTINGS.portfolioAssetsCount),
+    hideAnalysisDetails: value.hideAnalysisDetails !== false,
   };
 }
 
@@ -45,14 +52,29 @@ export function buildOptimizerSettingsPayload(settings: OptimizerSettings) {
     numberOr(DEFAULT_OPTIMIZER_SETTINGS.portfolioAssetsCount, 0),
   );
   const optimizationObjective = normalizeOptimizationObjective(settings.optimizationObjective);
+  const targetReturn = numberOr(settings.targetReturn, numberOr(DEFAULT_OPTIMIZER_SETTINGS.targetReturn, 20));
+  const targetRisk = numberOr(settings.targetRisk, numberOr(DEFAULT_OPTIMIZER_SETTINGS.targetRisk, 20));
 
   return {
     risk_free_rate: riskFreeRate,
     min_weight: minWeight,
     max_weight: maxWeight,
-    sharpe_blend_weight: optimizationObjective === "max_sharpe" ? Math.max(sharpeBlendWeight, 100) : 0,
-    min_risk_blend_weight: optimizationObjective === "min_risk" ? Math.max(minRiskBlendWeight, 100) : 0,
+    sharpe_blend_weight: optimizationObjective === "max_return_target_risk" ? Math.max(sharpeBlendWeight, 100) : 0,
+    min_risk_blend_weight: optimizationObjective === "min_risk_target_return" ? Math.max(minRiskBlendWeight, 100) : 0,
     optimization_objective: optimizationObjective,
+    target_return: targetReturn,
+    target_risk: targetRisk,
     ...(portfolioAssetsCount > 0 ? { portfolio_assets_count: portfolioAssetsCount } : {}),
   };
+}
+
+export function getOptimizationSummary(settings: OptimizerSettings, isEnglish = false): string {
+  if (settings.optimizationObjective === "max_return_target_risk") {
+    return isEnglish
+      ? `Maximum return with risk up to ${settings.targetRisk || "-"}%`
+      : `Максимальная доходность при риске до ${settings.targetRisk || "-"}%`;
+  }
+  return isEnglish
+    ? `Minimum risk with return from ${settings.targetReturn || "-"}%`
+    : `Минимальный риск при доходности от ${settings.targetReturn || "-"}%`;
 }

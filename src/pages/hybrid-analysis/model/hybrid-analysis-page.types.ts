@@ -10,6 +10,9 @@ export type HybridPortfolioSettingsInput = {
   riskFreeRate: string;
   sharpeBlendWeight: string;
   minRiskBlendWeight: string;
-  optimizationObjective: "max_sharpe" | "min_risk";
+  optimizationObjective: "min_risk_target_return" | "max_return_target_risk";
+  targetReturn: string;
+  targetRisk: string;
   portfolioAssetsCount: string;
+  hideAnalysisDetails: boolean;
 };

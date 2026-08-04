@@ -3,7 +3,7 @@ import { FileSpreadsheet, FileText, ImageDown, Layers, Play, Settings } from "lu
 import { useFundamentals } from "../../../entities/fundamentals";
 import { useAppSettings } from "../../../app/context/AppSettingsContext";
 import { Checkbox } from "../../../app/components/ui/checkbox";
-import { OptimizerSettingsFields, submitOptimizerSettings, useOptimizerSettings } from "../../../features/optimizer-settings";
+import { getOptimizationSummary, OptimizerSettingsFields, submitOptimizerSettings, useOptimizerSettings } from "../../../features/optimizer-settings";
 
 import { SavePortfolioButton } from "../../../features/saved-portfolios";
 import { API_BASE_URL } from "../../../config";
@@ -543,16 +543,17 @@ export function HybridAnalysis() {
           {(!!portfolio.length || portfolioAssetsCount > 0) && (
             <SectionCard
               title={t("Оптимальный портфель гибрида", "Hybrid Optimal Portfolio")}
-              description={
-                portfolioAssetsCount > 0
-                  ? (
-                      <>
-                        {t("Количество активов в портфеле", "Assets in portfolio")}: {" "}
-                        <span className="font-semibold text-slate-900 dark:text-slate-100">{portfolioAssetsCount}</span>
-                      </>
-                    )
-                  : undefined
-              }
+              description={(
+                <div className="space-y-1">
+                  <div>{getOptimizationSummary(optimizerSettings, isEn)}</div>
+                  {portfolioAssetsCount > 0 && (
+                    <div>
+                      {t("Количество активов в портфеле", "Assets in portfolio")}:{" "}
+                      <span className="font-semibold text-slate-900 dark:text-slate-100">{portfolioAssetsCount}</span>
+                    </div>
+                  )}
+                </div>
+              )}
               action={(
                 <div className="flex flex-wrap items-center gap-2">
                   <button

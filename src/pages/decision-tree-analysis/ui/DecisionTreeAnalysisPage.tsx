@@ -37,7 +37,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "../../../app/components/ui/select";
-import { OptimizerSettingsFields, submitOptimizerSettings, useOptimizerSettings } from "../../../features/optimizer-settings";
+import { getOptimizationSummary, OptimizerSettingsFields, submitOptimizerSettings, useOptimizerSettings } from "../../../features/optimizer-settings";
 import { PortfolioSimulationPanel } from "../../../features/portfolio-simulation";
 
 import { SavePortfolioButton } from "../../../features/saved-portfolios";
@@ -1278,6 +1278,8 @@ export function DecisionTreeAnalysis() {
             </>
           )}
 
+          {!optimizerSettings.hideAnalysisDetails && (
+            <>
           {!!overviewMetrics.length && (
             <MetricGrid>
               {overviewMetrics.map((m) => (
@@ -1534,9 +1536,13 @@ export function DecisionTreeAnalysis() {
             </SectionCard>
           )}
 
+            </>
+          )}
+
           {!!portfolioPositions.length && (
             <SectionCard
               title={t("Оптимальный портфель из дерева решений", "Optimal Portfolio from Decision Tree")}
+              description={getOptimizationSummary(optimizerSettings, isEn)}
               action={(
                 <div className="flex flex-wrap items-center gap-2">
                   <button
@@ -1623,6 +1629,8 @@ export function DecisionTreeAnalysis() {
             />
           )}
 
+          {!optimizerSettings.hideAnalysisDetails && (
+            <>
           {!!numericSummary.length && (
             <SectionCard title={t("Сводка по числовым признакам", "Numeric Features Summary")}>
               <div className="ui-table-shell overflow-x-auto">
@@ -1713,6 +1721,8 @@ export function DecisionTreeAnalysis() {
                 </table>
               </div>
             </SectionCard>
+          )}
+            </>
           )}
 
       </AnalysisPageFrame>

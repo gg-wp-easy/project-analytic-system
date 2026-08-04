@@ -23,7 +23,7 @@ function isMinRiskObjective(parsed: Record<string, unknown>): boolean {
   const summary = (parsed.summary as Record<string, unknown> | undefined) ?? {};
   const stats = (parsed.stats as Record<string, unknown> | undefined) ?? {};
   const objective = String(summary.optimization_objective ?? stats.optimization_objective ?? "").toLowerCase();
-  return objective === "min_risk" || objective === "min_volatility" || objective === "minimum_risk";
+  return ["min_risk", "min_volatility", "minimum_risk", "min_risk_target_return"].includes(objective);
 }
 
 export function extractModelScores(parsed: Record<string, unknown>, fallbackWeights: HybridModelWeights): ModelScore[] {
@@ -389,16 +389,20 @@ export function countSavedAutoTuneModels(modelSettings: Record<string, unknown>)
 }
 
 export function normalizePortfolioSettings(settings: HybridPortfolioSettingsInput): Record<string, unknown> {
-  const optimizationObjective = settings.optimizationObjective === "min_risk" ? "min_risk" : "max_sharpe";
+  const optimizationObjective = settings.optimizationObjective === "max_return_target_risk"
+    ? "max_return_target_risk"
+    : "min_risk_target_return";
   const portfolioAssetsCount = Math.max(0, Math.trunc(numberOr(settings.portfolioAssetsCount, 0)));
 
   return {
     risk_free_rate: numberOr(settings.riskFreeRate, 0),
     min_weight: Math.max(0, numberOr(settings.minWeight, 0)),
     max_weight: Math.max(0, numberOr(settings.maxWeight, 0)),
-    sharpe_blend_weight: optimizationObjective === "max_sharpe" ? Math.max(numberOr(settings.sharpeBlendWeight, 0), 100) : 0,
-    min_risk_blend_weight: optimizationObjective === "min_risk" ? Math.max(numberOr(settings.minRiskBlendWeight, 0), 100) : 0,
+    sharpe_blend_weight: optimizationObjective === "max_return_target_risk" ? Math.max(numberOr(settings.sharpeBlendWeight, 0), 100) : 0,
+    min_risk_blend_weight: optimizationObjective === "min_risk_target_return" ? Math.max(numberOr(settings.minRiskBlendWeight, 0), 100) : 0,
     optimization_objective: optimizationObjective,
+    target_return: Math.max(0, numberOr(settings.targetReturn, 20)),
+    target_risk: Math.max(0.1, numberOr(settings.targetRisk, 20)),
     portfolio_assets_count: portfolioAssetsCount,
     requested_assets_count: portfolioAssetsCount,
     enforce_requested_count: portfolioAssetsCount > 0,
