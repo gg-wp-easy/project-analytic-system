@@ -1,11 +1,9 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import {
   CheckCircle2,
   DownloadCloud,
   Eye,
   EyeOff,
-  FileText,
-  FolderOpen,
   Globe2,
   KeyRound,
   Moon,
@@ -15,12 +13,9 @@ import {
   Trash2,
 } from "lucide-react";
 import { useAppSettings } from "../../../app/context/AppSettingsContext";
-import {
-  createTBankInstrumentsApi,
-  normalizeTBankToken,
-} from "../../../shared/api/tbank";
+import { createTBankInstrumentsApi, normalizeTBankToken } from "../../../shared/api/tbank";
 import { PageHero, SectionCard } from "../../../shared/ui/analysis-shell";
-import type { DesktopLogApi, LogInfo, StatusState, UpdateStatusPayload } from "../model";
+import type { StatusState, UpdateStatusPayload } from "../model";
 import { getDesktopApi, getStatusClassName, readStoredToken, writeStoredToken } from "../lib";
 
 export function SettingsPage() {
@@ -30,30 +25,14 @@ export function SettingsPage() {
   const [isCheckingToken, setIsCheckingToken] = useState(false);
   const [isCheckingUpdates, setIsCheckingUpdates] = useState(false);
   const [isInstallingUpdate, setIsInstallingUpdate] = useState(false);
-  const [isOpeningLogs, setIsOpeningLogs] = useState(false);
   const [tokenStatus, setTokenStatus] = useState<StatusState>(null);
   const [updateStatus, setUpdateStatus] = useState<StatusState>(null);
-  const [logStatus, setLogStatus] = useState<StatusState>(null);
   const [updateState, setUpdateState] = useState<UpdateStatusPayload | null>(null);
-  const [logInfo, setLogInfo] = useState<LogInfo | null>(null);
 
   const desktopApi = getDesktopApi();
   const isDesktop = Boolean(desktopApi?.isDesktop);
-  const canInstallUpdates = Boolean(desktopApi?.installUpdate);
   const trimmedToken = normalizeTBankToken(token);
   const hasToken = trimmedToken.length > 0;
-
-  const tokenPreview = useMemo(() => {
-    if (!trimmedToken) {
-      return "-";
-    }
-
-    if (trimmedToken.length <= 12) {
-      return `${trimmedToken.slice(0, 4)}...`;
-    }
-
-    return `${trimmedToken.slice(0, 6)}...${trimmedToken.slice(-4)}`;
-  }, [trimmedToken]);
 
   useEffect(() => {
     const api = getDesktopApi();
@@ -86,20 +65,6 @@ export function SettingsPage() {
     });
   }, [t]);
 
-  useEffect(() => {
-    const api = getDesktopApi();
-    if (!api?.getLogInfo) {
-      return;
-    }
-
-    void api.getLogInfo().then(setLogInfo).catch((error) => {
-      setLogStatus({
-        tone: "error",
-        message: error instanceof Error ? error.message : t({ ru: "Не удалось получить путь к логам.", en: "Failed to get log path." }),
-      });
-    });
-  }, [t]);
-
   const updateButtonLabel =
     updateState?.status === "downloaded"
       ? t({ ru: "Установить обновление", en: "Install update" })
@@ -116,8 +81,8 @@ export function SettingsPage() {
     setTokenStatus({
       tone: "success",
       message: t({
-        ru: "Токен сохранён локально. Следующие запросы к T-Bank API будут использовать его автоматически.",
-        en: "Token saved locally. Future T-Bank API requests will use it automatically.",
+        ru: "Токен сохранён. Доступ к рыночным данным настроен.",
+        en: "Token saved. Market data access is ready.",
       }),
     });
   };
@@ -128,8 +93,8 @@ export function SettingsPage() {
     setTokenStatus({
       tone: "info",
       message: t({
-        ru: "Токен удалён из локального хранилища.",
-        en: "Token removed from local storage.",
+        ru: "Токен удалён.",
+        en: "Token removed.",
       }),
     });
   };
@@ -152,8 +117,8 @@ export function SettingsPage() {
       setTokenStatus({
         tone: "success",
         message: t({
-          ru: `Доступ проверен: API вернул ${shares.length} инструментов акций.`,
-          en: `Access checked: API returned ${shares.length} share instruments.`,
+          ru: `Доступ подтверждён. Найдено акций: ${shares.length}.`,
+          en: `Access confirmed. Shares found: ${shares.length}.`,
         }),
       });
     } catch (error) {
@@ -175,8 +140,8 @@ export function SettingsPage() {
       setUpdateStatus({
         tone: "info",
         message: t({
-          ru: "Проверка обновлений доступна только в Electron-сборке.",
-          en: "Update checks are available only in the Electron build.",
+          ru: "Обновления недоступны в этой версии приложения.",
+          en: "Updates are unavailable in this version of the app.",
         }),
       });
       return;
@@ -190,17 +155,17 @@ export function SettingsPage() {
       if (result?.status === "disabled") {
         setUpdateStatus({
           tone: "info",
-          message: result.message || t({ ru: "Автообновления недоступны для этой сборки.", en: "Auto-update is unavailable for this build." }),
+          message: t({ ru: "Обновления недоступны в этой версии приложения.", en: "Updates are unavailable in this version of the app." }),
         });
       } else if (result?.status === "not-available") {
         setUpdateStatus({
           tone: "info",
-          message: result.message || t({ ru: "Обновлений пока нет.", en: "No updates are available." }),
+          message: t({ ru: "Установлена актуальная версия.", en: "The app is up to date." }),
         });
       } else if (result?.status === "available") {
         setUpdateStatus({
           tone: "success",
-          message: result.message || t({ ru: "Обновление найдено, загрузка началась.", en: "Update found, download started." }),
+          message: t({ ru: "Обновление найдено, загрузка началась.", en: "Update found, download started." }),
         });
       }
     } catch (error) {
@@ -250,78 +215,14 @@ export function SettingsPage() {
     }
   };
 
-  const handleOpenLogs = async () => {
-    const api = getDesktopApi();
-    if (!api?.openLogsDirectory) {
-      setLogStatus({
-        tone: "info",
-        message: t({
-          ru: "Папка логов доступна только в Electron-сборке. В браузере используйте DevTools Console.",
-          en: "The logs folder is available only in the Electron build. In the browser, use DevTools Console.",
-        }),
-      });
-      return;
-    }
-
-    setIsOpeningLogs(true);
-    setLogStatus(null);
-
-    try {
-      const result = await api.openLogsDirectory();
-      setLogInfo({
-        logsDirectory: result.logsDirectory,
-        logFilePath: result.logFilePath,
-      });
-      setLogStatus({
-        tone: result.status === "ok" ? "success" : "error",
-        message:
-          result.status === "ok"
-            ? t({ ru: "Папка логов открыта.", en: "Logs folder opened." })
-            : result.message || t({ ru: "Не удалось открыть папку логов.", en: "Failed to open logs folder." }),
-      });
-    } catch (error) {
-      setLogStatus({
-        tone: "error",
-        message: error instanceof Error ? error.message : t({ ru: "Не удалось открыть папку логов.", en: "Failed to open logs folder." }),
-      });
-    } finally {
-      setIsOpeningLogs(false);
-    }
-  };
-
-  const handleWriteTestLog = (level: keyof DesktopLogApi) => {
-    const api = getDesktopApi();
-    const writer = api?.log?.[level];
-    if (!writer) {
-      console[level === "debug" ? "debug" : level]("[settings] test log from settings page");
-      setLogStatus({
-        tone: "info",
-        message: t({
-          ru: "Тестовая запись отправлена в console.",
-          en: "Test entry was sent to console.",
-        }),
-      });
-      return;
-    }
-
-    writer("[settings] test log from settings page", { level, ts: new Date().toISOString() });
-    setLogStatus({
-      tone: "success",
-      message: t({
-        ru: "Тестовая запись отправлена в лог приложения.",
-        en: "Test entry was sent to the application log.",
-      }),
-    });
-  };
-
   return (
     <div className="space-y-6">
       <PageHero
         icon={KeyRound}
         title={t({ ru: "Настройки", en: "Settings" })}
         description={t({
-          ru: "Токен T-Bank API, язык, тема, обновления и логи приложения собраны в одном месте.",
-          en: "T-Bank API token, language, theme, updates, and app logs live in one place.",
+          ru: "Язык, тема, доступ к рыночным данным и обновления приложения.",
+          en: "Language, theme, market data access, and app updates.",
         })}
         accent="slate"
         aside={
@@ -333,7 +234,7 @@ export function SettingsPage() {
               {hasToken ? t({ ru: "Токен задан", en: "Token set" }) : t({ ru: "Токен не задан", en: "No token" })}
             </div>
             <div className="text-sm text-white/80">
-              {isDesktop ? t({ ru: "Desktop режим", en: "Desktop mode" }) : t({ ru: "Browser режим", en: "Browser mode" })}
+              {hasToken ? t({ ru: "Рыночные данные доступны", en: "Market data available" }) : t({ ru: "Нужна настройка доступа", en: "Access setup required" })}
             </div>
           </div>
         }
@@ -342,8 +243,8 @@ export function SettingsPage() {
       <SectionCard
         title={t({ ru: "Внешний вид", en: "Appearance" })}
         description={t({
-          ru: "Настройки языка и темы теперь находятся здесь, чтобы шапка оставалась только для навигации.",
-          en: "Language and theme settings are here now, keeping the header focused on navigation.",
+          ru: "Выберите язык интерфейса и цветовую тему.",
+          en: "Choose the interface language and color theme.",
         })}
       >
         <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
@@ -408,8 +309,8 @@ export function SettingsPage() {
       <SectionCard
         title={t({ ru: "Доступ к рыночным данным", en: "Market Data Access" })}
         description={t({
-          ru: "Токен сохраняется только в localStorage этого приложения. После сохранения страницы фундаментала, облигаций и опционов смогут выполнять запросы без консоли браузера.",
-          en: "The token is saved only in this app's localStorage. After saving, fundamentals, bonds, and options pages can make requests without the browser console.",
+          ru: "Токен хранится только на этом устройстве и используется для загрузки данных T-Bank Invest.",
+          en: "The token stays on this device and is used to load T-Bank Invest data.",
         })}
       >
         <div className="space-y-5">
@@ -441,23 +342,6 @@ export function SettingsPage() {
             </div>
           </label>
 
-          <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
-            {[
-              { label: t({ ru: "Статус", en: "Status" }), value: hasToken ? t({ ru: "Заполнен", en: "Filled" }) : t({ ru: "Пусто", en: "Empty" }) },
-              { label: t({ ru: "Превью", en: "Preview" }), value: tokenPreview },
-              { label: t({ ru: "Длина", en: "Length" }), value: trimmedToken.length },
-            ].map((item) => (
-              <div key={item.label} className="rounded-2xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-800 dark:bg-slate-900/60">
-                <div className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">
-                  {item.label}
-                </div>
-                <div className="mt-2 font-mono text-base font-semibold text-slate-900 dark:text-slate-100">
-                  {item.value}
-                </div>
-              </div>
-            ))}
-          </div>
-
           <div className="flex flex-wrap gap-2">
             <button type="button" onClick={handleSaveToken} disabled={!hasToken} className="ui-primary-button">
               <CheckCircle2 className="h-4 w-4" />
@@ -481,35 +365,34 @@ export function SettingsPage() {
 
           <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm leading-6 text-amber-900 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-100">
             {locale === "ru"
-              ? "Не публикуйте токен и не коммитьте его в репозиторий. Он хранится локально в браузере или Electron-профиле текущего приложения."
-              : "Do not publish the token or commit it to the repository. It is stored locally in the browser or current Electron app profile."}
+              ? "Никому не передавайте токен. Удалить его с устройства можно кнопкой выше."
+              : "Do not share the token. You can remove it from this device using the button above."}
           </div>
         </div>
       </SectionCard>
 
-      <SectionCard
-        title={t({ ru: "Обновления", en: "Updates" })}
-        description={t({
-          ru: "Проверка и установка обновлений перенесены из шапки в настройки.",
-          en: "Update checks and installation moved from the header into settings.",
-        })}
-      >
-        <div className="space-y-4">
-          <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
-            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-800 dark:bg-slate-900/60">
-              <div className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">
-                {t({ ru: "Режим", en: "Mode" })}
-              </div>
-              <div className="mt-2 text-base font-semibold text-slate-900 dark:text-slate-100">
-                {canInstallUpdates ? t({ ru: "Доступно", en: "Available" }) : t({ ru: "Недоступно", en: "Unavailable" })}
-              </div>
-            </div>
+      {isDesktop ? (
+        <SectionCard
+          title={t({ ru: "Обновления", en: "Updates" })}
+          description={t({
+            ru: "Проверьте наличие новой версии и установите её, когда загрузка завершится.",
+            en: "Check for a new version and install it when the download is complete.",
+          })}
+        >
+          <div className="space-y-4">
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
             <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-800 dark:bg-slate-900/60">
               <div className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">
                 {t({ ru: "Статус", en: "Status" })}
               </div>
               <div className="mt-2 text-base font-semibold text-slate-900 dark:text-slate-100">
-                {updateState?.status ?? t({ ru: "Ожидание", en: "Idle" })}
+                {updateState?.status === "available"
+                  ? t({ ru: "Обновление найдено", en: "Update found" })
+                  : updateState?.status === "downloading"
+                    ? t({ ru: "Загрузка", en: "Downloading" })
+                    : updateState?.status === "downloaded"
+                      ? t({ ru: "Готово к установке", en: "Ready to install" })
+                      : t({ ru: "Обновлений нет", en: "Up to date" })}
               </div>
             </div>
             <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-800 dark:bg-slate-900/60">
@@ -542,64 +425,9 @@ export function SettingsPage() {
               {updateStatus.message}
             </div>
           ) : null}
-        </div>
-      </SectionCard>
-
-      <SectionCard
-        title={t({ ru: "Логи", en: "Logs" })}
-        description={t({
-          ru: "Логи renderer-процесса пишутся в файл Electron-сборки. В браузере доступна только консоль разработчика.",
-          en: "Renderer logs are written to the Electron app log file. In the browser, only DevTools Console is available.",
-        })}
-      >
-        <div className="space-y-4">
-          <div className="grid grid-cols-1 gap-3 xl:grid-cols-2">
-            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-800 dark:bg-slate-900/60">
-              <div className="mb-2 flex items-center gap-2 text-sm font-semibold text-slate-900 dark:text-slate-100">
-                <FolderOpen className="h-4 w-4" />
-                {t({ ru: "Папка логов", en: "Logs directory" })}
-              </div>
-              <div className="break-all font-mono text-xs leading-6 text-slate-600 dark:text-slate-300">
-                {logInfo?.logsDirectory || t({ ru: "Недоступно в браузере", en: "Unavailable in browser" })}
-              </div>
-            </div>
-            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-800 dark:bg-slate-900/60">
-              <div className="mb-2 flex items-center gap-2 text-sm font-semibold text-slate-900 dark:text-slate-100">
-                <FileText className="h-4 w-4" />
-                {t({ ru: "Файл", en: "File" })}
-              </div>
-              <div className="break-all font-mono text-xs leading-6 text-slate-600 dark:text-slate-300">
-                {logInfo?.logFilePath || "app.log"}
-              </div>
-            </div>
           </div>
-
-          <div className="flex flex-wrap gap-2">
-            <button type="button" onClick={handleOpenLogs} disabled={isOpeningLogs} className="ui-secondary-button">
-              {isOpeningLogs ? <RefreshCw className="h-4 w-4 animate-spin" /> : <FolderOpen className="h-4 w-4" />}
-              {t({ ru: "Открыть папку логов", en: "Open logs folder" })}
-            </button>
-            <button type="button" onClick={() => handleWriteTestLog("info")} className="ui-secondary-button">
-              <FileText className="h-4 w-4" />
-              {t({ ru: "Тест info", en: "Test info" })}
-            </button>
-            <button type="button" onClick={() => handleWriteTestLog("warn")} className="ui-secondary-button">
-              <FileText className="h-4 w-4" />
-              {t({ ru: "Тест warn", en: "Test warn" })}
-            </button>
-            <button type="button" onClick={() => handleWriteTestLog("error")} className="ui-secondary-button">
-              <FileText className="h-4 w-4" />
-              {t({ ru: "Тест error", en: "Test error" })}
-            </button>
-          </div>
-
-          {logStatus ? (
-            <div className={`rounded-2xl border px-4 py-3 text-sm leading-6 ${getStatusClassName(logStatus)}`}>
-              {logStatus.message}
-            </div>
-          ) : null}
-        </div>
-      </SectionCard>
+        </SectionCard>
+      ) : null}
     </div>
   );
 }

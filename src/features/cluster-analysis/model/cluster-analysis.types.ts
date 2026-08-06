@@ -15,6 +15,10 @@ export type ClusterPoint = {
   qualityScore?: number;
   growthScore?: number;
   incomeScore?: number;
+  dividendScore?: number;
+  dividendYield?: number;
+  dividendYearsCount?: number;
+  consecutiveDividendYears?: number;
   compositeScore?: number;
 };
 

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Link, Outlet, useLocation } from "react-router-dom";
 import type { LucideIcon } from "lucide-react";
 import {
@@ -7,7 +7,9 @@ import {
   Database,
   Landmark,
   Layers,
+  Maximize2,
   Menu,
+  Minimize2,
   Settings,
   TrendingUp,
   X,
@@ -27,67 +29,151 @@ const appNavigationIcons: Record<AppNavigationIconKey, LucideIcon> = {
   trendingUp: TrendingUp,
 };
 
+type FullscreenDesktopApi = {
+  isDesktop?: boolean;
+  toggleFullscreen?: () => Promise<{ isFullscreen?: boolean }>;
+  getFullscreenState?: () => Promise<{ isFullscreen?: boolean }>;
+  onFullscreenChange?: (listener: (payload: { isFullscreen?: boolean }) => void) => () => void;
+};
+
+function getFullscreenDesktopApi(): FullscreenDesktopApi | undefined {
+  if (typeof window === "undefined") {
+    return undefined;
+  }
+
+  return (window as Window & { electron?: FullscreenDesktopApi }).electron;
+}
+
 export function Root() {
   const location = useLocation();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [isFullscreen, setIsFullscreen] = useState(false);
   const { t } = useAppSettings();
 
   const desktopLinkClass = (isActive: boolean) =>
-    `inline-flex items-center gap-2 rounded-xl px-3 py-2 text-sm transition-colors ${
+    `inline-flex h-10 w-10 items-center justify-center rounded-lg transition-colors ${
       isActive
-        ? "bg-teal-50 text-teal-800 dark:bg-teal-500/10 dark:text-teal-200"
-        : "text-slate-600 dark:text-slate-300 hover:bg-slate-100/80 dark:hover:bg-slate-800/70"
+        ? "bg-primary/10 text-primary dark:bg-primary/15 dark:text-primary"
+        : "text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800"
     }`;
 
   const mobileLinkClass = (isActive: boolean) =>
-    `flex items-center gap-3 rounded-xl px-4 py-3 transition-all ${
+    `flex items-center gap-3 rounded-lg px-4 py-3 transition-all ${
       isActive
-        ? "bg-teal-50 text-teal-800 dark:bg-teal-500/10 dark:text-teal-200"
-        : "text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800/70"
+        ? "bg-primary/10 text-primary dark:bg-primary/15 dark:text-primary"
+        : "text-slate-600 hover:bg-slate-50 dark:text-slate-300 dark:hover:bg-slate-800"
     }`;
 
+  useEffect(() => {
+    const api = getFullscreenDesktopApi();
+    let removeDesktopListener: (() => void) | undefined;
+
+    void api?.getFullscreenState?.().then((state) => {
+      setIsFullscreen(Boolean(state?.isFullscreen));
+    });
+
+    if (api?.onFullscreenChange) {
+      removeDesktopListener = api.onFullscreenChange((state) => {
+        setIsFullscreen(Boolean(state?.isFullscreen));
+      });
+    }
+
+    const syncBrowserFullscreenState = () => {
+      setIsFullscreen(Boolean(document.fullscreenElement));
+    };
+
+    document.addEventListener("fullscreenchange", syncBrowserFullscreenState);
+    syncBrowserFullscreenState();
+
+    return () => {
+      removeDesktopListener?.();
+      document.removeEventListener("fullscreenchange", syncBrowserFullscreenState);
+    };
+  }, []);
+
+  const handleToggleFullscreen = useCallback(async () => {
+    const api = getFullscreenDesktopApi();
+
+    if (api?.toggleFullscreen) {
+      const state = await api.toggleFullscreen();
+      setIsFullscreen(Boolean(state?.isFullscreen));
+      return;
+    }
+
+    if (document.fullscreenElement) {
+      await document.exitFullscreen();
+      setIsFullscreen(false);
+      return;
+    }
+
+    await document.documentElement.requestFullscreen();
+    setIsFullscreen(true);
+  }, []);
+
+  const fullscreenLabel = isFullscreen
+    ? t({ ru: "Выйти из полноэкранного режима", en: "Exit fullscreen" })
+    : t({ ru: "Полноэкранный режим", en: "Fullscreen" });
+  const FullscreenIcon = isFullscreen ? Minimize2 : Maximize2;
+
   return (
-    <div className="min-h-screen bg-[var(--background)]">
-      <header className="sticky top-0 z-50 border-b border-slate-200/80 bg-white/90 shadow-sm backdrop-blur-md dark:border-slate-800/80 dark:bg-slate-950/85">
+    <div className="min-h-screen bg-background">
+      <header className="sticky top-0 z-50 border-b border-border bg-card/95 backdrop-blur dark:bg-card/92">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-          <div className="flex min-h-[4.5rem] items-center justify-between gap-3 py-3">
-            <div className="flex items-center gap-3 sm:gap-4">
-              <div className="rounded-lg bg-gradient-to-br from-teal-600 to-sky-600 p-2 shadow-sm">
-                <TrendingUp className="h-6 w-6 text-white" />
+          <div className="flex min-h-16 items-center justify-between gap-3 py-2">
+            <div className="flex min-w-0 items-center gap-3 sm:gap-4">
+              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary text-primary-foreground">
+                <TrendingUp className="h-5 w-5" />
               </div>
-              <div>
-                <h1 className="font-semibold text-slate-900 dark:text-slate-100">{t("header.title")}</h1>
-                <p className="text-xs text-slate-500 dark:text-slate-400">{t("header.subtitle")}</p>
+              <div className="min-w-0">
+                <h1 className="truncate text-base font-semibold leading-5 text-slate-900 dark:text-slate-100">{t("header.title")}</h1>
               </div>
             </div>
 
-            <button
-              type="button"
-              onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-              className="rounded-md p-2 text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800/70 lg:hidden"
-            >
-              {mobileMenuOpen ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
-            </button>
+            <nav className="hidden min-w-0 flex-1 items-center justify-end gap-1 xl:flex">
+              {APP_NAVIGATION_ITEMS.map((item) => {
+                const Icon = appNavigationIcons[item.icon];
+                const isActive = isNavItemActive(location.pathname, item);
+
+                return (
+                  <Link
+                    key={item.path}
+                    to={item.path}
+                    className={desktopLinkClass(isActive)}
+                    aria-label={t(item.title)}
+                    title={t(item.title)}
+                  >
+                    <Icon className="h-4 w-4" />
+                  </Link>
+                );
+              })}
+            </nav>
+
+            <div className="flex items-center gap-1">
+              <button
+                type="button"
+                onClick={handleToggleFullscreen}
+                className="inline-flex h-10 w-10 items-center justify-center rounded-lg text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800"
+                aria-label={fullscreenLabel}
+                title={fullscreenLabel}
+              >
+                <FullscreenIcon className="h-5 w-5" />
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+                className="inline-flex h-10 w-10 items-center justify-center rounded-lg text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800 xl:hidden"
+                aria-label={mobileMenuOpen ? t({ ru: "Закрыть меню", en: "Close menu" }) : t({ ru: "Открыть меню", en: "Open menu" })}
+              >
+                {mobileMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+              </button>
+            </div>
           </div>
-
-          <nav className="hidden flex-wrap items-center gap-2 pb-4 pt-1 lg:flex">
-            {APP_NAVIGATION_ITEMS.map((item) => {
-              const Icon = appNavigationIcons[item.icon];
-              const isActive = isNavItemActive(location.pathname, item);
-
-              return (
-                <Link key={item.path} to={item.path} className={desktopLinkClass(isActive)}>
-                  <Icon className="h-4 w-4" />
-                  <span className="whitespace-nowrap font-medium">{t(item.title)}</span>
-                </Link>
-              );
-            })}
-          </nav>
         </div>
 
         {mobileMenuOpen ? (
-          <div className="border-t border-slate-200/80 bg-white/90 dark:border-slate-800/80 dark:bg-slate-950/90 lg:hidden">
-            <nav className="space-y-1 px-4 py-5">
+          <div className="border-t border-border bg-card xl:hidden">
+            <nav className="space-y-1 px-4 py-4">
               {APP_NAVIGATION_ITEMS.map((item) => {
                 const Icon = appNavigationIcons[item.icon];
                 const isActive = isNavItemActive(location.pathname, item);
@@ -111,7 +197,7 @@ export function Root() {
 
       {location.pathname !== APP_ABSOLUTE_ROUTE_PATHS.settings ? <MarketIndicativesTicker /> : null}
 
-      <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
+      <main className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
         <Outlet />
       </main>
     </div>

@@ -60,8 +60,8 @@ export function StockAnalysisPage() {
       <SectionCard
         title={t({ ru: "Выбор анализа", en: "Analysis Selection" })}
         description={t({
-          ru: "Все модели используют единый кэш фундаментальных данных и результаты первичной обработки.",
-          en: "All models use the shared fundamentals cache and preprocessing results.",
+          ru: "Все модели используют единый набор фундаментальных данных и результаты первичной обработки.",
+          en: "All models use the same fundamentals dataset and preprocessing results.",
         })}
       >
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">

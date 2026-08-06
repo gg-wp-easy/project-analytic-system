@@ -1,13 +1,13 @@
 import type { AnalysisShellAccent } from "./analysis-shell.types";
 
 export const ANALYSIS_SHELL_HERO_ACCENT_CLASSES: Record<AnalysisShellAccent, string> = {
-  violet: "bg-gradient-to-br from-indigo-700 via-violet-600 to-purple-500",
-  emerald: "bg-gradient-to-br from-teal-700 via-emerald-600 to-green-500",
-  orange: "bg-gradient-to-br from-amber-600 via-orange-500 to-rose-500",
-  cyan: "bg-gradient-to-br from-teal-700 via-cyan-600 to-sky-600",
-  slate: "bg-gradient-to-br from-slate-800 via-slate-700 to-slate-600",
-  blue: "bg-gradient-to-br from-sky-700 via-blue-600 to-teal-500",
-  amber: "bg-gradient-to-br from-amber-600 via-yellow-500 to-orange-500",
+  violet: "bg-indigo-800",
+  emerald: "bg-teal-800",
+  orange: "bg-amber-800",
+  cyan: "bg-cyan-800",
+  slate: "bg-slate-800",
+  blue: "bg-blue-800",
+  amber: "bg-amber-700",
 };
 
 export const ANALYSIS_SHELL_ICON_ACCENT_CLASSES: Record<AnalysisShellAccent, string> = {

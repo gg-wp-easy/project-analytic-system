@@ -3,7 +3,10 @@ import { DEFAULT_OPTIMIZER_SETTINGS, type OptimizationObjective, type OptimizerS
 
 export function normalizeOptimizationObjective(value: unknown): OptimizationObjective {
   const normalized = String(value ?? "").trim().toLowerCase();
-  if (["max_return_target_risk", "max_return", "max_sharpe", "sharpe"].includes(normalized)) {
+  if (["max_sharpe", "sharpe"].includes(normalized)) {
+    return "max_sharpe";
+  }
+  if (["max_return_target_risk", "max_return"].includes(normalized)) {
     return "max_return_target_risk";
   }
   return "min_risk_target_return";
@@ -31,6 +34,8 @@ export function normalizeOptimizerSettings(value: Partial<OptimizerSettings>): O
     targetRisk: String(value.targetRisk ?? DEFAULT_OPTIMIZER_SETTINGS.targetRisk),
     portfolioAssetsCount: String(value.portfolioAssetsCount ?? DEFAULT_OPTIMIZER_SETTINGS.portfolioAssetsCount),
     hideAnalysisDetails: value.hideAnalysisDetails !== false,
+    autoModelTuning: value.autoModelTuning !== false,
+    autoPortfolioOptimization: value.autoPortfolioOptimization !== false,
   };
 }
 
@@ -59,9 +64,14 @@ export function buildOptimizerSettingsPayload(settings: OptimizerSettings) {
     risk_free_rate: riskFreeRate,
     min_weight: minWeight,
     max_weight: maxWeight,
-    sharpe_blend_weight: optimizationObjective === "max_return_target_risk" ? Math.max(sharpeBlendWeight, 100) : 0,
+    sharpe_blend_weight: optimizationObjective === "max_sharpe" || optimizationObjective === "max_return_target_risk" ? Math.max(sharpeBlendWeight, 100) : 0,
     min_risk_blend_weight: optimizationObjective === "min_risk_target_return" ? Math.max(minRiskBlendWeight, 100) : 0,
-    optimization_objective: optimizationObjective,
+    optimization_objective:
+      optimizationObjective === "max_return_target_risk"
+        ? "max_return"
+        : optimizationObjective === "min_risk_target_return"
+          ? "target_return"
+          : "max_sharpe",
     target_return: targetReturn,
     target_risk: targetRisk,
     ...(portfolioAssetsCount > 0 ? { portfolio_assets_count: portfolioAssetsCount } : {}),
@@ -69,6 +79,14 @@ export function buildOptimizerSettingsPayload(settings: OptimizerSettings) {
 }
 
 export function getOptimizationSummary(settings: OptimizerSettings, isEnglish = false): string {
+  if (settings.autoPortfolioOptimization) {
+    return isEnglish
+      ? "Auto portfolio: maximum Sharpe ratio, 20 positions"
+      : "Автопортфель: максимум коэффициента Шарпа, 20 позиций";
+  }
+  if (settings.optimizationObjective === "max_sharpe") {
+    return isEnglish ? "Maximum Sharpe ratio" : "Максимальный коэффициент Шарпа";
+  }
   if (settings.optimizationObjective === "max_return_target_risk") {
     return isEnglish
       ? `Maximum return with risk up to ${settings.targetRisk || "-"}%`

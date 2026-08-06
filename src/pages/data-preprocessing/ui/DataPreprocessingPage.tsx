@@ -205,7 +205,7 @@ export function DataPreprocessingPage() {
         <AnalysisSidebarCard
           icon={Database}
           title={t("Источник данных", "Data Source")}
-          description={t("Используется кэш фундаментальных данных T-Bank.", "Uses the T-Bank fundamentals cache.")}
+          description={t("Используются загруженные фундаментальные данные T-Bank.", "Uses loaded T-Bank fundamentals.")}
           accent="blue"
         >
           <div className="space-y-4">
@@ -226,7 +226,7 @@ export function DataPreprocessingPage() {
               className="ui-primary-button w-full bg-gradient-to-r from-blue-700 to-cyan-700 hover:from-blue-800 hover:to-cyan-800"
             >
               <RefreshCw className={`h-4 w-4 ${isLoading ? "animate-spin" : ""}`} />
-              {isLoading ? t("Загрузка...", "Loading...") : t("Обновить кэш", "Refresh Cache")}
+              {isLoading ? t("Загрузка...", "Loading...") : t("Обновить данные", "Refresh data")}
             </button>
             {!hasData && (
               <p className="text-xs leading-5 text-amber-700 dark:text-amber-300">

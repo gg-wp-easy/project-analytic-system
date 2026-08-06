@@ -1,1 +1,8 @@
-export type { DesktopApi, DesktopLogApi, LogInfo, StatusState, UpdateStatusPayload } from "./settings.types";
+export type {
+  DesktopApi,
+  DesktopLogApi,
+  FullscreenState,
+  LogInfo,
+  StatusState,
+  UpdateStatusPayload,
+} from "./settings.types";

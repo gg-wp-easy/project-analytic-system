@@ -16,6 +16,11 @@ export type DecisionTreeAnalysisResultRow = {
   pb: number;
   roe: number;
   growth: number;
+  dividendYield: number;
+  dividendScore: number;
+  dividendYearsCount: number;
+  consecutiveDividendYears: number;
+  candidateScore: number;
   marketCap: number;
   score: number;
 };

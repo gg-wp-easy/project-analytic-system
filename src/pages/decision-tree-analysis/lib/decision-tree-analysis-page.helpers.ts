@@ -113,6 +113,16 @@ export function extractAnalysisRows(parsed: Record<string, unknown>): AnalysisRe
         pb: numberOr(row["P/BV"], numberOr(row.pb, numberOr(row.pb_ratio, numberOr(row.PB, NaN)))),
         roe: normalizePercentLike(row.ROE ?? row.roe),
         growth: normalizePercentLike(row.g ?? row.growth_rate ?? row.growthRate ?? row.growth),
+        dividendYield: normalizePercentLike(
+          row.Average_dividend_yield ?? row.dividend_yield ?? row.dividendYield,
+        ),
+        dividendScore: normalizePercentLike(row.Dividend_Score ?? row.dividend_score ?? row.dividendScore),
+        dividendYearsCount: numberOr(row.dividend_years_count, numberOr(row.dividendYearsCount, 0)),
+        consecutiveDividendYears: numberOr(
+          row.consecutive_dividend_years,
+          numberOr(row.consecutiveDividendYears, 0),
+        ),
+        candidateScore: normalizePercentLike(row.Candidate_Score ?? row.candidate_score ?? row.candidateScore),
         marketCap: numberOr(
           row["Рыночная капитализация"],
           numberOr(row.market_cap, numberOr(row.market_cap_bn, numberOr(row.marketCap, NaN))),
@@ -122,6 +132,14 @@ export function extractAnalysisRows(parsed: Record<string, unknown>): AnalysisRe
     })
     .filter((row) => row.ticker && row.prediction && row.prediction !== "-")
     .sort((left, right) => {
+      const candidateDiff = numberOr(right.candidateScore, -Infinity) - numberOr(left.candidateScore, -Infinity);
+      if (candidateDiff !== 0) {
+        return candidateDiff;
+      }
+      const dividendDiff = numberOr(right.dividendScore, -Infinity) - numberOr(left.dividendScore, -Infinity);
+      if (dividendDiff !== 0) {
+        return dividendDiff;
+      }
       const confidenceDiff = numberOr(right.confidence, -Infinity) - numberOr(left.confidence, -Infinity);
       if (confidenceDiff !== 0) {
         return confidenceDiff;

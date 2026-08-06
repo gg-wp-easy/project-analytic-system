@@ -145,7 +145,7 @@ export function PortfolioAnalysisPage() {
     }
     const figiHoldings = selectedPortfolio.holdings.filter((holding) => holding.figi);
     if (!figiHoldings.length) {
-      setError(t("Для текущей динамики нужны FIGI в сохранённых позициях.", "FIGI is required in saved holdings to calculate current dynamics."));
+      setError(t("Для некоторых позиций недостаточно данных, чтобы рассчитать текущую динамику.", "Some positions do not have enough data to calculate current performance."));
       setTrackingResult(null);
       return;
     }

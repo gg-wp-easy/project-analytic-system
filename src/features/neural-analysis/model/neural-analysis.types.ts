@@ -40,12 +40,18 @@ export type NeuralTrainingPoint = {
 export type NeuralModelStatItem = {
   modelName: string;
   hiddenLayers: string;
+  features: string[];
   activation: string;
   solver: string;
+  epochsTrained: number;
   bestEpoch: number;
+  bestTrainMse: number;
   bestValMse: number;
   finalValMse: number;
   valR2Final: number;
+  overfitRatio: number;
+  isOverfit: boolean;
+  selectionScore: number;
 };
 
 
@@ -63,8 +69,13 @@ export type NeuralAnalysisResultRow = {
   qualityScore: number;
   growthScore: number;
   riskScore: number;
+  dividendScore: number;
   roe: number;
   dividendYield: number;
+  fiveYearAverageDividendYield: number;
+  dividendYearsCount: number;
+  consecutiveDividendYears: number;
+  dividendConsistency: number;
   beta: number;
   marketCap: number;
 };

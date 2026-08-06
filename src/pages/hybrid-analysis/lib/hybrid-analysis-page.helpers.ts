@@ -389,16 +389,25 @@ export function countSavedAutoTuneModels(modelSettings: Record<string, unknown>)
 }
 
 export function normalizePortfolioSettings(settings: HybridPortfolioSettingsInput): Record<string, unknown> {
-  const optimizationObjective = settings.optimizationObjective === "max_return_target_risk"
-    ? "max_return_target_risk"
-    : "min_risk_target_return";
-  const portfolioAssetsCount = Math.max(0, Math.trunc(numberOr(settings.portfolioAssetsCount, 0)));
+  const optimizationObjective = settings.autoPortfolioOptimization
+    ? "max_sharpe"
+    : settings.optimizationObjective === "max_return_target_risk"
+      ? "max_return_target_risk"
+      : settings.optimizationObjective === "max_sharpe"
+        ? "max_sharpe"
+        : "min_risk_target_return";
+  const portfolioAssetsCount = settings.autoPortfolioOptimization
+    ? 20
+    : Math.max(0, Math.trunc(numberOr(settings.portfolioAssetsCount, 0)));
 
   return {
     risk_free_rate: numberOr(settings.riskFreeRate, 0),
     min_weight: Math.max(0, numberOr(settings.minWeight, 0)),
     max_weight: Math.max(0, numberOr(settings.maxWeight, 0)),
-    sharpe_blend_weight: optimizationObjective === "max_return_target_risk" ? Math.max(numberOr(settings.sharpeBlendWeight, 0), 100) : 0,
+    sharpe_blend_weight:
+      optimizationObjective === "max_sharpe" || optimizationObjective === "max_return_target_risk"
+        ? Math.max(numberOr(settings.sharpeBlendWeight, 0), 100)
+        : 0,
     min_risk_blend_weight: optimizationObjective === "min_risk_target_return" ? Math.max(numberOr(settings.minRiskBlendWeight, 0), 100) : 0,
     optimization_objective: optimizationObjective,
     target_return: Math.max(0, numberOr(settings.targetReturn, 20)),
@@ -407,6 +416,11 @@ export function normalizePortfolioSettings(settings: HybridPortfolioSettingsInpu
     requested_assets_count: portfolioAssetsCount,
     enforce_requested_count: portfolioAssetsCount > 0,
   };
+}
+
+export function getHybridAnalysisParameters(modelSettings: Record<string, unknown>): Record<string, unknown> {
+  const neural = asRecord(modelSettings.neural);
+  return asRecord(neural?.parameters) ?? {};
 }
 
 export function buildHybridPipelinePayload(

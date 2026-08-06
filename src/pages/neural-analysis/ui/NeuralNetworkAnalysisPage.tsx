@@ -42,7 +42,13 @@ import {
   SelectTrigger,
   SelectValue,
 } from "../../../app/components/ui/select";
-import { getOptimizationSummary, OptimizerSettingsFields, submitOptimizerSettings, useOptimizerSettings } from "../../../features/optimizer-settings";
+import {
+  buildOptimizerSettingsPayload,
+  getOptimizationSummary,
+  OptimizerSettingsFields,
+  submitOptimizerSettings,
+  useOptimizerSettings,
+} from "../../../features/optimizer-settings";
 import { PortfolioSimulationPanel } from "../../../features/portfolio-simulation";
 
 import { SavePortfolioButton } from "../../../features/saved-portfolios";
@@ -98,7 +104,6 @@ import type {
   NeuralAnalysisSettings,
   NeuralModelType,
   NeuralOptimizer,
-  NeuralTuningMetric,
   SelectionMode,
   TuningBudget,
 } from "../model";
@@ -294,28 +299,44 @@ export function NeuralNetworkAnalysis() {
   ]);
 
 
-  const modelParameterRows = useMemo(
-    () =>
-      buildParameterRows(
+  const modelParameterRows = useMemo(() => {
+      const visibleKeys = [
+        "model_type",
+        "best_model",
+        "epochs",
+        "validation_split",
+        "tuning_budget",
+        "selected_features",
+        "feature_combinations_count",
+        "dividend_priority",
+        "reuse_cached_models",
+        "model_cache_status",
+        "variants_count",
+      ];
+      return buildParameterRows(
         modelParameters,
         {
           model_type: t("\u0422\u0438\u043f \u043c\u043e\u0434\u0435\u043b\u0438", "Model type"),
           best_model: t("\u041b\u0443\u0447\u0448\u0430\u044f \u043c\u043e\u0434\u0435\u043b\u044c", "Best model"),
           epochs: t("\u042d\u043f\u043e\u0445", "Epochs"),
           validation_split: t("\u0412\u0430\u043b\u0438\u0434\u0430\u0446\u0438\u043e\u043d\u043d\u0430\u044f \u0434\u043e\u043b\u044f", "Validation split"),
-          random_state: t("Random state", "Random state"),
+          random_state: t("Начальное значение", "Random seed"),
           selection_metric: t("\u041c\u0435\u0442\u0440\u0438\u043a\u0430 \u043f\u043e\u0434\u0431\u043e\u0440\u0430", "Selection metric"),
           selection_rule: t("\u041f\u0440\u0430\u0432\u0438\u043b\u043e \u0432\u044b\u0431\u043e\u0440\u0430", "Selection rule"),
           auto_tune: t("\u0410\u0432\u0442\u043e\u043f\u043e\u0434\u0431\u043e\u0440", "Auto tune"),
           tuning_budget: t("\u0411\u044e\u0434\u0436\u0435\u0442 \u043f\u043e\u0434\u0431\u043e\u0440\u0430", "Tuning budget"),
           features: t("\u041f\u0440\u0438\u0437\u043d\u0430\u043a\u0438", "Features"),
+          selected_features: t("Выбранные признаки", "Selected features"),
+          feature_combinations_count: t("Комбинаций признаков", "Feature combinations"),
+          dividend_priority: t("Дивидендный приоритет", "Dividend priority"),
+          reuse_cached_models: t("Кэш моделей", "Model cache"),
+          model_cache_status: t("Результат кэша", "Cache result"),
           variants_count: t("\u041a\u043e\u043d\u0444\u0438\u0433\u0443\u0440\u0430\u0446\u0438\u0439", "Variants"),
           grid_hidden_layers: t("\u0421\u0435\u0442\u043a\u0430 \u0441\u043b\u043e\u0451\u0432", "Layer grid"),
         },
-        ["model_type", "best_model", "epochs", "validation_split", "random_state", "selection_metric", "selection_rule", "auto_tune", "tuning_budget", "features", "variants_count", "grid_hidden_layers"],
-      ),
-    [modelParameters, t],
-  );
+        visibleKeys,
+      ).filter((row) => visibleKeys.includes(row.key));
+    }, [modelParameters, t]);
 
   const requestData = useMemo(
     () =>
@@ -342,6 +363,7 @@ export function NeuralNetworkAnalysis() {
             pe_ratio: f.peRatio,
             pb_ratio: f.pbRatio,
             ps_ratio: f.psRatio,
+            pfcf: f.pfcfRatio,
             ev_to_ebitda: f.evToEbitda,
             roa: f.roa,
             net_margin: f.netMargin,
@@ -349,6 +371,13 @@ export function NeuralNetworkAnalysis() {
             total_debt: f.totalDebt,
             roe: f.roe,
             dividend_yield: f.dividendYield,
+            five_year_avg_dividend_yield: f.fiveYearAverageDividendYield,
+            five_year_dividend_growth_rate: f.fiveYearDividendGrowthRate,
+            payout_ratio: f.dividendPayoutRatio,
+            dividend_years_count: f.dividendYearsCount,
+            consecutive_dividend_years: f.consecutiveDividendYears,
+            dividend_consistency: f.dividendConsistency,
+            last_dividend_year: f.lastDividendYear,
             beta: f.beta,
             g: f.roe,
             growth_rate: f.roe,
@@ -429,6 +458,24 @@ export function NeuralNetworkAnalysis() {
     return start + "-" + end + " / " + analysisRows.length;
   }, [activeAnalysisRowsPage, analysisRows.length]);
   const bestModelStat = modelStats[0] ?? null;
+  const resolvedFeatureNames = useMemo(() => {
+    if (bestModelStat?.features.length) {
+      return bestModelStat.features;
+    }
+    const selected = modelParameters.selected_features;
+    if (Array.isArray(selected) && selected.length) {
+      return selected.map(String);
+    }
+    return neuralSettings.features;
+  }, [bestModelStat?.features, modelParameters.selected_features, neuralSettings.features]);
+  const resolvedFeatureLabels = useMemo(
+    () =>
+      resolvedFeatureNames.map((feature) => {
+        const option = NEURAL_FEATURE_OPTIONS.find((item) => item.key === feature);
+        return option ? (isEn ? option.labelEn : option.labelRu) : feature;
+      }),
+    [isEn, resolvedFeatureNames],
+  );
 
   const modelStatsPageCount = useMemo(
     () => Math.max(1, Math.ceil(modelStats.length / MODEL_STATS_PAGE_SIZE)),
@@ -474,15 +521,15 @@ export function NeuralNetworkAnalysis() {
   );
 
   const architectureSignature = useMemo(
-    () => [neuralSettings.features.length, ...resolvedHiddenLayerSizes, 1].join(" -> "),
-    [neuralSettings.features.length, resolvedHiddenLayerSizes],
+    () => [resolvedFeatureNames.length, ...resolvedHiddenLayerSizes, 1].join(" -> "),
+    [resolvedFeatureNames.length, resolvedHiddenLayerSizes],
   );
 
   const architectureFeaturePreview = useMemo(() => {
-    const visible = selectedFeatureLabels.slice(0, 5);
-    const suffix = selectedFeatureLabels.length > visible.length ? " +" + (selectedFeatureLabels.length - visible.length) : "";
+    const visible = resolvedFeatureLabels.slice(0, 5);
+    const suffix = resolvedFeatureLabels.length > visible.length ? " +" + (resolvedFeatureLabels.length - visible.length) : "";
     return truncateSvgLabel(visible.join(", ") + suffix, 86);
-  }, [selectedFeatureLabels]);
+  }, [resolvedFeatureLabels]);
 
   const architectureLayers = useMemo(
     () => [
@@ -490,7 +537,7 @@ export function NeuralNetworkAnalysis() {
         key: "input",
         title: t("Вход", "Input"),
         subtitle: t("Признаки", "Features"),
-        count: Math.max(neuralSettings.features.length, 1),
+        count: Math.max(resolvedFeatureNames.length, 1),
         color: ARCHITECTURE_INPUT_COLOR,
         darkColor: ARCHITECTURE_INPUT_DARK_COLOR,
       },
@@ -511,7 +558,7 @@ export function NeuralNetworkAnalysis() {
         darkColor: ARCHITECTURE_OUTPUT_DARK_COLOR,
       },
     ],
-    [neuralSettings.features.length, resolvedHiddenLayerSizes, t],
+    [resolvedFeatureNames.length, resolvedHiddenLayerSizes, t],
   );
 
   const analysisSummary = useMemo(
@@ -545,8 +592,8 @@ export function NeuralNetworkAnalysis() {
       return {
         title: t("Автоподбор", "Auto selection"),
         text: t(
-          "Сервер может выбрать подходящую нейросетевую конфигурацию из доступных вариантов.",
-          "The server may choose a suitable neural configuration from available options.",
+          "Модель может автоматически выбрать подходящую конфигурацию из доступных вариантов.",
+          "The model can automatically choose a suitable configuration from the available options.",
         ),
         note: t(
           "Переданные ограничения остаются ориентирами для обучения.",
@@ -569,12 +616,13 @@ export function NeuralNetworkAnalysis() {
 
   const hasValidNeuralInput =
     hasData &&
-    selectedRequestData.length >= 2 &&
-    neuralSettings.features.length >= 2 &&
-    hiddenLayerSizes.length >= 1 &&
-    neuralSettings.epochs >= 1 &&
-    neuralSettings.batchSize >= 1 &&
-    neuralSettings.learningRate > 0;
+    selectedRequestData.length >= 10 &&
+    (optimizerSettings.autoModelTuning ||
+      (neuralSettings.features.length >= 2 &&
+        hiddenLayerSizes.length >= 1 &&
+        neuralSettings.epochs >= 1 &&
+        neuralSettings.batchSize >= 1 &&
+        neuralSettings.learningRate > 0));
   const canRunAnalysis = hasValidNeuralInput && !isRunning;
 
   const updateNeuralSettings = (patch: Partial<NeuralAnalysisSettings>) => {
@@ -622,8 +670,8 @@ export function NeuralNetworkAnalysis() {
     if (!hasValidNeuralInput) {
       showErrorDialog(
         t(
-          "Выберите минимум две акции, два признака и корректные параметры нейросети.",
-          "Select at least two stocks, two features, and valid neural network parameters.",
+          "Выберите минимум 10 акций, два признака и корректные параметры нейросети.",
+          "Select at least 10 stocks, two features, and valid neural network parameters.",
         ),
       );
       return;
@@ -632,14 +680,24 @@ export function NeuralNetworkAnalysis() {
     setIsRunning(true);
 
     try {
-      await submitOptimizerSettings(optimizerSettings);
+      const optimizerPayload = buildOptimizerSettingsPayload(optimizerSettings);
+      if (!optimizerSettings.autoPortfolioOptimization) {
+        await submitOptimizerSettings(optimizerSettings);
+      }
       const selectedTickers = selectedRequestData.map((row) => row.ticker);
       const selectedFigisForRequest = selectedRequestData.map((row) => row.figi);
+      const requestedAssetsCount = optimizerSettings.autoPortfolioOptimization
+        ? 20
+        : Number(optimizerPayload.portfolio_assets_count ?? 20);
       const response = await fetch(`${API_BASE_URL}/ai-analysis`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           data: selectedRequestData,
+          auto_model_tuning: optimizerSettings.autoModelTuning,
+          auto_portfolio_optimization: optimizerSettings.autoPortfolioOptimization,
+          portfolio_assets_count: requestedAssetsCount,
+          use_cache: true,
           parameters: {
             model_type: neuralSettings.autoTune ? "auto" : neuralSettings.modelType,
             activation: neuralSettings.activation,
@@ -653,7 +711,10 @@ export function NeuralNetworkAnalysis() {
             validation_split: neuralSettings.validationSplit / 100,
             random_state: neuralSettings.randomState,
             early_stopping: neuralSettings.earlyStopping,
-            auto_tune: neuralSettings.autoTune,
+            auto_tune: optimizerSettings.autoModelTuning ? true : neuralSettings.autoTune,
+            search_feature_combinations: neuralSettings.searchFeatureCombinations,
+            dividend_priority: neuralSettings.dividendPriority,
+            reuse_cached_models: neuralSettings.reuseCachedModels,
             tuning_metric: neuralSettings.tuningMetric,
             tuning_budget: neuralSettings.tuningBudget,
             tuning_scope: "neural_analysis",
@@ -670,11 +731,10 @@ export function NeuralNetworkAnalysis() {
       });
 
       const text = await response.text();
-      const parsed = text ? (JSON.parse(text) as Record<string, unknown>) : {};
-
       if (!response.ok) {
-        throw new Error(`HTTP ${response.status}${text ? `: ${text}` : ""}`);
+        throw new Error(t("Не удалось обучить нейросеть. Проверьте данные и повторите попытку.", "The neural model could not be trained. Check the data and try again."));
       }
+      const parsed = text ? (JSON.parse(text) as Record<string, unknown>) : {};
 
       const parsedMetrics = extractMetrics(parsed);
       const parsedAnalysisRows = extractAnalysisRows(parsed);
@@ -796,8 +856,10 @@ export function NeuralNetworkAnalysis() {
       label: t("Модель", "Model") + " #" + (index + 1),
       value: [
         row.modelName,
+        "features=" + row.features.join(","),
         row.hiddenLayers,
-        "best_val_mse=" + formatOptionalNumber(row.bestValMse, 5),
+        "selection_score=" + formatOptionalNumber(row.selectionScore, 5),
+        "overfit_ratio=" + formatOptionalNumber(row.overfitRatio, 2),
         "val_r2=" + formatOptionalNumber(row.valR2Final, 4),
       ].join("; "),
     })),
@@ -818,6 +880,10 @@ export function NeuralNetworkAnalysis() {
     { header: "Risk score, %", render: (row: AnalysisResultRow) => formatPercentValue(row.riskScore) },
     { header: "ROE, %", render: (row: AnalysisResultRow) => formatPercentValue(row.roe) },
     { header: "Dividend yield, %", render: (row: AnalysisResultRow) => formatPercentValue(row.dividendYield) },
+    { header: "5Y dividend yield, %", render: (row: AnalysisResultRow) => formatPercentValue(row.fiveYearAverageDividendYield) },
+    { header: "Dividend years", render: (row: AnalysisResultRow) => row.dividendYearsCount },
+    { header: "Consecutive dividend years", render: (row: AnalysisResultRow) => row.consecutiveDividendYears },
+    { header: "Dividend score, %", render: (row: AnalysisResultRow) => formatPercentValue(row.dividendScore) },
     { header: "Beta", render: (row: AnalysisResultRow) => formatOptionalNumber(row.beta, 2) },
     { header: "Market cap", render: (row: AnalysisResultRow) => formatOptionalNumber(row.marketCap, 0) },
   ];
@@ -888,8 +954,8 @@ export function NeuralNetworkAnalysis() {
           icon={Brain}
           title={t("Анализ нейросети", "Neural Network Analysis")}
           description={t(
-            "Выберите акции, признаки и гиперпараметры нейросети перед запуском серверного обучения.",
-            "Select stocks, features, and neural hyperparameters before server-side training.",
+            "Выберите акции, признаки и параметры, чтобы обучить и оценить нейросеть.",
+            "Select stocks, features, and settings to train and evaluate the neural model.",
           )}
           accent="orange"
         />
@@ -905,7 +971,7 @@ export function NeuralNetworkAnalysis() {
         >
           <div className="space-y-4">
             <div className="ui-surface-muted">
-              <p className="text-sm text-slate-700 dark:text-slate-300">{t("Источник: кэш фундаментальных данных", "Source: fundamentals cache")}</p>
+              <p className="text-sm text-slate-700 dark:text-slate-300">{t("Источник: загруженные фундаментальные данные", "Source: loaded fundamentals")}</p>
               <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
                 {t("Выбрано", "Selected")}: {selectedRequestData.length} / {requestData.length}
               </p>
@@ -924,7 +990,7 @@ export function NeuralNetworkAnalysis() {
                       <p>{neuralHelp.note}</p>
                       <div className="grid gap-1.5">
                         <div>
-                          <span className="font-semibold">Learning rate:</span>{" "}
+                          <span className="font-semibold">{t("Скорость обучения", "Learning rate")}:</span>{" "}
                           {t("скорость обновления весов; слишком высокая может сделать обучение нестабильным.", "weight update speed; too high can make training unstable.")}
                         </div>
                         <div>
@@ -933,15 +999,15 @@ export function NeuralNetworkAnalysis() {
                         </div>
                         <div>
                           <span className="font-semibold">g:</span>{" "}
-                          {t("темпы роста; в текущем кэше передаются через доступный ROE-показатель.", "growth rate; in the current cache it is sent through the available ROE metric.")}
+                          {t("темпы роста; используются вместе с доступным показателем ROE.", "growth rate used with the available ROE metric.")}
                         </div>
                         <div>
-                          <span className="font-semibold">Validation, %:</span>{" "}
+                          <span className="font-semibold">{t("Проверочная выборка, %", "Validation set, %")}:</span>{" "}
                           {t("доля данных для контроля качества во время обучения.", "share of data used to monitor quality during training.")}
                         </div>
                         <div>
                           <span className="font-semibold">{t("Автоподбор", "Auto-tune")}:</span>{" "}
-                          {t("сервер подбирает архитектуру и параметры обучения по выбранному критерию.", "the server tunes architecture and training parameters by the selected metric.")}
+                          {t("модель подбирает архитектуру и параметры обучения по выбранному критерию.", "the model tunes its architecture and training settings by the selected metric.")}
                         </div>
                       </div>
                     </div>
@@ -958,7 +1024,16 @@ export function NeuralNetworkAnalysis() {
                 </button>
               </div>
 
-              {!neuralSettings.autoTune && (
+              {optimizerSettings.autoModelTuning && (
+                <div className="rounded-md border border-orange-200 bg-orange-50/70 p-3 text-xs leading-5 text-orange-900 dark:border-orange-900 dark:bg-orange-950/20 dark:text-orange-200">
+                  {t(
+                    "Автоподбор параметров модели включен: система сама выберет признаки, архитектуру и режим обучения нейросети.",
+                    "Model auto-tuning is enabled: the system will choose features, architecture, and neural training mode automatically.",
+                  )}
+                </div>
+              )}
+
+              {!optimizerSettings.autoModelTuning && !neuralSettings.autoTune && (
                 <>
               <label className="block space-y-1.5">
                 <span className="text-xs font-medium text-slate-600 dark:text-slate-300">
@@ -1046,7 +1121,7 @@ export function NeuralNetworkAnalysis() {
                 </label>
                 <label className="block space-y-1.5">
                   <span className="text-xs font-medium text-slate-600 dark:text-slate-300">
-                    Batch
+                    {t("Размер пакета", "Batch size")}
                   </span>
                   <Input
                     type="number"
@@ -1063,7 +1138,7 @@ export function NeuralNetworkAnalysis() {
               <div className="grid grid-cols-2 gap-2">
                 <label className="block space-y-1.5">
                   <span className="text-xs font-medium text-slate-600 dark:text-slate-300">
-                    Learning rate
+                    {t("Скорость обучения", "Learning rate")}
                   </span>
                   <Input
                     type="number"
@@ -1095,7 +1170,7 @@ export function NeuralNetworkAnalysis() {
               <div className="grid grid-cols-2 gap-2">
                 <label className="block space-y-1.5">
                   <span className="text-xs font-medium text-slate-600 dark:text-slate-300">
-                    Validation, %
+                    {t("Проверочная выборка, %", "Validation set, %")}
                   </span>
                   <Input
                     type="number"
@@ -1109,7 +1184,7 @@ export function NeuralNetworkAnalysis() {
                 </label>
                 <label className="block space-y-1.5">
                   <span className="text-xs font-medium text-slate-600 dark:text-slate-300">
-                    Random state
+                    {t("Начальное значение", "Random seed")}
                   </span>
                   <Input
                     type="number"
@@ -1131,56 +1206,70 @@ export function NeuralNetworkAnalysis() {
                 </>
               )}
 
-              <label className="flex items-center gap-2 rounded-md border border-orange-200 bg-orange-50/70 px-3 py-2 text-sm text-orange-900 dark:border-orange-900 dark:bg-orange-950/20 dark:text-orange-200">
-                <Checkbox
-                  checked={neuralSettings.autoTune}
-                  onCheckedChange={(checked) => updateNeuralSettings({ autoTune: checked === true })}
-                />
-                <span>{t("Автоподбор", "Auto-tune")}</span>
-              </label>
+              {!optimizerSettings.autoModelTuning && (
+                <>
+                  <label className="flex items-center gap-2 rounded-md border border-orange-200 bg-orange-50/70 px-3 py-2 text-sm text-orange-900 dark:border-orange-900 dark:bg-orange-950/20 dark:text-orange-200">
+                    <Checkbox
+                      checked={neuralSettings.autoTune}
+                      onCheckedChange={(checked) => updateNeuralSettings({ autoTune: checked === true })}
+                    />
+                    <span>{t("Автоподбор", "Auto-tune")}</span>
+                  </label>
 
-              {neuralSettings.autoTune && (
-                <div className="grid grid-cols-2 gap-2">
-                  <label className="block space-y-1.5">
-                    <span className="text-xs font-medium text-slate-600 dark:text-slate-300">
-                      {t("Критерий", "Metric")}
-                    </span>
-                    <Select
-                      value={neuralSettings.tuningMetric}
-                      onValueChange={(value) => updateNeuralSettings({ tuningMetric: value as NeuralTuningMetric })}
-                    >
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="val_loss">Val loss</SelectItem>
-                        <SelectItem value="sharpe_ratio">Sharpe</SelectItem>
-                        <SelectItem value="expected_return">Expected return</SelectItem>
-                      </SelectContent>
-                    </Select>
+                  {neuralSettings.autoTune && (
+                    <div className="space-y-2">
+                      <label className="block space-y-1.5">
+                        <span className="text-xs font-medium text-slate-600 dark:text-slate-300">
+                          {t("Режим подбора", "Tuning mode")}
+                        </span>
+                        <Select
+                          value={neuralSettings.tuningBudget}
+                          onValueChange={(value) => updateNeuralSettings({ tuningBudget: value as TuningBudget })}
+                        >
+                          <SelectTrigger>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="fast">{t("Быстро", "Fast")}</SelectItem>
+                            <SelectItem value="balanced">{t("Баланс", "Balanced")}</SelectItem>
+                            <SelectItem value="quality">{t("Качество", "Quality")}</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </label>
+                      <label className="flex items-center gap-2 rounded-md border border-slate-200 px-3 py-2 text-sm text-slate-700 dark:border-slate-700 dark:text-slate-200">
+                        <Checkbox
+                          checked={neuralSettings.searchFeatureCombinations}
+                          onCheckedChange={(checked) => updateNeuralSettings({ searchFeatureCombinations: checked === true })}
+                        />
+                        <span>{t("Подбирать комбинации признаков", "Tune feature combinations")}</span>
+                      </label>
+                    </div>
+                  )}
+                </>
+              )}
+
+              {!optimizerSettings.autoModelTuning && (
+                <>
+                  <label className="flex items-center gap-2 rounded-md border border-emerald-200 bg-emerald-50/60 px-3 py-2 text-sm text-emerald-900 dark:border-emerald-900 dark:bg-emerald-950/20 dark:text-emerald-200">
+                    <Checkbox
+                      checked={neuralSettings.dividendPriority}
+                      onCheckedChange={(checked) => updateNeuralSettings({ dividendPriority: checked === true })}
+                    />
+                    <span>{t("Приоритет стабильных дивидендов", "Prioritize stable dividends")}</span>
                   </label>
-                  <label className="block space-y-1.5">
-                    <span className="text-xs font-medium text-slate-600 dark:text-slate-300">
-                      {t("Режим подбора", "Tuning mode")}
-                    </span>
-                    <Select
-                      value={neuralSettings.tuningBudget}
-                      onValueChange={(value) => updateNeuralSettings({ tuningBudget: value as TuningBudget })}
-                    >
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="fast">{t("Быстро", "Fast")}</SelectItem>
-                        <SelectItem value="balanced">{t("Баланс", "Balanced")}</SelectItem>
-                        <SelectItem value="quality">{t("Качество", "Quality")}</SelectItem>
-                      </SelectContent>
-                    </Select>
+
+                  <label className="flex items-center gap-2 rounded-md border border-slate-200 px-3 py-2 text-sm text-slate-700 dark:border-slate-700 dark:text-slate-200">
+                    <Checkbox
+                      checked={neuralSettings.reuseCachedModels}
+                      onCheckedChange={(checked) => updateNeuralSettings({ reuseCachedModels: checked === true })}
+                    />
+                    <span>{t("Использовать готовые модели", "Reuse trained models")}</span>
                   </label>
-                </div>
+                </>
               )}
             </div>
 
+            {!optimizerSettings.autoModelTuning && (
             <div className="space-y-3">
               <div>
                 <div className="text-sm font-semibold text-slate-800 dark:text-slate-100">
@@ -1210,6 +1299,7 @@ export function NeuralNetworkAnalysis() {
                 })}
               </div>
             </div>
+            )}
 
             <OptimizerSettingsFields
               settings={optimizerSettings}
@@ -1220,7 +1310,7 @@ export function NeuralNetworkAnalysis() {
             {!hasData && (
               <div className="rounded-2xl border border-amber-200 bg-amber-50 p-3 dark:border-amber-900 dark:bg-amber-950/20">
                 <p className="text-sm text-amber-800 dark:text-amber-300">
-                  {t("Кэш пуст. Сначала загрузите фундаментальные данные.", "Cache is empty. Load fundamentals first.")}
+                  {t("Данных пока нет. Сначала загрузите фундаментальные показатели.", "No data yet. Load fundamentals first.")}
                 </p>
               </div>
             )}
@@ -1240,8 +1330,8 @@ export function NeuralNetworkAnalysis() {
           <SectionCard
             title={t("Состав выборки", "Stock Universe")}
             description={t(
-              "Можно обучить нейросеть по всему кэшу или вручную оставить только нужные акции.",
-              "Train the neural model on the full cache or keep only the stocks you need.",
+              "Можно обучить нейросеть по всем данным или оставить только нужные акции.",
+              "Train the neural model on all loaded data or keep only the stocks you need.",
             )}
             action={(
               <div className="flex flex-wrap items-center gap-2">
@@ -1253,7 +1343,7 @@ export function NeuralNetworkAnalysis() {
                   }`}
                 >
                   <Square className="h-4 w-4" />
-                  {t("Весь кэш", "All cache")}
+                  {t("Все данные", "All data")}
                 </button>
                 <button
                   type="button"
@@ -1619,7 +1709,7 @@ export function NeuralNetworkAnalysis() {
                           {Array.from({ length: visibleNodeCount }).map((_, nodeIndex) => {
                             const nodeY = getArchitectureNodeY(nodeIndex, visibleNodeCount);
                             const inputLabel = layer.key === "input"
-                              ? truncateSvgLabel(selectedFeatureLabels[nodeIndex] ?? "x" + (nodeIndex + 1), 10)
+                              ? truncateSvgLabel(resolvedFeatureLabels[nodeIndex] ?? "x" + (nodeIndex + 1), 10)
                               : "";
                             return (
                               <g key={layer.key + "-node-" + nodeIndex}>
@@ -1757,7 +1847,7 @@ export function NeuralNetworkAnalysis() {
                       </InfoTooltip>
                     </div>
                     <div className="flex flex-wrap gap-1.5">
-                      {selectedFeatureLabels.map((label) => (
+                      {resolvedFeatureLabels.map((label) => (
                         <span key={label} className="rounded-md border border-sky-200 bg-sky-50 px-2 py-1 text-xs font-medium text-sky-800 dark:border-sky-900 dark:bg-sky-950/30 dark:text-sky-200">
                           {label}
                         </span>
@@ -1801,27 +1891,12 @@ export function NeuralNetworkAnalysis() {
               }
             >
               <div className="ui-table-shell overflow-x-auto">
-                <table className="ui-data-table">
+                <table className="ui-data-table min-w-[68rem]">
                   <thead>
                     <tr>
                       <th>{t("\u041c\u043e\u0434\u0435\u043b\u044c", "Model")}</th>
+                      <th>{t("Признаки", "Features")}</th>
                       <th>{t("\u0421\u043b\u043e\u0438", "Layers")}</th>
-                      <th>
-                        <span className="inline-flex items-center gap-1">
-                          Activation
-                          <InfoTooltip label="Activation" side="top">
-                            {t("Нелинейная функция скрытых нейронов: влияет на то, какие зависимости сеть может выучить.", "Non-linear function of hidden neurons: affects which relationships the network can learn.")}
-                          </InfoTooltip>
-                        </span>
-                      </th>
-                      <th>
-                        <span className="inline-flex items-center gap-1">
-                          Solver
-                          <InfoTooltip label="Solver" side="top">
-                            {t("Оптимизатор обучения: способ, которым модель обновляет веса на каждой итерации.", "Training optimizer: how the model updates weights on each iteration.")}
-                          </InfoTooltip>
-                        </span>
-                      </th>
                       <th>{t("\u041b\u0443\u0447\u0448\u0430\u044f \u044d\u043f\u043e\u0445\u0430", "Best epoch")}</th>
                       <th>
                         <span className="inline-flex items-center gap-1">
@@ -1831,14 +1906,8 @@ export function NeuralNetworkAnalysis() {
                           </InfoTooltip>
                         </span>
                       </th>
-                      <th>
-                        <span className="inline-flex items-center gap-1">
-                          Final val MSE
-                          <InfoTooltip label="Final val MSE" side="top">
-                            {t("Ошибка на валидации в последнюю эпоху; помогает увидеть, не ухудшилась ли модель к концу обучения.", "Validation error at the final epoch; helps detect whether the model worsened near the end of training.")}
-                          </InfoTooltip>
-                        </span>
-                      </th>
+                      <th>{t("Итоговая оценка", "Selection score")}</th>
+                      <th>{t("Переобучение", "Overfit")}</th>
                       <th>
                         <span className="inline-flex items-center gap-1">
                           Val R2
@@ -1853,12 +1922,14 @@ export function NeuralNetworkAnalysis() {
                     {paginatedModelStats.map((row) => (
                       <tr key={row.modelName}>
                         <td className="font-medium text-slate-900 dark:text-slate-100">{row.modelName}</td>
+                        <td className="max-w-64 whitespace-normal">{row.features.join(", ") || "-"}</td>
                         <td>{row.hiddenLayers}</td>
-                        <td>{row.activation}</td>
-                        <td>{row.solver}</td>
                         <td>{Number.isFinite(row.bestEpoch) ? row.bestEpoch : "-"}</td>
                         <td>{Number.isFinite(row.bestValMse) ? row.bestValMse.toFixed(5) : "-"}</td>
-                        <td>{Number.isFinite(row.finalValMse) ? row.finalValMse.toFixed(5) : "-"}</td>
+                        <td>{Number.isFinite(row.selectionScore) ? row.selectionScore.toFixed(5) : "-"}</td>
+                        <td className={row.isOverfit ? "text-rose-600 dark:text-rose-300" : "text-emerald-700 dark:text-emerald-300"}>
+                          {Number.isFinite(row.overfitRatio) ? row.overfitRatio.toFixed(2) + "x" : "-"}
+                        </td>
                         <td>{Number.isFinite(row.valR2Final) ? row.valR2Final.toFixed(4) : "-"}</td>
                       </tr>
                     ))}
@@ -2078,9 +2149,10 @@ export function NeuralNetworkAnalysis() {
                       <th>Gap</th>
                       <th>{t("Ожид. доходность", "Expected return")}</th>
                       <th>{t("Сигнал", "Signal")}</th>
-                      <th>Value</th>
-                      <th>Quality</th>
-                      <th>Growth</th>
+                      <th>{t("Дивиденды", "Dividend yield")}</th>
+                      <th>{t("Лет выплат", "Years paid")}</th>
+                      <th>{t("Подряд", "Consecutive")}</th>
+                      <th>{t("Див. оценка", "Dividend score")}</th>
                       <th>Beta</th>
                     </tr>
                   </thead>
@@ -2094,9 +2166,10 @@ export function NeuralNetworkAnalysis() {
                         <td className="ui-cell-number">{formatPercentValue(row.undervaluationGap)}</td>
                         <td className="ui-cell-number">{formatPercentValue(row.expectedReturn)}</td>
                         <td className="ui-cell-number font-semibold text-orange-700 dark:text-orange-300">{formatPercentValue(row.portfolioSignal)}</td>
-                        <td className="ui-cell-number">{formatPercentValue(row.valueScore)}</td>
-                        <td className="ui-cell-number">{formatPercentValue(row.qualityScore)}</td>
-                        <td className="ui-cell-number">{formatPercentValue(row.growthScore)}</td>
+                        <td className="ui-cell-number">{formatPercentValue(row.dividendYield)}</td>
+                        <td className="ui-cell-number">{row.dividendYearsCount}</td>
+                        <td className="ui-cell-number">{row.consecutiveDividendYears}</td>
+                        <td className="ui-cell-number">{formatPercentValue(row.dividendScore)}</td>
                         <td className="ui-cell-number">{formatOptionalNumber(row.beta, 2)}</td>
                       </tr>
                     ))}

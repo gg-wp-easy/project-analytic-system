@@ -79,7 +79,7 @@ export const ANALYSIS_METRIC_TOOLTIPS: Record<string, MetricLocalizedText> = {
   },
   diversification: {
     ru: "Индекс диверсификации — внутренняя оценка распределения рисков по активам. Более высокий показатель означает более равномерное распределение рисков, что может способствовать устойчивости портфеля к негативным событиям, затрагивающим отдельные активы.",
-    en: "Diversification score — internal measure of risk distribution across holdings.",
+    en: "Diversification score shows how evenly risk is distributed across holdings.",
   },
 };
 

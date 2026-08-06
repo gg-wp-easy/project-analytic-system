@@ -8,6 +8,8 @@ import {
   CLOSE_PRICES_ENDPOINT,
   CURRENCIES_ENDPOINT,
   DEFAULT_REQUEST_TIMEOUT_MS,
+  DIVIDENDS_ENDPOINT,
+  DIVIDEND_HISTORY_PARALLEL_LIMIT,
   FIND_INSTRUMENT_ENDPOINT,
   FUTURES_ENDPOINT,
   INDICATIVES_ENDPOINT,
@@ -35,6 +37,7 @@ import type {
   TBankCandle,
   TBankClosePrice,
   TBankCurrency,
+  TBankDividend,
   TBankFundamental,
   TBankIndicative,
   TBankInstrumentReference,
@@ -249,6 +252,7 @@ function normalizeFundamentalItem(item: AnyRecord, nowIso: string): TBankFundame
     peRatio: normalizeRatio(pickNumber(item, ["pe_ratio_ttm", "peRatio", "pe_ratio", "peRatioTtm"])),
     pbRatio: normalizeRatio(pickNumber(item, ["price_to_book_ttm", "pbRatio", "pb_ratio", "pb_ratio_ttm", "priceToBookTtm"])),
     psRatio: normalizeRatio(pickNumber(item, ["price_to_sales_ttm", "psRatio", "ps_ratio", "priceToSalesTtm"])),
+    pfcfRatio: normalizeRatio(pickNumber(item, ["price_to_free_cash_flow_ttm", "pfcfRatio", "pfcf_ratio", "priceToFreeCashFlowTtm"])),
     roe: normalizeRate(pickNumber(item, ["roe", "roe_ttm"])),
     roa: normalizeRate(pickNumber(item, ["roa", "roa_ttm"])),
     netMargin: normalizeRate(pickNumber(item, ["net_margin", "netMarginMrq"])),
@@ -256,6 +260,9 @@ function normalizeFundamentalItem(item: AnyRecord, nowIso: string): TBankFundame
     evToEbitda: normalizeRatio(pickNumber(item, ["ev_to_ebitda", "evToEbitdaMrq"])),
     totalDebt: normalizeScaledBillions(totalDebtRaw),
     dividendYield: normalizeRate(dividendYieldRaw),
+    fiveYearAverageDividendYield: normalizeRate(pickNumber(item, ["five_years_average_dividend_yield", "fiveYearsAverageDividendYield"])),
+    fiveYearDividendGrowthRate: normalizeRate(pickNumber(item, ["five_year_annual_dividend_growth_rate", "fiveYearAnnualDividendGrowthRate"])),
+    dividendPayoutRatio: normalizeRate(pickNumber(item, ["dividend_payout_ratio_fy", "dividendPayoutRatioFy"])),
     marketCapBn: normalizeScaledBillions(marketCapRaw),
     beta: normalizeRatio(pickNumber(item, ["beta", "five_years_beta"])),
     updatedAt:
@@ -679,6 +686,21 @@ function normalizeBondCouponItem(item: AnyRecord, figi: string, nowIso: string):
   };
 }
 
+function normalizeDividendItem(item: AnyRecord, figi: string, nowIso: string): TBankDividend {
+  return {
+    figi,
+    dividendNet: quotationToNumber(item.dividendNet ?? item.dividend_net),
+    paymentDate: pickTimestampIso(item, ["paymentDate", "payment_date"]) || nowIso,
+    declaredDate: pickTimestampIso(item, ["declaredDate", "declared_date"]) || nowIso,
+    lastBuyDate: pickTimestampIso(item, ["lastBuyDate", "last_buy_date"]) || nowIso,
+    recordDate: pickTimestampIso(item, ["recordDate", "record_date"]) || nowIso,
+    dividendType: pickString(item, ["dividendType", "dividend_type"]),
+    regularity: pickString(item, ["regularity"]),
+    closePrice: quotationToNumber(item.closePrice ?? item.close_price),
+    yieldValue: quotationToNumber(item.yieldValue ?? item.yield_value),
+  };
+}
+
 function normalizeCandleItem(item: AnyRecord, figi: string, nowIso: string): TBankCandle {
   return {
     figi,
@@ -958,7 +980,7 @@ export function createTBankInstrumentsApi(token?: string) {
           otcFlag: pickOptionalBoolean(item, ["otcFlag", "otc_flag"]),
         } satisfies TBankShare;
       })
-      .filter((share): share is TBankShare => Boolean(share))
+      .filter((share): share is NonNullable<typeof share> => share !== null)
       .filter((share) => share.currency.toUpperCase() === "RUB")
       .filter((share) => share.otcFlag !== true);
   }
@@ -1573,6 +1595,47 @@ export function createTBankInstrumentsApi(token?: string) {
     );
   }
 
+  async function fetchDividendHistories(params: {
+    shares: TBankShare[];
+    from: string;
+    to: string;
+  }): Promise<Record<string, TBankDividend[]>> {
+    const authToken = ensureToken();
+    const uniqueShares = [...new Map(params.shares.map((share) => [share.figi, share])).values()];
+    const buckets = await mapWithConcurrency(
+      uniqueShares,
+      DIVIDEND_HISTORY_PARALLEL_LIMIT,
+      async (share) => {
+        try {
+          const payload = await requestJson<AnyRecord>(DIVIDENDS_ENDPOINT, authToken, {
+            instrumentId: share.figi,
+            from: params.from,
+            to: params.to,
+          });
+          const rawItems =
+            (Array.isArray(payload.dividends) && payload.dividends) ||
+            (Array.isArray(payload.items) && payload.items) ||
+            (Array.isArray(payload.data) && payload.data) ||
+            [];
+          const nowIso = new Date().toISOString();
+          return {
+            figi: share.figi,
+            events: rawItems.map((raw) => normalizeDividendItem((raw ?? {}) as AnyRecord, share.figi, nowIso)),
+          };
+        } catch {
+          return null;
+        }
+      },
+    );
+
+    return buckets.reduce<Record<string, TBankDividend[]>>((acc, bucket) => {
+      if (bucket) {
+        acc[bucket.figi] = bucket.events;
+      }
+      return acc;
+    }, {});
+  }
+
   async function fetchCandles(params: {
     figi: string;
     from: string;
@@ -1614,6 +1677,7 @@ export function createTBankInstrumentsApi(token?: string) {
     fetchClosePricesByInstrumentIds,
     fetchLastPricesByInstrumentIds,
     fetchBondCoupons,
+    fetchDividendHistories,
     fetchCandles,
     endpoints: {
       shares: SHARES_ENDPOINT,
@@ -1627,6 +1691,7 @@ export function createTBankInstrumentsApi(token?: string) {
       findInstrument: FIND_INSTRUMENT_ENDPOINT,
       assets: ASSETS_ENDPOINT,
       bondCoupons: BOND_COUPONS_ENDPOINT,
+      dividends: DIVIDENDS_ENDPOINT,
       assetFundamentals: ASSET_FUNDAMENTALS_ENDPOINT,
       closePrices: CLOSE_PRICES_ENDPOINT,
       lastPrices: LAST_PRICES_ENDPOINT,

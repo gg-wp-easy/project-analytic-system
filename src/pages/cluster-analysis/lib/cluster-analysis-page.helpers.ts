@@ -25,6 +25,11 @@ export function formatMetric(value: unknown): string {
   return String(value);
 }
 
+function normalizeScoreLike(value: unknown): number {
+  const parsed = numberOr(value, NaN);
+  return Number.isFinite(parsed) && Math.abs(parsed) <= 1 ? parsed * 100 : parsed;
+}
+
 function isMinRiskObjective(parsed: Record<string, unknown>): boolean {
   const summary = (parsed.summary as Record<string, unknown> | undefined) ?? {};
   const stats = (parsed.stats as Record<string, unknown> | undefined) ?? {};
@@ -138,6 +143,13 @@ export function extractPoints(parsed: Record<string, unknown>): ClusterPoint[] {
         qualityScore: numberOr(row.qualityScore, numberOr(row.Quality_Score, NaN)),
         growthScore: numberOr(row.growthScore, numberOr(row.Growth_Score, NaN)),
         incomeScore: numberOr(row.incomeScore, numberOr(row.Income_Score, NaN)),
+        dividendScore: normalizeScoreLike(row.dividendScore ?? row.Dividend_Score),
+        dividendYield: normalizeScoreLike(row.dividend_yield ?? row.dividendYield ?? row.Div_Yield),
+        dividendYearsCount: numberOr(row.dividend_years_count, numberOr(row.dividendYearsCount, 0)),
+        consecutiveDividendYears: numberOr(
+          row.consecutive_dividend_years,
+          numberOr(row.consecutiveDividendYears, 0),
+        ),
         compositeScore: numberOr(row.compositeScore, numberOr(row.Composite_Score, NaN)),
       } satisfies ClusterPoint;
     })
@@ -171,7 +183,7 @@ export function extractGroups(parsed: Record<string, unknown>, points: ClusterPo
         avgDividendYield,
         avgRisk,
         color: getClusterColor(cluster),
-        description: String(row.description ?? "Server clustering profile"),
+        description: String(row.description ?? "Clustering profile"),
         recommendation: typeof row.recommendation === "string" ? row.recommendation : undefined,
         growthCategory: typeof row.growth_category === "string" ? row.growth_category : undefined,
         valuationCategory: typeof row.valuation_category === "string" ? row.valuation_category : undefined,
@@ -199,7 +211,7 @@ export function extractGroups(parsed: Record<string, unknown>, points: ClusterPo
       avgROE: finiteRoe.length ? finiteRoe.reduce((acc, value) => acc + value, 0) / finiteRoe.length : undefined,
       avgRisk: finiteRisk.length ? finiteRisk.reduce((acc, value) => acc + value, 0) / finiteRisk.length : undefined,
       color: getClusterColor(cluster),
-      description: "Server clustering profile",
+      description: "Clustering profile",
     };
   });
 }

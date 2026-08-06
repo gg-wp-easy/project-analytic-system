@@ -3,7 +3,12 @@ import { FileSpreadsheet, FileText, ImageDown, Layers, Play, Settings } from "lu
 import { useFundamentals } from "../../../entities/fundamentals";
 import { useAppSettings } from "../../../app/context/AppSettingsContext";
 import { Checkbox } from "../../../app/components/ui/checkbox";
-import { getOptimizationSummary, OptimizerSettingsFields, submitOptimizerSettings, useOptimizerSettings } from "../../../features/optimizer-settings";
+import {
+  getOptimizationSummary,
+  OptimizerSettingsFields,
+  submitOptimizerSettings,
+  useOptimizerSettings,
+} from "../../../features/optimizer-settings";
 
 import { SavePortfolioButton } from "../../../features/saved-portfolios";
 import { API_BASE_URL } from "../../../config";
@@ -56,6 +61,7 @@ import {
   extractPortfolioPositions,
   extractPortfolioStrategies,
   extractTrainingHistory,
+  getHybridAnalysisParameters,
   normalizePortfolioSettings,
   readHybridModelSettings,
   safeParseJsonObject,
@@ -250,24 +256,19 @@ export function HybridAnalysis() {
     setErrorDialogMessage(message);
   };
 
-  const formatHttpError = (response: Response, text: string): string => {
+  const formatAnalysisError = (text: string): string => {
     const payload = safeParseJsonObject(text);
     const serverMessage = extractErrorText(payload);
     if (serverMessage) {
-      return `HTTP ${response.status}: ${serverMessage}`;
+      return serverMessage;
     }
-    const fallback = isEn ? DEFAULT_SERVER_ERROR_EN : DEFAULT_SERVER_ERROR_RU;
-    const statusText = response.statusText?.trim();
-    if (statusText) {
-      return `HTTP ${response.status} ${statusText}`;
-    }
-    return `HTTP ${response.status}: ${fallback}`;
+    return isEn ? DEFAULT_SERVER_ERROR_EN : DEFAULT_SERVER_ERROR_RU;
   };
 
   const parseHybridResponse = async (response: Response): Promise<Record<string, unknown>> => {
     const text = await response.text();
     if (!response.ok) {
-      throw new Error(formatHttpError(response, text));
+      throw new Error(formatAnalysisError(text));
     }
     return safeParseJsonObject(text) ?? {};
   };
@@ -284,16 +285,26 @@ export function HybridAnalysis() {
     };
 
     try {
-      await submitOptimizerSettings(optimizerSettings);
+      if (!optimizerSettings.autoPortfolioOptimization) {
+        await submitOptimizerSettings(optimizerSettings);
+      }
       const modelSettings = useSavedAnalysisSettings ? readHybridModelSettings() : {};
       const portfolioSettings = normalizePortfolioSettings(optimizerSettings);
       const hybridPipeline = buildHybridPipelinePayload(modelSettings, portfolioSettings, numericWeights);
+      const requestedAssetsCount = optimizerSettings.autoPortfolioOptimization
+        ? 20
+        : Number(portfolioSettings.portfolio_assets_count ?? 20);
       const response = await fetch(`${API_BASE_URL}/hybrid-analysis`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           data: requestData,
           weights: numericWeights,
+          parameters: getHybridAnalysisParameters(modelSettings),
+          auto_model_tuning: optimizerSettings.autoModelTuning,
+          auto_portfolio_optimization: optimizerSettings.autoPortfolioOptimization,
+          portfolio_assets_count: requestedAssetsCount,
+          use_cache: true,
           portfolio_settings: portfolioSettings,
           optimizer_settings: portfolioSettings,
           model_settings: modelSettings,
@@ -438,7 +449,7 @@ export function HybridAnalysis() {
           >
             <div className="space-y-4">
               <div className="ui-surface-muted">
-                <p className="text-sm text-slate-700 dark:text-slate-300">{t("Источник: кэш фундаментальных данных", "Source: fundamentals cache")}</p>
+                <p className="text-sm text-slate-700 dark:text-slate-300">{t("Источник: загруженные фундаментальные данные", "Source: loaded fundamentals")}</p>
                 <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">{t("Записей", "Records")}: {requestData.length}</p>
               </div>
               <div className="ui-surface-muted space-y-3">
@@ -476,8 +487,8 @@ export function HybridAnalysis() {
                 </label>
                 <p className="text-xs leading-5 text-slate-500 dark:text-slate-400">
                   {t(
-                    "Гибрид передаст серверу сохраненные настройки кластеров, дерева и нейросети.",
-                    "Hybrid will send saved cluster, tree, and neural settings to the server.",
+                    "Гибрид использует сохранённые настройки кластеров, дерева и нейросети.",
+                    "The hybrid model uses the saved cluster, tree, and neural settings.",
                   )}
                 </p>
                 <p className="text-xs font-semibold text-cyan-700 dark:text-cyan-300">

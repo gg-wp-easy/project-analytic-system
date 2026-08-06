@@ -18,6 +18,9 @@ export type NeuralAnalysisSettings = {
   randomState: number;
   earlyStopping: boolean;
   autoTune: boolean;
+  searchFeatureCombinations: boolean;
+  dividendPriority: boolean;
+  reuseCachedModels: boolean;
   tuningMetric: NeuralTuningMetric;
   tuningBudget: TuningBudget;
   features: string[];

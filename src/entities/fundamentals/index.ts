@@ -5,6 +5,7 @@ export {
 export type {
   ShareRecord,
   AssetFundamentalRecord,
+  DividendHistorySummary,
   ClosePricePoint,
   FundamentalsCache,
   FundamentalsContextValue,

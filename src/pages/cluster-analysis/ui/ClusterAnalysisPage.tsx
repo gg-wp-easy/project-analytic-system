@@ -36,7 +36,13 @@ import {
   SelectTrigger,
   SelectValue,
 } from "../../../app/components/ui/select";
-import { getOptimizationSummary, OptimizerSettingsFields, submitOptimizerSettings, useOptimizerSettings } from "../../../features/optimizer-settings";
+import {
+  buildOptimizerSettingsPayload,
+  getOptimizationSummary,
+  OptimizerSettingsFields,
+  submitOptimizerSettings,
+  useOptimizerSettings,
+} from "../../../features/optimizer-settings";
 import { PortfolioSimulationPanel } from "../../../features/portfolio-simulation";
 
 import { SavePortfolioButton } from "../../../features/saved-portfolios";
@@ -259,16 +265,17 @@ export function ClusterAnalysis() {
         modelParameters,
         {
           requested_algorithm: t("Запрошенный алгоритм", "Requested algorithm"),
-          used_algorithm: t("Алгоритм на сервере", "Server algorithm"),
+          used_algorithm: t("Итоговый алгоритм", "Selected algorithm"),
           clusters_count: t("Кластеров получено", "Clusters found"),
           requested_clusters_count: t("Кластеров запрошено", "Requested clusters"),
           auto_tune: t("Автоподбор", "Auto tune"),
           scaling_method: t("Масштабирование", "Scaling"),
           distance_metric: t("Метрика расстояния", "Distance metric"),
           features: t("Признаки модели", "Model features"),
-          requested_features: "Requested features",
-          model_features: "Model feature columns",
-          random_state: "Random state",
+          requested_features: t("Запрошенные признаки", "Requested features"),
+          model_features: t("Признаки модели", "Model features"),
+          random_state: t("Начальное значение", "Random seed"),
+          dividend_priority: t("Приоритет стабильных дивидендов", "Stable dividend priority"),
           portfolio_assets_count: "Assets in portfolio",
           requested_portfolio_assets_count: "Requested assets",
           effective_min_weight_pct: "Effective min weight, %",
@@ -287,6 +294,7 @@ export function ClusterAnalysis() {
           "requested_features",
           "model_features",
           "random_state",
+          "dividend_priority",
           "portfolio_assets_count",
           "requested_portfolio_assets_count",
           "effective_min_weight_pct",
@@ -339,6 +347,13 @@ export function ClusterAnalysis() {
             growth_rate: f.roe,
             growthRate: f.roe,
             dividend_yield: f.dividendYield,
+            five_year_avg_dividend_yield: f.fiveYearAverageDividendYield,
+            five_year_dividend_growth_rate: f.fiveYearDividendGrowthRate,
+            payout_ratio: f.dividendPayoutRatio,
+            dividend_years_count: f.dividendYearsCount,
+            consecutive_dividend_years: f.consecutiveDividendYears,
+            dividend_consistency: f.dividendConsistency,
+            last_dividend_year: f.lastDividendYear,
             beta: f.beta,
             peRatio: f.peRatio,
             pbRatio: f.pbRatio,
@@ -402,8 +417,8 @@ export function ClusterAnalysis() {
           "Finds dense groups and can separate unusual companies as outliers. Useful for uneven stock universes.",
         ),
         note: t(
-          "Число кластеров может игнорироваться серверной реализацией DBSCAN.",
-          "Clusters count may be ignored by the server-side DBSCAN implementation.",
+          "DBSCAN определяет число групп автоматически, поэтому заданное значение может не использоваться.",
+          "DBSCAN determines the number of groups automatically, so the chosen value may not be used.",
         ),
       };
     }
@@ -423,8 +438,8 @@ export function ClusterAnalysis() {
   const maxClustersCount = Math.max(2, Math.min(12, selectedRequestData.length || 12));
   const hasValidClusterInput =
     hasData &&
-    selectedRequestData.length >= Math.max(2, Math.min(clusterSettings.clustersCount, 12)) &&
-    clusterSettings.features.length >= 2;
+    selectedRequestData.length >= (optimizerSettings.autoModelTuning ? 2 : Math.max(2, Math.min(clusterSettings.clustersCount, 12))) &&
+    (optimizerSettings.autoModelTuning || clusterSettings.features.length >= 2);
   const canRunClusterAnalysis = hasValidClusterInput && !isRunning;
 
   const updateClusterSettings = (patch: Partial<ClusterAnalysisSettings>) => {
@@ -554,6 +569,10 @@ export function ClusterAnalysis() {
     { header: "Quality score", render: (row: ClusterPoint) => formatOptionalNumber(row.qualityScore, 2) },
     { header: "Growth score", render: (row: ClusterPoint) => formatOptionalNumber(row.growthScore, 2) },
     { header: "Income score", render: (row: ClusterPoint) => formatOptionalNumber(row.incomeScore, 2) },
+    { header: "Dividend yield, %", render: (row: ClusterPoint) => formatOptionalNumber(row.dividendYield, 2) },
+    { header: "Dividend years", render: (row: ClusterPoint) => formatOptionalNumber(row.dividendYearsCount, 0) },
+    { header: "Consecutive years", render: (row: ClusterPoint) => formatOptionalNumber(row.consecutiveDividendYears, 0) },
+    { header: "Dividend score, %", render: (row: ClusterPoint) => formatOptionalNumber(row.dividendScore, 2) },
     { header: "Composite score", render: (row: ClusterPoint) => formatOptionalNumber(row.compositeScore, 2) },
   ];
 
@@ -605,12 +624,22 @@ export function ClusterAnalysis() {
     setIsRunning(true);
 
     try {
-      await submitOptimizerSettings(optimizerSettings);
+      const optimizerPayload = buildOptimizerSettingsPayload(optimizerSettings);
+      if (!optimizerSettings.autoPortfolioOptimization) {
+        await submitOptimizerSettings(optimizerSettings);
+      }
       const sanitizedClustersCount = Math.max(2, Math.min(clusterSettings.clustersCount, selectedRequestData.length));
       const selectedTickers = selectedRequestData.map((row) => row.ticker);
       const selectedFigisForRequest = selectedRequestData.map((row) => row.figi);
+      const requestedAssetsCount = optimizerSettings.autoPortfolioOptimization
+        ? 20
+        : Number(optimizerPayload.portfolio_assets_count ?? 20);
       const body = JSON.stringify({
         data: selectedRequestData,
+        auto_model_tuning: optimizerSettings.autoModelTuning,
+        auto_portfolio_optimization: optimizerSettings.autoPortfolioOptimization,
+        portfolio_assets_count: requestedAssetsCount,
+        use_cache: true,
         parameters: {
           algorithm: clusterSettings.algorithm,
           n_clusters: sanitizedClustersCount,
@@ -620,10 +649,11 @@ export function ClusterAnalysis() {
           standardize: clusterSettings.scalingMethod !== "none",
           random_state: clusterSettings.randomState,
           include_outliers: clusterSettings.includeOutliers,
-          auto_tune: clusterSettings.autoTune,
+          auto_tune: optimizerSettings.autoModelTuning ? true : clusterSettings.autoTune,
           tuning_metric: clusterSettings.tuningMetric,
           tuning_budget: clusterSettings.tuningBudget,
           tuning_scope: "cluster_analysis",
+          dividend_priority: true,
           features: clusterSettings.features,
         },
         selected_figis: selectedFigisForRequest,
@@ -641,11 +671,10 @@ export function ClusterAnalysis() {
       });
 
       const text = await response.text();
-      const parsed = text ? (JSON.parse(text) as Record<string, unknown>) : {};
-
       if (!response.ok) {
-        throw new Error(`HTTP ${response.status}${text ? `: ${text}` : ""}`);
+        throw new Error(t("Не удалось выполнить кластерный анализ. Проверьте данные и повторите попытку.", "Cluster analysis could not be completed. Check the data and try again."));
       }
+      const parsed = text ? (JSON.parse(text) as Record<string, unknown>) : {};
 
       const points = extractPoints(parsed);
       const groups = extractGroups(parsed, points);
@@ -692,8 +721,8 @@ export function ClusterAnalysis() {
           icon={Network}
           title={t("Кластерный анализ", "Cluster Analysis")}
           description={t(
-            "Выберите акции, настройте признаки и запустите серверную кластеризацию по нужной выборке.",
-            "Select stocks, tune features, and run server-side clustering for the chosen universe.",
+            "Выберите акции и признаки, чтобы распределить компании по похожим группам.",
+            "Select stocks and features to group similar companies.",
           )}
           accent="violet"
         />
@@ -711,7 +740,7 @@ export function ClusterAnalysis() {
           <div className="space-y-4">
             <div className="ui-surface-muted">
               <p className="text-sm text-slate-700 dark:text-slate-300">
-                {t("Источник: кэш фундаментальных данных", "Source: fundamentals cache")}
+                {t("Источник: загруженные фундаментальные данные", "Source: loaded fundamentals")}
               </p>
               <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
                 {t("Выбрано", "Selected")}: {selectedRequestData.length} / {requestData.length}
@@ -740,15 +769,15 @@ export function ClusterAnalysis() {
                         </div>
                         <div>
                           <span className="font-semibold">g:</span>{" "}
-                          {t("темпы роста; в текущем кэше передаются через доступный ROE-показатель.", "growth rate; in the current cache it is sent through the available ROE metric.")}
+                          {t("темпы роста; используются вместе с доступным показателем ROE.", "growth rate used with the available ROE metric.")}
                         </div>
                         <div>
-                          <span className="font-semibold">Random state:</span>{" "}
+                          <span className="font-semibold">{t("Начальное значение", "Random seed")}:</span>{" "}
                           {t("фиксирует повторяемость результата для алгоритмов со случайным стартом.", "keeps results reproducible for algorithms with random starts.")}
                         </div>
                         <div>
                           <span className="font-semibold">{t("Автоподбор", "Auto-tune")}:</span>{" "}
-                          {t("сервер подбирает алгоритм, число кластеров и метрики в выбранном режиме.", "the server tunes algorithm, cluster count, and metrics in the selected mode.")}
+                          {t("модель подбирает алгоритм, число групп и метрики по выбранному критерию.", "the model tunes the algorithm, group count, and metrics for the selected criterion.")}
                         </div>
                       </div>
                     </div>
@@ -765,7 +794,16 @@ export function ClusterAnalysis() {
                 </button>
               </div>
 
-              {!clusterSettings.autoTune && (
+              {optimizerSettings.autoModelTuning && (
+                <div className="rounded-md border border-violet-200 bg-violet-50/70 p-3 text-xs leading-5 text-violet-900 dark:border-violet-900 dark:bg-violet-950/20 dark:text-violet-200">
+                  {t(
+                    "Автоподбор параметров модели включен: система сама выберет признаки, количество кластеров и режим кластеризации.",
+                    "Model auto-tuning is enabled: the system will choose features, cluster count, and clustering mode automatically.",
+                  )}
+                </div>
+              )}
+
+              {!optimizerSettings.autoModelTuning && !clusterSettings.autoTune && (
                 <>
               <label className="block space-y-1.5">
                 <span className="text-xs font-medium text-slate-600 dark:text-slate-300">
@@ -844,7 +882,7 @@ export function ClusterAnalysis() {
 
               <label className="block space-y-1.5">
                 <span className="text-xs font-medium text-slate-600 dark:text-slate-300">
-                  Random state
+                  {t("Начальное значение", "Random seed")}
                 </span>
                 <Input
                   type="number"
@@ -865,56 +903,61 @@ export function ClusterAnalysis() {
                 </>
               )}
 
-              <label className="flex items-center gap-2 rounded-md border border-violet-200 bg-violet-50/70 px-3 py-2 text-sm text-violet-900 dark:border-violet-900 dark:bg-violet-950/20 dark:text-violet-200">
-                <Checkbox
-                  checked={clusterSettings.autoTune}
-                  onCheckedChange={(checked) => updateClusterSettings({ autoTune: checked === true })}
-                />
-                <span>{t("Автоподбор", "Auto-tune")}</span>
-              </label>
+              {!optimizerSettings.autoModelTuning && (
+                <>
+                  <label className="flex items-center gap-2 rounded-md border border-violet-200 bg-violet-50/70 px-3 py-2 text-sm text-violet-900 dark:border-violet-900 dark:bg-violet-950/20 dark:text-violet-200">
+                    <Checkbox
+                      checked={clusterSettings.autoTune}
+                      onCheckedChange={(checked) => updateClusterSettings({ autoTune: checked === true })}
+                    />
+                    <span>{t("Автоподбор", "Auto-tune")}</span>
+                  </label>
 
-              {clusterSettings.autoTune && (
-                <div className="grid grid-cols-2 gap-2">
-                  <label className="block space-y-1.5">
-                    <span className="text-xs font-medium text-slate-600 dark:text-slate-300">
-                      {t("Критерий", "Metric")}
-                    </span>
-                    <Select
-                      value={clusterSettings.tuningMetric}
-                      onValueChange={(value) => updateClusterSettings({ tuningMetric: value as ClusterTuningMetric })}
-                    >
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="silhouette">{t("Качество разделения кластеров", "Cluster separation quality")}</SelectItem>
-                        <SelectItem value="davies_bouldin">Davies-Bouldin</SelectItem>
-                        <SelectItem value="calinski_harabasz">Calinski-Harabasz</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </label>
-                  <label className="block space-y-1.5">
-                    <span className="text-xs font-medium text-slate-600 dark:text-slate-300">
-                      {t("Режим подбора", "Tuning mode")}
-                    </span>
-                    <Select
-                      value={clusterSettings.tuningBudget}
-                      onValueChange={(value) => updateClusterSettings({ tuningBudget: value as TuningBudget })}
-                    >
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="fast">{t("Быстро", "Fast")}</SelectItem>
-                        <SelectItem value="balanced">{t("Баланс", "Balanced")}</SelectItem>
-                        <SelectItem value="quality">{t("Качество", "Quality")}</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </label>
-                </div>
+                  {clusterSettings.autoTune && (
+                    <div className="grid grid-cols-2 gap-2">
+                      <label className="block space-y-1.5">
+                        <span className="text-xs font-medium text-slate-600 dark:text-slate-300">
+                          {t("Критерий", "Metric")}
+                        </span>
+                        <Select
+                          value={clusterSettings.tuningMetric}
+                          onValueChange={(value) => updateClusterSettings({ tuningMetric: value as ClusterTuningMetric })}
+                        >
+                          <SelectTrigger>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="silhouette">{t("Качество разделения кластеров", "Cluster separation quality")}</SelectItem>
+                            <SelectItem value="davies_bouldin">Davies-Bouldin</SelectItem>
+                            <SelectItem value="calinski_harabasz">Calinski-Harabasz</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </label>
+                      <label className="block space-y-1.5">
+                        <span className="text-xs font-medium text-slate-600 dark:text-slate-300">
+                          {t("Режим подбора", "Tuning mode")}
+                        </span>
+                        <Select
+                          value={clusterSettings.tuningBudget}
+                          onValueChange={(value) => updateClusterSettings({ tuningBudget: value as TuningBudget })}
+                        >
+                          <SelectTrigger>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="fast">{t("Быстро", "Fast")}</SelectItem>
+                            <SelectItem value="balanced">{t("Баланс", "Balanced")}</SelectItem>
+                            <SelectItem value="quality">{t("Качество", "Quality")}</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </label>
+                    </div>
+                  )}
+                </>
               )}
             </div>
 
+            {!optimizerSettings.autoModelTuning && (
             <div className="space-y-3">
               <div>
                 <div className="text-sm font-semibold text-slate-800 dark:text-slate-100">
@@ -944,6 +987,7 @@ export function ClusterAnalysis() {
                 })}
               </div>
             </div>
+            )}
 
             <OptimizerSettingsFields
               settings={optimizerSettings}
@@ -954,7 +998,7 @@ export function ClusterAnalysis() {
             {!hasData && (
               <div className="rounded-2xl border border-amber-200 bg-amber-50 p-3 dark:border-amber-900 dark:bg-amber-950/20">
                 <p className="text-sm text-amber-800 dark:text-amber-300">
-                  {t("Кэш пуст. Сначала загрузите фундаментальные данные.", "Cache is empty. Load fundamentals first.")}
+                  {t("Данных пока нет. Сначала загрузите фундаментальные показатели.", "No data yet. Load fundamentals first.")}
                 </p>
               </div>
             )}
@@ -974,8 +1018,8 @@ export function ClusterAnalysis() {
           <SectionCard
             title={t("Состав выборки", "Stock Universe")}
             description={t(
-              "Можно запустить анализ по всему кэшу или вручную оставить только нужные акции.",
-              "Run analysis on the full cache or keep only the stocks you need.",
+              "Можно запустить анализ по всем данным или оставить только нужные акции.",
+              "Run analysis on all loaded data or keep only the stocks you need.",
             )}
             action={(
               <div className="flex flex-wrap items-center gap-2">
@@ -987,7 +1031,7 @@ export function ClusterAnalysis() {
                   }`}
                 >
                   <Square className="h-4 w-4" />
-                  {t("Весь кэш", "All cache")}
+                  {t("Все данные", "All data")}
                 </button>
                 <button
                   type="button"
@@ -1398,6 +1442,12 @@ export function ClusterAnalysis() {
                         <p className="mb-1 text-sm font-medium text-slate-700 dark:text-slate-200">{data.ticker}</p>
                         <p className="text-sm text-slate-600 dark:text-slate-300">P/E: {data.pe.toFixed(2)}</p>
                         <p className="text-sm text-slate-600 dark:text-slate-300">g: {data.g.toFixed(2)}%</p>
+                        <p className="text-sm text-slate-600 dark:text-slate-300">
+                          {t("Дивидендная оценка", "Dividend score")}: {formatOptionalNumber(data.dividendScore, 2)}%
+                        </p>
+                        <p className="text-sm text-slate-600 dark:text-slate-300">
+                          {t("Лет выплат", "Years paid")}: {formatOptionalNumber(data.dividendYearsCount, 0)}
+                        </p>
                         <p className="text-sm text-slate-600 dark:text-slate-300">{data.label}</p>
                       </div>
                     );

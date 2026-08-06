@@ -5,26 +5,26 @@
   --font-sans: var(--app-font-sans);
   --font-display: var(--app-font-display);
   --font-mono: var(--app-font-mono);
-  --background: #edf3f1;
-  --foreground: #243044;
+  --background: #f6f8fb;
+  --foreground: #172033;
   --card: #ffffff;
-  --card-foreground: #243044;
+  --card-foreground: #172033;
   --popover: #ffffff;
-  --popover-foreground: #243044;
+  --popover-foreground: #172033;
   --primary: #0f766e;
   --primary-foreground: oklch(1 0 0);
-  --secondary: #e7efeb;
-  --secondary-foreground: #2f3b4f;
-  --muted: #e3ece8;
-  --muted-foreground: #5f6c7b;
-  --accent: #e6f0f4;
-  --accent-foreground: #2d4658;
-  --destructive: #d4183d;
+  --secondary: #eef2f7;
+  --secondary-foreground: #273447;
+  --muted: #f1f5f9;
+  --muted-foreground: #64748b;
+  --accent: #e8f3ff;
+  --accent-foreground: #1f3a56;
+  --destructive: #dc2626;
   --destructive-foreground: #ffffff;
-  --border: rgba(69, 82, 102, 0.22);
-  --input: #b8c7c1;
+  --border: rgba(100, 116, 139, 0.24);
+  --input: #cbd5e1;
   --input-background: #ffffff;
-  --switch-background: #c3d0cb;
+  --switch-background: #cbd5e1;
   --font-weight-medium: 600;
   --font-weight-normal: 400;
   --ring: rgba(15, 118, 110, 0.24);
@@ -33,7 +33,7 @@
   --chart-3: #f59e0b;
   --chart-4: #e11d48;
   --chart-5: #8b5cf6;
-  --radius: 0.875rem;
+  --radius: 0.5rem;
   --sidebar: oklch(0.985 0 0);
   --sidebar-foreground: oklch(0.145 0 0);
   --sidebar-primary: #030213;
@@ -42,40 +42,40 @@
   --sidebar-accent-foreground: oklch(0.205 0 0);
   --sidebar-border: oklch(0.922 0 0);
   --sidebar-ring: oklch(0.708 0 0);
-  --page-highlight: rgba(15, 118, 110, 0.08);
-  --page-highlight-secondary: rgba(37, 99, 235, 0.055);
-  --surface-shadow: 0 20px 46px -32px rgba(46, 63, 76, 0.28);
-  --surface-shadow-strong: 0 30px 78px -44px rgba(46, 63, 76, 0.34);
+  --page-highlight: transparent;
+  --page-highlight-secondary: transparent;
+  --surface-shadow: 0 12px 32px -26px rgba(15, 23, 42, 0.28);
+  --surface-shadow-strong: 0 18px 44px -30px rgba(15, 23, 42, 0.34);
   --scrollbar-size: 12px;
-  --scrollbar-track: rgba(229, 236, 232, 0.72);
-  --scrollbar-track-strong: rgba(211, 221, 217, 0.82);
-  --scrollbar-thumb-color: rgba(116, 130, 145, 0.64);
-  --scrollbar-thumb: linear-gradient(180deg, rgba(154, 168, 182, 0.72), rgba(116, 130, 145, 0.68));
-  --scrollbar-thumb-hover-color: rgba(91, 105, 122, 0.76);
-  --scrollbar-thumb-hover: linear-gradient(180deg, rgba(128, 143, 158, 0.8), rgba(91, 105, 122, 0.76));
-  --scrollbar-corner: rgba(244, 247, 245, 0.92);
+  --scrollbar-track: rgba(226, 232, 240, 0.72);
+  --scrollbar-track-strong: rgba(203, 213, 225, 0.82);
+  --scrollbar-thumb-color: rgba(100, 116, 139, 0.58);
+  --scrollbar-thumb: linear-gradient(180deg, rgba(148, 163, 184, 0.72), rgba(100, 116, 139, 0.64));
+  --scrollbar-thumb-hover-color: rgba(71, 85, 105, 0.74);
+  --scrollbar-thumb-hover: linear-gradient(180deg, rgba(125, 140, 158, 0.8), rgba(71, 85, 105, 0.74));
+  --scrollbar-corner: rgba(248, 250, 252, 0.92);
 }
 
 .dark {
-  --background: #0b1120;
-  --foreground: #e6edf5;
-  --card: #111827;
-  --card-foreground: #e6edf5;
-  --popover: #111827;
-  --popover-foreground: #e6edf5;
+  --background: #0f172a;
+  --foreground: #e5edf5;
+  --card: #151c2b;
+  --card-foreground: #e5edf5;
+  --popover: #151c2b;
+  --popover-foreground: #e5edf5;
   --primary: #5eead4;
   --primary-foreground: #042f2e;
-  --secondary: #172033;
-  --secondary-foreground: #e6edf5;
-  --muted: #182235;
-  --muted-foreground: #9aa8ba;
-  --accent: #12324a;
-  --accent-foreground: #d9f6ff;
-  --destructive: oklch(0.396 0.141 25.723);
-  --destructive-foreground: oklch(0.637 0.237 25.331);
-  --border: rgba(148, 163, 184, 0.16);
-  --input: #172033;
-  --input-background: rgb(12 18 32 / 0.82);
+  --secondary: #1d2738;
+  --secondary-foreground: #e5edf5;
+  --muted: #202a3a;
+  --muted-foreground: #a8b3c2;
+  --accent: #153047;
+  --accent-foreground: #d7f1ff;
+  --destructive: #f87171;
+  --destructive-foreground: #450a0a;
+  --border: rgba(148, 163, 184, 0.2);
+  --input: #263244;
+  --input-background: rgb(15 23 42 / 0.82);
   --ring: rgba(94, 234, 212, 0.28);
   --font-weight-medium: 600;
   --font-weight-normal: 400;
@@ -165,10 +165,7 @@
     min-height: 100vh;
     font-family: var(--font-sans);
     letter-spacing: 0;
-    background-image:
-      linear-gradient(135deg, var(--page-highlight), transparent 34%),
-      linear-gradient(215deg, var(--page-highlight-secondary), transparent 38%);
-    background-attachment: fixed;
+    background-image: none;
   }
 
   #root {
@@ -184,21 +181,21 @@
   }
 
   h1 {
-    font-size: clamp(2rem, 1.65rem + 1vw, 3rem);
+    font-size: 2.25rem;
     font-weight: 700;
-    line-height: 1.04;
+    line-height: 1.08;
   }
 
   h2 {
-    font-size: clamp(1.4rem, 1.18rem + 0.5vw, 1.95rem);
+    font-size: 1.625rem;
     font-weight: 700;
-    line-height: 1.12;
+    line-height: 1.16;
   }
 
   h3 {
-    font-size: clamp(1.12rem, 1.04rem + 0.25vw, 1.4rem);
+    font-size: 1.25rem;
     font-weight: 600;
-    line-height: 1.18;
+    line-height: 1.22;
   }
 
   h4 {
@@ -296,35 +293,35 @@
   }
 
   :root:not(.dark) .bg-slate-50 {
-    background-color: rgb(240 246 243 / var(--tw-bg-opacity, 1)) !important;
+    background-color: rgb(248 250 252 / var(--tw-bg-opacity, 1)) !important;
   }
 
   :root:not(.dark) .border-slate-200 {
-    border-color: rgb(199 212 206 / var(--tw-border-opacity, 1)) !important;
+    border-color: rgb(226 232 240 / var(--tw-border-opacity, 1)) !important;
   }
 
   :root:not(.dark) .border-slate-300 {
-    border-color: rgb(181 198 191 / var(--tw-border-opacity, 1)) !important;
+    border-color: rgb(203 213 225 / var(--tw-border-opacity, 1)) !important;
   }
 
   :root:not(.dark) .text-slate-900 {
-    color: rgb(36 48 68 / var(--tw-text-opacity, 1)) !important;
+    color: rgb(15 23 42 / var(--tw-text-opacity, 1)) !important;
   }
 
   :root:not(.dark) .text-slate-700 {
-    color: rgb(76 88 104 / var(--tw-text-opacity, 1)) !important;
+    color: rgb(51 65 85 / var(--tw-text-opacity, 1)) !important;
   }
 
   :root:not(.dark) .text-slate-600 {
-    color: rgb(93 106 121 / var(--tw-text-opacity, 1)) !important;
+    color: rgb(71 85 105 / var(--tw-text-opacity, 1)) !important;
   }
 
   :root:not(.dark) .text-slate-500 {
-    color: rgb(96 110 125 / var(--tw-text-opacity, 1)) !important;
+    color: rgb(100 116 139 / var(--tw-text-opacity, 1)) !important;
   }
 
   :root:not(.dark) .hover\:bg-slate-50:hover {
-    background-color: rgb(237 243 240 / var(--tw-bg-opacity, 1)) !important;
+    background-color: rgb(248 250 252 / var(--tw-bg-opacity, 1)) !important;
   }
 
   .dark .bg-white {
@@ -352,22 +349,22 @@
 
 @layer components {
   .ui-surface {
-    @apply rounded-3xl border p-6 backdrop-blur-sm dark:border-slate-800/90 dark:bg-slate-900/78 dark:text-slate-100;
-    border-color: rgb(199 212 206 / 0.92);
-    background-color: rgb(255 255 255 / 0.96);
-    color: #243044;
+    @apply rounded-lg border p-5 dark:text-slate-100;
+    border-color: var(--border);
+    background-color: var(--card);
+    color: var(--card-foreground);
     box-shadow: var(--surface-shadow);
   }
 
   .ui-surface-muted {
-    @apply rounded-2xl border p-4 dark:border-slate-700/70 dark:bg-slate-800/50 dark:text-slate-300;
-    border-color: rgb(193 207 201 / 0.92);
-    background-color: rgb(236 243 240 / 0.94);
-    color: #435163;
+    @apply rounded-lg border p-4 dark:text-slate-300;
+    border-color: var(--border);
+    background-color: var(--muted);
+    color: var(--muted-foreground);
   }
 
   .ui-page-hero {
-    @apply relative overflow-hidden rounded-[2rem] border border-white/12 p-6 text-white sm:p-8;
+    @apply relative overflow-hidden rounded-lg border border-white/12 p-5 text-white sm:p-6;
     box-shadow: var(--surface-shadow-strong);
   }
 
@@ -379,9 +376,7 @@
     content: "";
     position: absolute;
     inset: 0;
-    background:
-      linear-gradient(120deg, rgba(255, 255, 255, 0.12), transparent 55%),
-      linear-gradient(180deg, rgba(255, 255, 255, 0.08), transparent 70%);
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.08), transparent 72%);
     pointer-events: none;
   }
 
@@ -396,57 +391,57 @@
 
   .ui-section-title {
     @apply text-lg font-semibold dark:text-slate-100;
-    color: #243044;
+    color: var(--foreground);
   }
 
   .ui-section-copy {
     @apply text-sm leading-6 dark:text-slate-400;
-    color: #707c8b;
+    color: var(--muted-foreground);
   }
 
   .ui-metric-card {
-    @apply rounded-2xl border p-4 backdrop-blur-sm dark:border-slate-800 dark:bg-slate-900/76;
-    border-color: rgb(199 212 206 / 0.9);
-    background-color: rgb(255 255 255 / 0.96);
-    box-shadow: 0 14px 30px -24px rgba(46, 63, 76, 0.3);
+    @apply rounded-lg border p-4 dark:border-slate-800 dark:bg-slate-900/76;
+    border-color: var(--border);
+    background-color: var(--card);
+    box-shadow: none;
   }
 
   .ui-stat-card {
-    @apply rounded-2xl border p-4 backdrop-blur-sm dark:border-slate-800 dark:bg-slate-900/76;
-    border-color: rgb(199 212 206 / 0.9);
-    background-color: rgb(244 248 246 / 0.96);
+    @apply rounded-lg border p-4 dark:border-slate-800 dark:bg-slate-900/76;
+    border-color: var(--border);
+    background-color: var(--muted);
   }
 
   .ui-pill {
-    @apply inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-semibold dark:border-slate-700 dark:bg-slate-900/70 dark:text-slate-300;
-    border-color: rgb(193 207 201 / 0.92);
-    background-color: rgb(255 255 255 / 0.94);
-    color: #4c5b6b;
-    box-shadow: 0 8px 18px -16px rgba(69, 82, 102, 0.22);
+    @apply inline-flex items-center gap-2 rounded-md border px-3 py-1 text-xs font-semibold dark:border-slate-700 dark:bg-slate-900/70 dark:text-slate-300;
+    border-color: var(--border);
+    background-color: var(--card);
+    color: var(--muted-foreground);
+    box-shadow: none;
   }
 
   .ui-primary-button {
-    @apply inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold text-white shadow-sm disabled:cursor-not-allowed disabled:opacity-50;
+    @apply inline-flex items-center justify-center gap-2 rounded-lg bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground shadow-sm disabled:cursor-not-allowed disabled:opacity-50;
   }
 
   .ui-secondary-button {
-    @apply inline-flex items-center justify-center gap-2 rounded-xl border px-4 py-2.5 text-sm font-semibold shadow-sm dark:border-slate-700 dark:bg-slate-900/70 dark:text-slate-200 dark:hover:bg-slate-900;
-    border-color: rgb(181 198 191 / 0.96);
-    background-color: rgb(255 255 255 / 0.96);
-    color: #3f4d5d;
-    box-shadow: 0 10px 24px -22px rgba(69, 82, 102, 0.3);
+    @apply inline-flex items-center justify-center gap-2 rounded-lg border px-4 py-2.5 text-sm font-semibold shadow-sm dark:border-slate-700 dark:bg-slate-900/70 dark:text-slate-200 dark:hover:bg-slate-900;
+    border-color: var(--border);
+    background-color: var(--card);
+    color: var(--foreground);
+    box-shadow: none;
   }
 
   .ui-secondary-button:hover {
-    border-color: rgb(134 157 148 / 0.96);
-    background-color: rgb(240 246 243 / 0.98);
+    border-color: var(--input);
+    background-color: var(--muted);
   }
 
   .ui-input {
-    @apply w-full rounded-xl border px-3.5 py-2.5 text-sm shadow-sm outline-none placeholder:text-slate-400 focus:ring-4 dark:border-slate-700 dark:bg-slate-950/80 dark:text-slate-100 dark:focus:border-teal-400 dark:focus:ring-teal-500/20;
-    border-color: rgb(174 193 185 / 0.98);
-    background-color: rgb(255 255 255 / 0.98);
-    color: #243044;
+    @apply w-full rounded-lg border px-3.5 py-2.5 text-sm shadow-sm outline-none placeholder:text-slate-400 focus:ring-4 dark:border-slate-700 dark:bg-slate-950/80 dark:text-slate-100 dark:focus:border-teal-400 dark:focus:ring-teal-500/20;
+    border-color: var(--input);
+    background-color: var(--input-background);
+    color: var(--foreground);
   }
 
   .ui-input:focus {
@@ -455,9 +450,9 @@
   }
 
   .ui-table-shell {
-    @apply overflow-x-auto rounded-2xl border dark:border-slate-800 dark:bg-slate-950/40;
-    border-color: rgb(193 207 201 / 0.92);
-    background-color: rgb(255 255 255 / 0.96);
+    @apply overflow-x-auto rounded-lg border dark:border-slate-800 dark:bg-slate-950/40;
+    border-color: var(--border);
+    background-color: var(--card);
     box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
   }
 

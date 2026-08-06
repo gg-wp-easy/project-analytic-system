@@ -37,7 +37,13 @@ import {
   SelectTrigger,
   SelectValue,
 } from "../../../app/components/ui/select";
-import { getOptimizationSummary, OptimizerSettingsFields, submitOptimizerSettings, useOptimizerSettings } from "../../../features/optimizer-settings";
+import {
+  buildOptimizerSettingsPayload,
+  getOptimizationSummary,
+  OptimizerSettingsFields,
+  submitOptimizerSettings,
+  useOptimizerSettings,
+} from "../../../features/optimizer-settings";
 import { PortfolioSimulationPanel } from "../../../features/portfolio-simulation";
 
 import { SavePortfolioButton } from "../../../features/saved-portfolios";
@@ -313,14 +319,15 @@ export function DecisionTreeAnalysis() {
           algorithm: t("\u0410\u043b\u0433\u043e\u0440\u0438\u0442\u043c", "Algorithm"),
           criterion: t("\u041a\u0440\u0438\u0442\u0435\u0440\u0438\u0439", "Criterion"),
           max_depth: t("\u041c\u0430\u043a\u0441. \u0433\u043b\u0443\u0431\u0438\u043d\u0430", "Max depth"),
-          min_samples_split: t("\u041c\u0438\u043d. \u043e\u0431\u044a\u0435\u043a\u0442\u043e\u0432 \u0434\u043b\u044f split", "Min samples split"),
+          min_samples_split: t("Мин. объектов для разделения", "Min samples split"),
           min_samples_leaf: t("\u041c\u0438\u043d. \u043e\u0431\u044a\u0435\u043a\u0442\u043e\u0432 \u0432 \u043b\u0438\u0441\u0442\u0435", "Min samples leaf"),
           test_size: t("\u0422\u0435\u0441\u0442\u043e\u0432\u0430\u044f \u0434\u043e\u043b\u044f", "Test size"),
-          random_state: t("Random state", "Random state"),
+          random_state: t("Начальное значение", "Random seed"),
           class_weight: t("\u0411\u0430\u043b\u0430\u043d\u0441 \u043a\u043b\u0430\u0441\u0441\u043e\u0432", "Class weight"),
           features: t("\u041f\u0440\u0438\u0437\u043d\u0430\u043a\u0438", "Features"),
+          dividend_priority: t("Приоритет стабильных дивидендов", "Stable dividend priority"),
         },
-        ["algorithm", "criterion", "max_depth", "min_samples_split", "min_samples_leaf", "test_size", "random_state", "class_weight", "features"],
+        ["algorithm", "criterion", "max_depth", "min_samples_split", "min_samples_leaf", "test_size", "random_state", "class_weight", "features", "dividend_priority"],
       ),
     [modelParameters, t],
   );
@@ -379,6 +386,13 @@ export function DecisionTreeAnalysis() {
             total_debt: f.totalDebt,
             roe: f.roe,
             dividend_yield: f.dividendYield,
+            five_year_avg_dividend_yield: f.fiveYearAverageDividendYield,
+            five_year_dividend_growth_rate: f.fiveYearDividendGrowthRate,
+            payout_ratio: f.dividendPayoutRatio,
+            dividend_years_count: f.dividendYearsCount,
+            consecutive_dividend_years: f.consecutiveDividendYears,
+            dividend_consistency: f.dividendConsistency,
+            last_dividend_year: f.lastDividendYear,
             beta: f.beta,
             g: f.roe,
             growth_rate: f.roe,
@@ -477,9 +491,10 @@ export function DecisionTreeAnalysis() {
   const hasValidTreeInput =
     hasData &&
     selectedRequestData.length >= 2 &&
-    treeSettings.features.length >= 2 &&
-    treeSettings.minSamplesSplit >= 2 &&
-    treeSettings.minSamplesLeaf >= 1;
+    (optimizerSettings.autoModelTuning ||
+      (treeSettings.features.length >= 2 &&
+        treeSettings.minSamplesSplit >= 2 &&
+        treeSettings.minSamplesLeaf >= 1));
   const canRunAnalysis = hasValidTreeInput && !isRunning;
 
   const updateTreeSettings = (patch: Partial<DecisionTreeSettings>) => {
@@ -537,14 +552,24 @@ export function DecisionTreeAnalysis() {
     setIsRunning(true);
 
     try {
-      await submitOptimizerSettings(optimizerSettings);
+      const optimizerPayload = buildOptimizerSettingsPayload(optimizerSettings);
+      if (!optimizerSettings.autoPortfolioOptimization) {
+        await submitOptimizerSettings(optimizerSettings);
+      }
       const selectedTickers = selectedRequestData.map((row) => row.ticker);
       const selectedFigisForRequest = selectedRequestData.map((row) => row.figi);
+      const requestedAssetsCount = optimizerSettings.autoPortfolioOptimization
+        ? 20
+        : Number(optimizerPayload.portfolio_assets_count ?? 20);
       const response = await fetch(`${API_BASE_URL}/tree-solver-analysis`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           data: selectedRequestData,
+          auto_model_tuning: optimizerSettings.autoModelTuning,
+          auto_portfolio_optimization: optimizerSettings.autoPortfolioOptimization,
+          portfolio_assets_count: requestedAssetsCount,
+          use_cache: true,
           parameters: {
             algorithm: treeSettings.algorithm,
             criterion: treeSettings.criterion,
@@ -555,10 +580,11 @@ export function DecisionTreeAnalysis() {
             random_state: treeSettings.randomState,
             class_weight: treeSettings.classBalance ? "balanced" : null,
             balance_classes: treeSettings.classBalance,
-            auto_tune: treeSettings.autoTune,
+            auto_tune: optimizerSettings.autoModelTuning ? true : treeSettings.autoTune,
             tuning_metric: treeSettings.tuningMetric,
             tuning_budget: treeSettings.tuningBudget,
             tuning_scope: "decision_tree_analysis",
+            dividend_priority: true,
             features: treeSettings.features,
           },
           selected_figis: selectedFigisForRequest,
@@ -572,11 +598,10 @@ export function DecisionTreeAnalysis() {
       });
 
       const text = await response.text();
-      const parsed = text ? (JSON.parse(text) as Record<string, unknown>) : {};
-
       if (!response.ok) {
-        throw new Error(`HTTP ${response.status}${text ? `: ${text}` : ""}`);
+        throw new Error(t("Не удалось построить дерево решений. Проверьте данные и повторите попытку.", "The decision tree could not be built. Check the data and try again."));
       }
+      const parsed = text ? (JSON.parse(text) as Record<string, unknown>) : {};
 
       const parsedMetrics = [...extractMetrics(parsed), ...extractPortfolioMetrics(parsed)];
       const parsedAnalysisRows = extractAnalysisRows(parsed);
@@ -718,6 +743,11 @@ export function DecisionTreeAnalysis() {
     { header: "P/BV", render: (row: AnalysisResultRow) => formatOptionalNumber(row.pb, 2) },
     { header: "ROE, %", render: (row: AnalysisResultRow) => formatPercentValue(row.roe) },
     { header: "g, %", render: (row: AnalysisResultRow) => formatPercentValue(row.growth) },
+    { header: t("Дивиденды, %", "Dividend yield, %"), render: (row: AnalysisResultRow) => formatPercentValue(row.dividendYield) },
+    { header: t("Лет выплат", "Years paid"), render: (row: AnalysisResultRow) => row.dividendYearsCount },
+    { header: t("Лет подряд", "Consecutive years"), render: (row: AnalysisResultRow) => row.consecutiveDividendYears },
+    { header: t("Див. оценка, %", "Dividend score, %"), render: (row: AnalysisResultRow) => formatPercentValue(row.dividendScore) },
+    { header: t("Итоговый сигнал, %", "Final signal, %"), render: (row: AnalysisResultRow) => formatPercentValue(row.candidateScore) },
     { header: t("Рыночная капитализация", "Market cap"), render: (row: AnalysisResultRow) => formatOptionalNumber(row.marketCap, 0) },
     { header: t("Оценка", "Score"), render: (row: AnalysisResultRow) => formatOptionalNumber(row.score, 2) },
   ];
@@ -788,8 +818,8 @@ export function DecisionTreeAnalysis() {
           icon={GitBranch}
           title={t("Анализ дерева решений", "Decision Tree Analysis")}
           description={t(
-            "Выберите акции, признаки и параметры дерева решений перед запуском серверного анализа.",
-            "Select stocks, features, and decision tree parameters before running server-side analysis.",
+            "Выберите акции и признаки, чтобы построить и оценить дерево решений.",
+            "Select stocks and features to build and evaluate a decision tree.",
           )}
           accent="emerald"
         />
@@ -805,7 +835,7 @@ export function DecisionTreeAnalysis() {
         >
           <div className="space-y-4">
             <div className="ui-surface-muted">
-              <p className="text-sm text-slate-700 dark:text-slate-300">{t("Источник: кэш фундаментальных данных", "Source: fundamentals cache")}</p>
+              <p className="text-sm text-slate-700 dark:text-slate-300">{t("Источник: загруженные фундаментальные данные", "Source: loaded fundamentals")}</p>
               <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
                 {t("Выбрано", "Selected")}: {selectedRequestData.length} / {requestData.length}
               </p>
@@ -828,20 +858,20 @@ export function DecisionTreeAnalysis() {
                           {t("выбирает, какой признак лучше разделяет акции на классы.", "chooses which feature best splits stocks into classes.")}
                         </div>
                         <div>
-                          <span className="font-semibold">Min split / leaf:</span>{" "}
+                          <span className="font-semibold">{t("Минимум для разделения и листа", "Minimum split and leaf size")}:</span>{" "}
                           {t("ограничивают мелкие разбиения и помогают против переобучения.", "limit tiny splits and help against overfitting.")}
                         </div>
                         <div>
                           <span className="font-semibold">g:</span>{" "}
-                          {t("темпы роста; в текущем кэше передаются через доступный ROE-показатель.", "growth rate; in the current cache it is sent through the available ROE metric.")}
+                          {t("темпы роста; используются вместе с доступным показателем ROE.", "growth rate used with the available ROE metric.")}
                         </div>
                         <div>
-                          <span className="font-semibold">Test, %:</span>{" "}
+                          <span className="font-semibold">{t("Проверочная выборка, %", "Validation set, %")}:</span>{" "}
                           {t("доля данных для проверки качества модели.", "share of data reserved for model validation.")}
                         </div>
                         <div>
                           <span className="font-semibold">{t("Автоподбор", "Auto-tune")}:</span>{" "}
-                          {t("сервер выбирает алгоритм и ограничения дерева по выбранному критерию качества.", "the server selects algorithm and tree constraints by the selected quality metric.")}
+                          {t("модель выбирает алгоритм и ограничения дерева по выбранному критерию качества.", "the model selects the algorithm and tree constraints by the chosen quality metric.")}
                         </div>
                       </div>
                     </div>
@@ -858,7 +888,16 @@ export function DecisionTreeAnalysis() {
                 </button>
               </div>
 
-              {!treeSettings.autoTune && (
+              {optimizerSettings.autoModelTuning && (
+                <div className="rounded-md border border-emerald-200 bg-emerald-50/70 p-3 text-xs leading-5 text-emerald-900 dark:border-emerald-900 dark:bg-emerald-950/20 dark:text-emerald-200">
+                  {t(
+                    "Автоподбор параметров модели включен: система сама выберет признаки и параметры дерева решений.",
+                    "Model auto-tuning is enabled: the system will choose features and decision tree parameters automatically.",
+                  )}
+                </div>
+              )}
+
+              {!optimizerSettings.autoModelTuning && !treeSettings.autoTune && (
                 <>
               <label className="block space-y-1.5">
                 <span className="text-xs font-medium text-slate-600 dark:text-slate-300">
@@ -915,7 +954,7 @@ export function DecisionTreeAnalysis() {
                 </label>
                 <label className="block space-y-1.5">
                   <span className="text-xs font-medium text-slate-600 dark:text-slate-300">
-                    Test, %
+                    {t("Проверочная выборка, %", "Validation set, %")}
                   </span>
                   <Input
                     type="number"
@@ -932,7 +971,7 @@ export function DecisionTreeAnalysis() {
               <div className="grid grid-cols-2 gap-2">
                 <label className="block space-y-1.5">
                   <span className="text-xs font-medium text-slate-600 dark:text-slate-300">
-                    Min split
+                    {t("Мин. для разделения", "Min split")}
                   </span>
                   <Input
                     type="number"
@@ -945,7 +984,7 @@ export function DecisionTreeAnalysis() {
                 </label>
                 <label className="block space-y-1.5">
                   <span className="text-xs font-medium text-slate-600 dark:text-slate-300">
-                    Min leaf
+                    {t("Мин. в листе", "Min leaf")}
                   </span>
                   <Input
                     type="number"
@@ -960,7 +999,7 @@ export function DecisionTreeAnalysis() {
 
               <label className="block space-y-1.5">
                 <span className="text-xs font-medium text-slate-600 dark:text-slate-300">
-                  Random state
+                  {t("Начальное значение", "Random seed")}
                 </span>
                 <Input
                   type="number"
@@ -981,57 +1020,62 @@ export function DecisionTreeAnalysis() {
                 </>
               )}
 
-              <label className="flex items-center gap-2 rounded-md border border-emerald-200 bg-emerald-50/70 px-3 py-2 text-sm text-emerald-900 dark:border-emerald-900 dark:bg-emerald-950/20 dark:text-emerald-200">
-                <Checkbox
-                  checked={treeSettings.autoTune}
-                  onCheckedChange={(checked) => updateTreeSettings({ autoTune: checked === true })}
-                />
-                <span>{t("Автоподбор", "Auto-tune")}</span>
-              </label>
+              {!optimizerSettings.autoModelTuning && (
+                <>
+                  <label className="flex items-center gap-2 rounded-md border border-emerald-200 bg-emerald-50/70 px-3 py-2 text-sm text-emerald-900 dark:border-emerald-900 dark:bg-emerald-950/20 dark:text-emerald-200">
+                    <Checkbox
+                      checked={treeSettings.autoTune}
+                      onCheckedChange={(checked) => updateTreeSettings({ autoTune: checked === true })}
+                    />
+                    <span>{t("Автоподбор", "Auto-tune")}</span>
+                  </label>
 
-              {treeSettings.autoTune && (
-                <div className="grid grid-cols-2 gap-2">
-                  <label className="block space-y-1.5">
-                    <span className="text-xs font-medium text-slate-600 dark:text-slate-300">
-                      {t("Критерий", "Metric")}
-                    </span>
-                    <Select
-                      value={treeSettings.tuningMetric}
-                      onValueChange={(value) => updateTreeSettings({ tuningMetric: value as TreeTuningMetric })}
-                    >
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="f1">F1</SelectItem>
-                        <SelectItem value="accuracy">Accuracy</SelectItem>
-                        <SelectItem value="roc_auc">ROC AUC</SelectItem>
-                        <SelectItem value="balanced_accuracy">Balanced accuracy</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </label>
-                  <label className="block space-y-1.5">
-                    <span className="text-xs font-medium text-slate-600 dark:text-slate-300">
-                      {t("Режим подбора", "Tuning mode")}
-                    </span>
-                    <Select
-                      value={treeSettings.tuningBudget}
-                      onValueChange={(value) => updateTreeSettings({ tuningBudget: value as TuningBudget })}
-                    >
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="fast">{t("Быстро", "Fast")}</SelectItem>
-                        <SelectItem value="balanced">{t("Баланс", "Balanced")}</SelectItem>
-                        <SelectItem value="quality">{t("Качество", "Quality")}</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </label>
-                </div>
+                  {treeSettings.autoTune && (
+                    <div className="grid grid-cols-2 gap-2">
+                      <label className="block space-y-1.5">
+                        <span className="text-xs font-medium text-slate-600 dark:text-slate-300">
+                          {t("Критерий", "Metric")}
+                        </span>
+                        <Select
+                          value={treeSettings.tuningMetric}
+                          onValueChange={(value) => updateTreeSettings({ tuningMetric: value as TreeTuningMetric })}
+                        >
+                          <SelectTrigger>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="f1">F1</SelectItem>
+                            <SelectItem value="accuracy">Accuracy</SelectItem>
+                            <SelectItem value="roc_auc">ROC AUC</SelectItem>
+                            <SelectItem value="balanced_accuracy">Balanced accuracy</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </label>
+                      <label className="block space-y-1.5">
+                        <span className="text-xs font-medium text-slate-600 dark:text-slate-300">
+                          {t("Режим подбора", "Tuning mode")}
+                        </span>
+                        <Select
+                          value={treeSettings.tuningBudget}
+                          onValueChange={(value) => updateTreeSettings({ tuningBudget: value as TuningBudget })}
+                        >
+                          <SelectTrigger>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="fast">{t("Быстро", "Fast")}</SelectItem>
+                            <SelectItem value="balanced">{t("Баланс", "Balanced")}</SelectItem>
+                            <SelectItem value="quality">{t("Качество", "Quality")}</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </label>
+                    </div>
+                  )}
+                </>
               )}
             </div>
 
+            {!optimizerSettings.autoModelTuning && (
             <div className="space-y-3">
               <div>
                 <div className="text-sm font-semibold text-slate-800 dark:text-slate-100">
@@ -1061,6 +1105,7 @@ export function DecisionTreeAnalysis() {
                 })}
               </div>
             </div>
+            )}
 
             <OptimizerSettingsFields
               settings={optimizerSettings}
@@ -1071,7 +1116,7 @@ export function DecisionTreeAnalysis() {
             {!hasData && (
               <div className="rounded-2xl border border-amber-200 bg-amber-50 p-3 dark:border-amber-900 dark:bg-amber-950/20">
                 <p className="text-sm text-amber-800 dark:text-amber-300">
-                  {t("Кэш пуст. Сначала загрузите фундаментальные данные.", "Cache is empty. Load fundamentals first.")}
+                  {t("Данных пока нет. Сначала загрузите фундаментальные показатели.", "No data yet. Load fundamentals first.")}
                 </p>
               </div>
             )}
@@ -1091,8 +1136,8 @@ export function DecisionTreeAnalysis() {
           <SectionCard
             title={t("Состав выборки", "Stock Universe")}
             description={t(
-              "Можно запустить дерево по всему кэшу или вручную оставить только нужные акции.",
-              "Run the tree on the full cache or keep only the stocks you need.",
+              "Можно построить дерево по всем данным или оставить только нужные акции.",
+              "Build the tree from all loaded data or keep only the stocks you need.",
             )}
             action={(
               <div className="flex flex-wrap items-center gap-2">
@@ -1104,7 +1149,7 @@ export function DecisionTreeAnalysis() {
                   }`}
                 >
                   <Square className="h-4 w-4" />
-                  {t("Весь кэш", "All cache")}
+                  {t("Все данные", "All data")}
                 </button>
                 <button
                   type="button"
@@ -1415,10 +1460,10 @@ export function DecisionTreeAnalysis() {
           {!!analysisRows.length && (
             <SectionCard
               title={t("Результаты анализа дерева решений", "Decision Tree Analysis Results")}
-              description={t("Таблица классифицированных акций, отсортированная по уверенности модели.", "Classified stocks sorted by model confidence.")}
+              description={t("Акции отсортированы по итоговому сигналу с приоритетом стабильных дивидендов.", "Stocks sorted by the final signal with stable dividends prioritized.")}
             >
               <div className="ui-table-shell overflow-x-auto tree-analysis-results-table">
-                <table className="ui-data-table min-w-[78rem]">
+                <table className="ui-data-table min-w-[108rem]">
                   <thead>
                     <tr>
                       <th>Ticker</th>
@@ -1432,6 +1477,11 @@ export function DecisionTreeAnalysis() {
                       <th>P/BV</th>
                       <th>ROE</th>
                       <th>g</th>
+                      <th>{t("Дивиденды", "Dividend yield")}</th>
+                      <th>{t("Лет выплат", "Years paid")}</th>
+                      <th>{t("Подряд", "Consecutive")}</th>
+                      <th>{t("Див. оценка", "Dividend score")}</th>
+                      <th>{t("Сигнал", "Signal")}</th>
                       <th>{t("Капитализация", "Market cap")}</th>
                     </tr>
                   </thead>
@@ -1449,6 +1499,11 @@ export function DecisionTreeAnalysis() {
                         <td className="ui-cell-number">{formatOptionalNumber(row.pb, 2)}</td>
                         <td className="ui-cell-number">{formatPercentValue(row.roe)}</td>
                         <td className="ui-cell-number">{formatPercentValue(row.growth)}</td>
+                        <td className="ui-cell-number">{formatPercentValue(row.dividendYield)}</td>
+                        <td className="ui-cell-number">{row.dividendYearsCount}</td>
+                        <td className="ui-cell-number">{row.consecutiveDividendYears}</td>
+                        <td className="ui-cell-number">{formatPercentValue(row.dividendScore)}</td>
+                        <td className="ui-cell-number font-semibold text-emerald-700 dark:text-emerald-300">{formatPercentValue(row.candidateScore)}</td>
                         <td className="ui-cell-number">{formatOptionalNumber(row.marketCap, 0)}</td>
                       </tr>
                     ))}

@@ -26,24 +26,24 @@ export function PageHero({
       <div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
         <div className="space-y-4">
           {badge ? <div className="ui-page-hero-badge">{badge}</div> : null}
-          <div className="flex items-start gap-4">
+          <div className="flex items-start gap-3">
             <span
               className={cn(
-                "inline-flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl ring-1 backdrop-blur-sm",
+                "inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-lg ring-1 backdrop-blur-sm",
                 ANALYSIS_SHELL_ICON_ACCENT_CLASSES[accent],
               )}
             >
-              <Icon className="h-7 w-7" />
+              <Icon className="h-6 w-6" />
             </span>
             <div className="space-y-2">
-              <div className="text-3xl font-semibold text-white sm:text-4xl">{title}</div>
+              <div className="text-2xl font-semibold text-white sm:text-3xl">{title}</div>
               {description ? <div className="max-w-3xl text-[15px] leading-7 text-white/82">{description}</div> : null}
             </div>
           </div>
         </div>
 
         {aside ? (
-          <div className="rounded-3xl border border-white/15 bg-white/10 px-5 py-4 text-sm text-white/85 shadow-lg backdrop-blur-md">
+          <div className="rounded-lg border border-white/15 bg-white/10 px-4 py-3 text-sm text-white/85 backdrop-blur-md">
             {aside}
           </div>
         ) : null}
@@ -92,7 +92,7 @@ export function AnalysisSidebarCard({
       <div className="flex items-start gap-3">
         <span
           className={cn(
-            "inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl ring-1",
+            "inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-lg ring-1",
             ANALYSIS_SHELL_SIDEBAR_ACCENT_CLASSES[accent],
           )}
         >

@@ -13,6 +13,9 @@ const INSTALL_UPDATE_CHANNEL = "app:install-update";
 const UPDATE_STATUS_CHANNEL = "app:update-status";
 const GET_LOG_INFO_CHANNEL = "app:get-log-info";
 const OPEN_LOGS_DIRECTORY_CHANNEL = "app:open-logs-directory";
+const TOGGLE_FULLSCREEN_CHANNEL = "app:toggle-fullscreen";
+const GET_FULLSCREEN_STATE_CHANNEL = "app:get-fullscreen-state";
+const FULLSCREEN_STATE_CHANGED_CHANNEL = "app:fullscreen-state-changed";
 const LOG_LEVELS = new Set(["debug", "info", "warn", "error"]);
 const AUTO_UPDATE_INITIAL_DELAY_MS = 12_000;
 const AUTO_UPDATE_INTERVAL_MS = 4 * 60 * 60 * 1000;
@@ -181,6 +184,22 @@ function registerAppIpcHandlers() {
       logsDirectory,
       logFilePath: getAppLogFilePath(),
     };
+  });
+
+  ipcMain.handle(TOGGLE_FULLSCREEN_CHANNEL, (event) => {
+    const targetWindow = BrowserWindow.fromWebContents(event.sender);
+    if (!targetWindow || targetWindow.isDestroyed()) {
+      return { isFullscreen: false };
+    }
+
+    const nextState = !targetWindow.isFullScreen();
+    targetWindow.setFullScreen(nextState);
+    return { isFullscreen: nextState };
+  });
+
+  ipcMain.handle(GET_FULLSCREEN_STATE_CHANNEL, (event) => {
+    const targetWindow = BrowserWindow.fromWebContents(event.sender);
+    return { isFullscreen: Boolean(targetWindow && !targetWindow.isDestroyed() && targetWindow.isFullScreen()) };
   });
 }
 
@@ -511,6 +530,14 @@ function createMainWindow() {
     mainWindow = null;
   });
 
+  mainWindow.on("enter-full-screen", () => {
+    sendFullscreenState(true);
+  });
+
+  mainWindow.on("leave-full-screen", () => {
+    sendFullscreenState(false);
+  });
+
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
     shell.openExternal(url);
     return { action: "deny" };
@@ -638,6 +665,14 @@ function sendUpdateStatus(payload) {
   }
 
   mainWindow.webContents.send(UPDATE_STATUS_CHANNEL, payload);
+}
+
+function sendFullscreenState(isFullscreen) {
+  if (!mainWindow || mainWindow.isDestroyed()) {
+    return;
+  }
+
+  mainWindow.webContents.send(FULLSCREEN_STATE_CHANGED_CHANNEL, { isFullscreen });
 }
 
 async function performAutoUpdateCheck({ manual = false } = {}) {

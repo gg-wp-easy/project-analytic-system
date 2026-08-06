@@ -851,7 +851,7 @@ export function FundamentalsDetailsPage() {
           icon={TrendingUp}
           title={t("Акция не найдена", "Share not found")}
           description={
-            t("Откройте страницу после загрузки кеша фундаментальных данных, чтобы сопоставить FIGI с карточкой акции.", "Open this page after loading the fundamentals cache, so we can match the FIGI with a stock card.")
+            t("Сначала загрузите фундаментальные данные, затем снова откройте карточку акции.", "Load fundamentals first, then open the stock card again.")
           }
           badge={t("Фундаментальные данные", "Fundamentals")}
           accent="slate"
@@ -877,12 +877,12 @@ export function FundamentalsDetailsPage() {
           {isLoading ? (
             <PageLoadingState
               title={t("Загружаем фундаментальные данные", "Loading fundamentals")}
-              subtitle={t("Обновляем локальный кеш компаний и показателей.", "Refreshing the local company and metrics cache.")}
+              subtitle={t("Обновляем данные компаний и финансовые показатели.", "Refreshing company data and financial metrics.")}
               accentClassName="text-slate-700"
             />
           ) : (
             <div className="ui-surface-muted text-sm leading-7 text-slate-600 dark:text-slate-300">
-              {t("В локальном кеше пока нет подходящей компании. Загрузите или обновите фундаментальные данные на основной странице, затем снова откройте карточку акции.", "No matching company was found in the local cache yet. Load or refresh fundamentals on the main page, then open the stock card again.")}
+              {t("Компания не найдена в загруженных данных. Обновите фундаментальные данные на основной странице и снова откройте карточку акции.", "The company was not found in the loaded data. Refresh fundamentals on the main page and open the stock card again.")}
             </div>
           )}
         </SectionCard>
@@ -1287,7 +1287,7 @@ export function FundamentalsDetailsPage() {
       <SectionCard
         title={t("Фундаментальные показатели", "Fundamental metrics")}
         description={
-          t("Ключевые мультипликаторы и показатели прибыльности из кэша фундаментальных данных. Наведите на значок подсказки, чтобы увидеть объяснение метрики.", "Core valuation and profitability indicators from the fundamentals cache. Hover the help icon to see what each metric means.")
+          t("Ключевые мультипликаторы и показатели прибыльности. Наведите на значок подсказки, чтобы увидеть объяснение метрики.", "Core valuation and profitability indicators. Hover the help icon to see what each metric means.")
         }
       >
         <MetricGrid className="xl:grid-cols-3">

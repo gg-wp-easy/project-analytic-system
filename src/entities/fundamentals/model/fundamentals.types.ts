@@ -20,6 +20,7 @@ export type AssetFundamentalRecord = {
   peRatio: number;
   pbRatio: number;
   psRatio: number;
+  pfcfRatio: number;
   evToEbitda: number;
   roa: number;
   netMargin: number;
@@ -27,8 +28,26 @@ export type AssetFundamentalRecord = {
   totalDebt: number;
   roe: number;
   dividendYield: number;
+  fiveYearAverageDividendYield: number;
+  fiveYearDividendGrowthRate: number;
+  dividendPayoutRatio: number;
+  dividendYearsCount?: number;
+  consecutiveDividendYears?: number;
+  dividendConsistency?: number;
+  lastDividendYear?: number;
+  dividendPaymentsCount?: number;
+  dividendHistoryAvailable?: boolean;
   beta: number;
   updatedAt: string;
+};
+
+export type DividendHistorySummary = {
+  dividendYearsCount: number;
+  consecutiveDividendYears: number;
+  dividendConsistency: number;
+  lastDividendYear?: number;
+  dividendPaymentsCount: number;
+  dividendHistoryAvailable: boolean;
 };
 
 export type ClosePricePoint = {

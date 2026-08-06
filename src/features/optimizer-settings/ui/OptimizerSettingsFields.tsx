@@ -11,6 +11,24 @@ export function OptimizerSettingsFields({ settings, onChange, autoFitWeights = f
         {t("Настройки оптимизатора портфеля", "Portfolio Optimizer Settings")}
       </p>
 
+      <label className="flex items-center gap-2 text-xs font-medium text-slate-700 dark:text-slate-300">
+        <Checkbox
+          checked={settings.autoModelTuning}
+          onCheckedChange={(checked) => onChange({ ...settings, autoModelTuning: checked === true })}
+        />
+        <span>{t("Автоподбор параметров модели", "Auto-tune model parameters")}</span>
+      </label>
+
+      <label className="flex items-center gap-2 text-xs font-medium text-slate-700 dark:text-slate-300">
+        <Checkbox
+          checked={settings.autoPortfolioOptimization}
+          onCheckedChange={(checked) => onChange({ ...settings, autoPortfolioOptimization: checked === true })}
+        />
+        <span>{t("Автоподбор параметров портфеля", "Auto-tune portfolio parameters")}</span>
+      </label>
+
+      {!settings.autoPortfolioOptimization && (
+        <>
       <label className="block text-xs text-slate-600 dark:text-slate-400">
         {t("Безрисковая ставка, %", "Risk-free rate, %")}
         <input
@@ -59,12 +77,17 @@ export function OptimizerSettingsFields({ settings, onChange, autoFitWeights = f
             onChange({
               ...settings,
               optimizationObjective:
-                e.target.value === "max_return_target_risk"
+                e.target.value === "max_sharpe"
+                  ? "max_sharpe"
+                  : e.target.value === "max_return_target_risk"
                   ? "max_return_target_risk"
                   : "min_risk_target_return",
             })
           }
         >
+          <option value="max_sharpe">
+            {t("Максимальный коэффициент Шарпа", "Maximum Sharpe ratio")}
+          </option>
           <option value="min_risk_target_return">
             {t("Минимальный риск при заданной доходности", "Minimum risk at a target return")}
           </option>
@@ -86,7 +109,7 @@ export function OptimizerSettingsFields({ settings, onChange, autoFitWeights = f
             onChange={(e) => onChange({ ...settings, targetReturn: e.target.value })}
           />
         </label>
-      ) : (
+      ) : settings.optimizationObjective === "max_return_target_risk" ? (
         <label className="block text-xs text-slate-600 dark:text-slate-400">
           {t("Максимальный допустимый риск, %", "Maximum allowed risk, %")}
           <input
@@ -98,7 +121,7 @@ export function OptimizerSettingsFields({ settings, onChange, autoFitWeights = f
             onChange={(e) => onChange({ ...settings, targetRisk: e.target.value })}
           />
         </label>
-      )}
+      ) : null}
 
       <label className="block text-xs text-slate-600 dark:text-slate-400">
         {t("Количество активов в портфеле", "Portfolio assets count")}
@@ -111,6 +134,8 @@ export function OptimizerSettingsFields({ settings, onChange, autoFitWeights = f
           onChange={(e) => onChange({ ...settings, portfolioAssetsCount: e.target.value })}
         />
       </label>
+        </>
+      )}
 
       <label className="flex items-center gap-2 text-xs font-medium text-slate-700 dark:text-slate-300">
         <Checkbox

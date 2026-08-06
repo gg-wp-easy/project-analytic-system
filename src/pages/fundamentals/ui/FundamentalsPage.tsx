@@ -188,20 +188,6 @@ export function FundamentalsPage() {
 
       <FundamentalsTabs />
 
-      {/*<div className="bg-white dark:bg-slate-900 rounded-xl p-6 shadow-sm border border-slate-200 dark:border-slate-800">
-        <h2 className="font-semibold text-slate-900 dark:text-slate-100 mb-4">{t("fund.sourcesTitle")}</h2>
-        <div className="space-y-2 text-sm">
-          <div>
-            <div className="text-slate-500 dark:text-slate-400">{t("fund.sharesEndpoint")}</div>
-            <div className="font-mono text-slate-800 dark:text-slate-200 break-all">{cache.source.shares}</div>
-          </div>
-          <div>
-            <div className="text-slate-500 dark:text-slate-400">{t("fund.assetEndpoint")}</div>
-            <div className="font-mono text-slate-800 dark:text-slate-200 break-all">{cache.source.assetFundamentals}</div>
-          </div>
-        </div>
-      </div>*/}
-
       {isLoading && (
         <SectionCard>
           <PageLoadingState

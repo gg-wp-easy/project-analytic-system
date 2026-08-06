@@ -8,6 +8,7 @@ export {
   extractPortfolioPositions,
   extractPortfolioStrategies,
   extractTrainingHistory,
+  getHybridAnalysisParameters,
   normalizePortfolioSettings,
   readHybridModelSettings,
   safeParseJsonObject,

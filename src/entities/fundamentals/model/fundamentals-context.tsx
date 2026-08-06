@@ -19,6 +19,7 @@ import {
   loadFundamentalsCacheFromStorage,
   saveFundamentalsCacheToStorage,
   sortSharesByMarketCap,
+  summarizeDividendHistory,
 } from "../lib/fundamentals-cache.helpers";
 
 type FundamentalsContextGlobal = typeof globalThis & {
@@ -47,6 +48,30 @@ export function FundamentalsProvider({ children }: { children: ReactNode }) {
       const api = createTBankInstrumentsApi();
       const shares = await api.fetchShares();
       const fundamentalsByFigi = await api.fetchAssetFundamentals(shares);
+      const now = new Date();
+      const from = new Date(Date.UTC(now.getUTCFullYear() - 5, 0, 1));
+      const dividendCandidates = shares.filter((share) => {
+        const fundamentals = fundamentalsByFigi[share.figi];
+        return Boolean(
+          fundamentals &&
+          (fundamentals.dividendYield > 0 || fundamentals.fiveYearAverageDividendYield > 0)
+        );
+      });
+      const dividendHistories = await api.fetchDividendHistories({
+        shares: dividendCandidates,
+        from: from.toISOString(),
+        to: now.toISOString(),
+      });
+      for (const share of shares) {
+        const fundamentals = fundamentalsByFigi[share.figi];
+        if (!fundamentals) {
+          continue;
+        }
+        fundamentalsByFigi[share.figi] = {
+          ...fundamentals,
+          ...summarizeDividendHistory(dividendHistories[share.figi], now),
+        };
+      }
       const closePricesByFigi = await api.fetchClosePrices(shares);
       const sortedShares = sortSharesByMarketCap(shares, fundamentalsByFigi);
 

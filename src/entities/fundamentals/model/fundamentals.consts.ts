@@ -1,6 +1,6 @@
 import type { FundamentalsCache } from "./fundamentals.types";
 
-export const FUNDAMENTALS_CACHE_KEY = "fundamentals-cache-v1";
+export const FUNDAMENTALS_CACHE_KEY = "fundamentals-cache-v2";
 
 export const FUNDAMENTALS_SHARES_ENDPOINT =
   "https://invest-public-api.tbank.ru/rest/tinkoff.public.invest.api.contract.v1.InstrumentsService/Shares";

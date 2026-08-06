@@ -8,6 +8,7 @@ export type {
   TBankCandle,
   TBankClosePrice,
   TBankCurrency,
+  TBankDividend,
   TBankFundamental,
   TBankIndicative,
   TBankInstrumentReference,

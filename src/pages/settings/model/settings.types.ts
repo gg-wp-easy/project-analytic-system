@@ -22,12 +22,19 @@ export type LogInfo = {
   logFilePath?: string;
 };
 
+export type FullscreenState = {
+  isFullscreen?: boolean;
+};
+
 export type DesktopApi = {
   isDesktop?: boolean;
   checkForUpdates?: () => Promise<{ status?: string; message?: string; version?: string }>;
   installUpdate?: () => Promise<{ status?: string; message?: string }>;
   getLogInfo?: () => Promise<LogInfo>;
   openLogsDirectory?: () => Promise<{ status?: string; message?: string; logsDirectory?: string; logFilePath?: string }>;
+  toggleFullscreen?: () => Promise<FullscreenState>;
+  getFullscreenState?: () => Promise<FullscreenState>;
   onUpdateStatus?: (listener: (payload: UpdateStatusPayload) => void) => () => void;
+  onFullscreenChange?: (listener: (payload: FullscreenState) => void) => () => void;
   log?: DesktopLogApi;
 };

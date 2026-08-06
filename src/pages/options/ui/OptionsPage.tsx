@@ -120,7 +120,7 @@ export function OptionsPage() {
               className="ui-secondary-button border-white/20 bg-white/10 text-white hover:bg-white/16 dark:border-white/20 dark:bg-white/10 dark:text-white"
             >
               <Trash2 className="h-4 w-4" />
-              {t({ ru: "Очистить кэш", en: "Clear cache" })}
+              {t({ ru: "Удалить данные", en: "Remove data" })}
             </button>
           </>
         }

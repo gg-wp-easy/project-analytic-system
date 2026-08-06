@@ -1,4 +1,5 @@
 export type {
+  NeuralAnalysisResultRow,
   NeuralFeatureImportanceItem,
   NeuralMetricItem,
   NeuralModelStatItem,

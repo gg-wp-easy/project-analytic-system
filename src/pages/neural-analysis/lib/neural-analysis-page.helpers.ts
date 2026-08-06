@@ -94,8 +94,18 @@ export function extractAnalysisRows(parsed: Record<string, unknown>): AnalysisRe
         qualityScore: normalizeScoreLike(row.quality_score ?? row.qualityScore),
         growthScore: normalizeScoreLike(row.growth_score ?? row.growthScore),
         riskScore: normalizeScoreLike(row.risk_score ?? row.riskScore),
+        dividendScore: normalizeScoreLike(row.dividend_score ?? row.dividendScore),
         roe: normalizePercentLike(row.roe ?? row.ROE),
         dividendYield: normalizePercentLike(row.dividend_yield ?? row.dividendYield),
+        fiveYearAverageDividendYield: normalizePercentLike(
+          row.five_year_avg_dividend_yield ?? row.fiveYearAverageDividendYield,
+        ),
+        dividendYearsCount: numberOr(row.dividend_years_count, numberOr(row.dividendYearsCount, 0)),
+        consecutiveDividendYears: numberOr(
+          row.consecutive_dividend_years,
+          numberOr(row.consecutiveDividendYears, 0),
+        ),
+        dividendConsistency: normalizeScoreLike(row.dividend_consistency ?? row.dividendConsistency),
         beta: numberOr(row.beta, NaN),
         marketCap: numberOr(row.market_cap, numberOr(row.market_cap_bn, numberOr(row.marketCap, NaN))),
       } satisfies AnalysisResultRow;
@@ -335,14 +345,20 @@ export function extractModelStats(parsed: Record<string, unknown>): ModelStatIte
       return {
         modelName: String(row.model_name ?? row.modelName ?? `Model ${index + 1}`),
         hiddenLayers: String(row.hidden_layers ?? row.hiddenLayers ?? "-"),
+        features: Array.isArray(row.features) ? row.features.map(String) : [],
         activation: String(row.activation ?? "-"),
         solver: String(row.solver ?? row.optimizer ?? "-"),
+        epochsTrained: numberOr(row.epochs_trained, NaN),
         bestEpoch: numberOr(row.best_epoch, NaN),
+        bestTrainMse: numberOr(row.best_train_mse, NaN),
         bestValMse: numberOr(row.best_val_mse, NaN),
         finalValMse: numberOr(row.final_val_mse, NaN),
         valR2Final: numberOr(row.val_r2_final, NaN),
+        overfitRatio: numberOr(row.overfit_ratio, NaN),
+        isOverfit: row.is_overfit === true,
+        selectionScore: numberOr(row.selection_score, numberOr(row.best_val_mse, NaN)),
       } satisfies ModelStatItem;
     })
     .filter((row) => Number.isFinite(row.bestValMse))
-    .sort((a, b) => a.bestValMse - b.bestValMse);
+    .sort((a, b) => a.selectionScore - b.selectionScore);
 }

@@ -5,7 +5,62 @@ import {
   FUNDAMENTALS_CLOSE_PRICES_ENDPOINT,
   FUNDAMENTALS_SHARES_ENDPOINT,
 } from "../model/fundamentals.consts";
-import type { AssetFundamentalRecord, FundamentalsCache, ShareRecord } from "../model/fundamentals.types";
+import type {
+  AssetFundamentalRecord,
+  DividendHistorySummary,
+  FundamentalsCache,
+  ShareRecord,
+} from "../model/fundamentals.types";
+import type { TBankDividend } from "../../../shared/api/tbank";
+
+export function summarizeDividendHistory(
+  events: TBankDividend[] | undefined,
+  referenceDate = new Date(),
+): DividendHistorySummary {
+  if (!events) {
+    return {
+      dividendYearsCount: 0,
+      consecutiveDividendYears: 0,
+      dividendConsistency: 0,
+      lastDividendYear: undefined,
+      dividendPaymentsCount: 0,
+      dividendHistoryAvailable: false,
+    };
+  }
+
+  const currentYear = referenceDate.getUTCFullYear();
+  const firstYear = currentYear - 5;
+  const paidEvents = events.filter((event) => {
+    const recordDate = new Date(event.recordDate);
+    const type = event.dividendType.trim().toLowerCase();
+    return (
+      Number.isFinite(recordDate.getTime()) &&
+      recordDate <= referenceDate &&
+      recordDate.getUTCFullYear() >= firstYear &&
+      event.dividendNet > 0 &&
+      !type.includes("cancel")
+    );
+  });
+  const paidYears = new Set(paidEvents.map((event) => new Date(event.recordDate).getUTCFullYear()));
+  const completedYears = Array.from({ length: 5 }, (_, index) => firstYear + index);
+  const dividendYearsCount = completedYears.filter((year) => paidYears.has(year)).length;
+  let consecutiveDividendYears = 0;
+  for (let year = currentYear - 1; year >= firstYear; year -= 1) {
+    if (!paidYears.has(year)) {
+      break;
+    }
+    consecutiveDividendYears += 1;
+  }
+
+  return {
+    dividendYearsCount,
+    consecutiveDividendYears,
+    dividendConsistency: dividendYearsCount / completedYears.length,
+    lastDividendYear: paidYears.size ? Math.max(...paidYears) : undefined,
+    dividendPaymentsCount: paidEvents.length,
+    dividendHistoryAvailable: true,
+  };
+}
 
 export function loadFundamentalsCacheFromStorage(): FundamentalsCache {
   if (typeof window === "undefined") {

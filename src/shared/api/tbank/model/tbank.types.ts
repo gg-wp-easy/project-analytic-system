@@ -125,6 +125,7 @@ export type TBankFundamental = {
   peRatio: number;
   pbRatio: number;
   psRatio: number;
+  pfcfRatio: number;
   evToEbitda: number;
   roe: number;
   roa: number;
@@ -132,9 +133,25 @@ export type TBankFundamental = {
   netDebtToEbitda: number;
   totalDebt: number;
   dividendYield: number;
+  fiveYearAverageDividendYield: number;
+  fiveYearDividendGrowthRate: number;
+  dividendPayoutRatio: number;
   marketCapBn: number;
   beta: number;
   updatedAt: string;
+};
+
+export type TBankDividend = {
+  figi: string;
+  dividendNet: number;
+  paymentDate: string;
+  declaredDate: string;
+  lastBuyDate: string;
+  recordDate: string;
+  dividendType: string;
+  regularity: string;
+  closePrice: number;
+  yieldValue: number;
 };
 
 export type TBankClosePrice = {
