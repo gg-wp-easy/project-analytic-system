@@ -4,6 +4,7 @@ import type { LucideIcon } from "lucide-react";
 import {
   Activity,
   BriefcaseBusiness,
+  Gem,
   Database,
   Landmark,
   Layers,
@@ -23,6 +24,7 @@ const appNavigationIcons: Record<AppNavigationIconKey, LucideIcon> = {
   activity: Activity,
   briefcase: BriefcaseBusiness,
   database: Database,
+  gem: Gem,
   landmark: Landmark,
   layers: Layers,
   settings: Settings,

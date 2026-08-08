@@ -9,6 +9,7 @@ import { NeuralNetworkAnalysis } from "../pages/neural-analysis";
 import { HybridAnalysis } from "../pages/hybrid-analysis";
 import { StockAnalysisPage } from "../pages/stock-analysis";
 import { PortfolioAnalysisPage } from "../pages/portfolio-analysis";
+import { CommoditiesAnalysisPage, IndexesAnalysisPage } from "../pages/market-yfinance-analysis";
 import { BondsAnalysis } from "../pages/bonds-analysis";
 import { FundamentalsDetailsPage, FundamentalsPage } from "../pages/fundamentals";
 import { OptionsPage, UnderlyingOptionsPage } from "../pages/options";
@@ -38,6 +39,8 @@ const routes = [
       { path: APP_ROUTE_PATHS.decisionTree, Component: DecisionTreeAnalysis },
       { path: APP_ROUTE_PATHS.neuralNetwork, Component: NeuralNetworkAnalysis },
       { path: APP_ROUTE_PATHS.hybrid, Component: HybridAnalysis },
+      { path: APP_ROUTE_PATHS.indexes, Component: IndexesAnalysisPage },
+      { path: APP_ROUTE_PATHS.commodities, Component: CommoditiesAnalysisPage },
       { path: APP_ROUTE_PATHS.bonds, Component: BondsAnalysis },
       { path: APP_ROUTE_PATHS.options, Component: OptionsPage },
       { path: APP_ROUTE_PATHS.optionAssetDetails, Component: UnderlyingOptionsPage },

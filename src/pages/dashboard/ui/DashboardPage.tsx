@@ -1,5 +1,5 @@
 import { Link } from "react-router-dom";
-import { Activity, ArrowRight, BriefcaseBusiness, Database, Landmark, Layers, TrendingUp } from "lucide-react";
+import { Activity, ArrowRight, BriefcaseBusiness, Database, Gem, Landmark, Layers, TrendingUp } from "lucide-react";
 import { useAppSettings } from "../../../app/context/AppSettingsContext";
 import {
   DASHBOARD_HERO,
@@ -13,8 +13,10 @@ const dashboardIcons: Record<DashboardIconKey, typeof Activity> = {
   activity: Activity,
   briefcase: BriefcaseBusiness,
   database: Database,
+  gem: Gem,
   landmark: Landmark,
   layers: Layers,
+  trendingUp: TrendingUp,
 };
 
 export function Dashboard() {

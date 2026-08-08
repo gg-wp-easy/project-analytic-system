@@ -10,6 +10,8 @@ export type AppRoutePathMap = {
   decisionTree: string;
   neuralNetwork: string;
   hybrid: string;
+  indexes: string;
+  commodities: string;
   bonds: string;
   options: string;
   optionAssetDetails: string;
@@ -27,6 +29,8 @@ export type AppAbsoluteRoutePathMap = {
   decisionTree: string;
   neuralNetwork: string;
   hybrid: string;
+  indexes: string;
+  commodities: string;
   bonds: string;
   options: string;
   settings: string;

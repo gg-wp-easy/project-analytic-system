@@ -51,6 +51,26 @@ export const DASHBOARD_SECTIONS: DashboardSectionConfig[] = [
     color: "from-teal-600 to-emerald-700",
   },
   {
+    title: { ru: "Анализ индексов", en: "Index Analysis" },
+    description: {
+      ru: "Месячные данные yfinance по ключевым мировым рынкам и портфель с максимальным коэффициентом Шарпа.",
+      en: "Monthly yfinance data for key global markets and a maximum-Sharpe portfolio.",
+    },
+    path: "/indexes",
+    icon: "trendingUp",
+    color: "from-sky-600 to-blue-700",
+  },
+  {
+    title: { ru: "Анализ товаров", en: "Commodity Analysis" },
+    description: {
+      ru: "Месячные данные yfinance по металлам, энергии и аграрным товарам с оптимизацией max Sharpe.",
+      en: "Monthly yfinance data for metals, energy, and agricultural commodities with max-Sharpe optimization.",
+    },
+    path: "/commodities",
+    icon: "gem",
+    color: "from-amber-500 to-orange-600",
+  },
+  {
     title: { ru: "Анализ облигаций", en: "Bond Analysis" },
     description: {
       ru: "Загрузка облигаций, расчёт локальных метрик, подбор и выгрузка портфеля.",

@@ -20,6 +20,8 @@ export const APP_NAVIGATION_ITEMS: AppNavigationItem[] = [
     ],
   },
   { title: { ru: "Анализ портфелей", en: "Portfolio Analysis" }, path: APP_ABSOLUTE_ROUTE_PATHS.portfolioAnalysis, icon: "briefcase" },
+  { title: { ru: "Анализ индексов", en: "Index Analysis" }, path: APP_ABSOLUTE_ROUTE_PATHS.indexes, icon: "trendingUp" },
+  { title: { ru: "Анализ товаров", en: "Commodity Analysis" }, path: APP_ABSOLUTE_ROUTE_PATHS.commodities, icon: "gem" },
   { title: { ru: "Анализ облигаций", en: "Bond Analysis" }, path: APP_ABSOLUTE_ROUTE_PATHS.bonds, icon: "landmark" },
   { title: { ru: "Анализ опционов", en: "Options Analysis" }, path: APP_ABSOLUTE_ROUTE_PATHS.options, icon: "activity" },
   { title: { ru: "Настройки", en: "Settings" }, path: APP_ABSOLUTE_ROUTE_PATHS.settings, icon: "settings" },
