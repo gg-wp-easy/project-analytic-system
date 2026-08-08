@@ -204,7 +204,7 @@ export function FundamentalsPage() {
             type="button"
             onClick={loadFundamentals}
             disabled={isLoading}
-            className="ui-primary-button bg-slate-900 hover:bg-slate-950"
+            className="ui-primary-button"
           >
             {isLoading ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
             {isLoading ? t("fund.loading") : t("fund.loadCache")}

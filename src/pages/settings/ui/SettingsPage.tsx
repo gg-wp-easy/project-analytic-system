@@ -227,13 +227,13 @@ export function SettingsPage() {
         accent="slate"
         aside={
           <div className="space-y-2">
-            <div className="text-xs uppercase tracking-[0.18em] text-white/60">
+            <div className="text-xs uppercase tracking-[0.18em] text-slate-500 dark:text-white/60">
               {t({ ru: "Состояние", en: "Status" })}
             </div>
             <div className="text-lg font-semibold">
               {hasToken ? t({ ru: "Токен задан", en: "Token set" }) : t({ ru: "Токен не задан", en: "No token" })}
             </div>
-            <div className="text-sm text-white/80">
+            <div className="text-sm text-slate-600 dark:text-white/80">
               {hasToken ? t({ ru: "Рыночные данные доступны", en: "Market data available" }) : t({ ru: "Нужна настройка доступа", en: "Access setup required" })}
             </div>
           </div>

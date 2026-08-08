@@ -1,7 +1,7 @@
 import type { LucideIcon } from "lucide-react";
 import type { ReactNode } from "react";
 
-export type AnalysisShellAccent = "violet" | "emerald" | "orange" | "cyan" | "slate" | "blue" | "amber";
+export type AnalysisShellAccent = "violet" | "emerald" | "orange" | "cyan" | "teal" | "slate" | "blue" | "amber";
 
 export type PageHeroProps = {
   icon: LucideIcon;

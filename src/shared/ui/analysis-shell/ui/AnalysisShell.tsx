@@ -36,14 +36,14 @@ export function PageHero({
               <Icon className="h-6 w-6" />
             </span>
             <div className="space-y-2">
-              <div className="text-2xl font-semibold text-white sm:text-3xl">{title}</div>
-              {description ? <div className="max-w-3xl text-[15px] leading-7 text-white/82">{description}</div> : null}
+              <div className="text-2xl font-semibold text-slate-950 dark:text-white sm:text-3xl">{title}</div>
+              {description ? <div className="max-w-3xl text-[15px] leading-7 text-slate-600 dark:text-white/82">{description}</div> : null}
             </div>
           </div>
         </div>
 
         {aside ? (
-          <div className="rounded-lg border border-white/15 bg-white/10 px-4 py-3 text-sm text-white/85 backdrop-blur-md">
+          <div className="rounded-lg border border-slate-200 bg-white/75 px-4 py-3 text-sm text-slate-700 backdrop-blur-md dark:border-white/15 dark:bg-white/10 dark:text-white/85">
             {aside}
           </div>
         ) : null}
@@ -138,9 +138,9 @@ export function MetricGrid({ children, className }: MetricGridProps) {
 
 export function MetricCard({ label, value, helper, className }: MetricCardProps) {
   return (
-    <div className={cn("ui-metric-card", className)}>
-      <div className="mb-1 flex items-center gap-1 text-sm text-slate-500 dark:text-slate-400">{label}</div>
-      <div className="text-2xl font-semibold tracking-tight text-slate-900 dark:text-slate-100">{value}</div>
+    <div className={cn("ui-metric-card min-w-0", className)}>
+      <div className="mb-1 flex min-w-0 items-center gap-1 text-sm text-slate-500 dark:text-slate-400">{label}</div>
+      <div className="min-w-0 break-words text-2xl font-semibold leading-tight tracking-tight text-slate-900 dark:text-slate-100">{value}</div>
       {helper ? <div className="mt-2 text-xs text-slate-500 dark:text-slate-400">{helper}</div> : null}
     </div>
   );

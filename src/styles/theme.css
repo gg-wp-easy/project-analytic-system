@@ -364,7 +364,7 @@
   }
 
   .ui-page-hero {
-    @apply relative overflow-hidden rounded-lg border border-white/12 p-5 text-white sm:p-6;
+    @apply relative overflow-hidden rounded-lg border p-5 text-slate-950 dark:text-white sm:p-6;
     box-shadow: var(--surface-shadow-strong);
   }
 
@@ -376,8 +376,12 @@
     content: "";
     position: absolute;
     inset: 0;
-    background: linear-gradient(180deg, rgba(255, 255, 255, 0.08), transparent 72%);
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.62), transparent 72%);
     pointer-events: none;
+  }
+
+  .dark .ui-page-hero::after {
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.08), transparent 72%);
   }
 
   .ui-page-hero > * {
@@ -386,7 +390,7 @@
   }
 
   .ui-page-hero-badge {
-    @apply inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/10 px-3 py-1.5 text-[0.7rem] font-semibold uppercase tracking-[0.14em] text-white/85 backdrop-blur-sm;
+    @apply inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white/75 px-3 py-1.5 text-[0.7rem] font-semibold uppercase tracking-[0.14em] text-slate-600 backdrop-blur-sm dark:border-white/15 dark:bg-white/10 dark:text-white/85;
   }
 
   .ui-section-title {

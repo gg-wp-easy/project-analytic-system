@@ -223,7 +223,7 @@ export function DataPreprocessingPage() {
               type="button"
               onClick={() => void loadFundamentals()}
               disabled={isLoading}
-              className="ui-primary-button w-full bg-gradient-to-r from-blue-700 to-cyan-700 hover:from-blue-800 hover:to-cyan-800"
+              className="ui-primary-button w-full"
             >
               <RefreshCw className={`h-4 w-4 ${isLoading ? "animate-spin" : ""}`} />
               {isLoading ? t("Загрузка...", "Loading...") : t("Обновить данные", "Refresh data")}

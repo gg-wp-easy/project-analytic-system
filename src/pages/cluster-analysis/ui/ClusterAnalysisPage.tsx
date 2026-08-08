@@ -43,7 +43,6 @@ import {
   submitOptimizerSettings,
   useOptimizerSettings,
 } from "../../../features/optimizer-settings";
-import { PortfolioSimulationPanel } from "../../../features/portfolio-simulation";
 
 import { SavePortfolioButton } from "../../../features/saved-portfolios";
 import { API_BASE_URL } from "../../../config";
@@ -337,6 +336,8 @@ export function ClusterAnalysis() {
             pe_ratio: f.peRatio,
             pb_ratio: f.pbRatio,
             ps_ratio: f.psRatio,
+            pfcf: f.pfcfRatio,
+            pfcfRatio: f.pfcfRatio,
             ev_to_ebitda: f.evToEbitda,
             roa: f.roa,
             net_margin: f.netMargin,
@@ -1549,15 +1550,6 @@ export function ClusterAnalysis() {
             </SectionCard>
           )}
 
-          {!!displayPortfolio.length && (
-            <PortfolioSimulationPanel
-              holdings={displayPortfolio}
-              shares={cache.shares}
-              fundamentalsByFigi={cache.fundamentalsByFigi}
-              analysisName={t("Кластерный анализ", "Cluster Analysis")}
-              filenamePrefix="cluster-portfolio"
-            />
-          )}
             </>
           )}
 

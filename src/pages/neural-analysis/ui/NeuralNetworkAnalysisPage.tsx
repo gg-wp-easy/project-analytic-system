@@ -49,7 +49,6 @@ import {
   submitOptimizerSettings,
   useOptimizerSettings,
 } from "../../../features/optimizer-settings";
-import { PortfolioSimulationPanel } from "../../../features/portfolio-simulation";
 
 import { SavePortfolioButton } from "../../../features/saved-portfolios";
 import { API_BASE_URL } from "../../../config";
@@ -573,6 +572,18 @@ export function NeuralNetworkAnalysis() {
     }),
     [analysisRows, bestModelStat?.modelName, modelParameters.best_model, selectedRequestData.length],
   );
+  const compactBestModelName = useMemo(() => {
+    const value = analysisSummary.bestModel;
+    if (!value || value === "-") {
+      return "-";
+    }
+    const compact = value
+      .replace(/\s+/g, " ")
+      .replace(/\s*features\s*=\s*.+$/i, "")
+      .replace(/\s*признаки\s*=\s*.+$/i, "")
+      .trim();
+    return compact.length > 54 ? compact.slice(0, 51).trimEnd() + "..." : compact;
+  }, [analysisSummary.bestModel]);
 
   const neuralHelp = useMemo(() => {
     if (!neuralSettings.autoTune && neuralSettings.modelType === "deep_mlp") {
@@ -1771,7 +1782,7 @@ export function NeuralNetworkAnalysis() {
                       );
                     })}
                     <text x="28" y={ARCHITECTURE_DIAGRAM_HEIGHT - 24} className="fill-slate-500 dark:fill-slate-300" fontSize="12" fontWeight="600">
-                      {t("Лучшая конфигурация", "Best configuration")}: {analysisSummary.bestModel}
+                      {t("Лучшая конфигурация", "Best configuration")}: {compactBestModelName}
                     </text>
                   </svg>
                 </div>
@@ -2291,15 +2302,6 @@ export function NeuralNetworkAnalysis() {
             </SectionCard>
           )}
 
-          {!!portfolioPositions.length && (
-            <PortfolioSimulationPanel
-              holdings={portfolioPositions}
-              shares={cache.shares}
-              fundamentalsByFigi={cache.fundamentalsByFigi}
-              analysisName={t("Нейросетевой анализ", "Neural Network Analysis")}
-              filenamePrefix="neural-portfolio"
-            />
-          )}
             </>
           )}
 

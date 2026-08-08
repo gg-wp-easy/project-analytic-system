@@ -865,7 +865,7 @@ export function FundamentalsDetailsPage() {
                 type="button"
                 onClick={() => void loadFundamentals()}
                 disabled={isLoading}
-                className="ui-primary-button bg-slate-900 hover:bg-slate-950"
+                className="ui-primary-button"
               >
                 {isLoading ? <RefreshCw className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
                 {t("Загрузить фундаментал", "Load fundamentals")}
