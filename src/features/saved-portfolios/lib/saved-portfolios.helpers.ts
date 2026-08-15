@@ -125,12 +125,15 @@ function normalizeSavedPortfolio(value: unknown): SavedPortfolio | null {
   }
   const name = String(row.name ?? "").trim();
   const sourceLabel = String(row.sourceLabel ?? "").trim();
+  const assetClass = ["stock", "bond", "index", "commodity"].includes(row.assetClass)
+    ? row.assetClass
+    : "stock";
   return {
     id: String(row.id || createSavedPortfolioId()),
     name: name || "Portfolio",
     sourceKey: row.sourceKey,
     sourceLabel: sourceLabel || "Analysis",
-    assetClass: row.assetClass === "bond" ? "bond" : "stock",
+    assetClass,
     createdAt: String(row.createdAt || toDateInputValue()),
     savedAt: String(row.savedAt || new Date().toISOString()),
     holdings: holdings

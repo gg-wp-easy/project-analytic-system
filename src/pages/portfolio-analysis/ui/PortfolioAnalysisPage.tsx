@@ -119,6 +119,12 @@ export function PortfolioAnalysisPage() {
     [portfolios, selectedId],
   );
   const expectedMetricRows = useMemo(() => buildExpectedMetricRows(selectedPortfolio), [selectedPortfolio]);
+  const supportsTBankTracking = Boolean(
+    selectedPortfolio
+      && selectedPortfolio.assetClass !== "index"
+      && selectedPortfolio.assetClass !== "commodity"
+      && selectedPortfolio.holdings.some((holding) => holding.figi),
+  );
   const amount = parseAmount(portfolioAmount);
   const currency = getPortfolioCurrency(selectedPortfolio);
   const totalWeight = useMemo(
@@ -141,6 +147,14 @@ export function PortfolioAnalysisPage() {
 
   const refreshTracking = async () => {
     if (!selectedPortfolio) {
+      return;
+    }
+    if (!supportsTBankTracking) {
+      setError(t(
+        "Для портфелей индексов и товаров сохраняются состав и расчётные метрики; обновление через T-Bank для них недоступно.",
+        "Index and commodity portfolios preserve holdings and calculated metrics; T-Bank tracking is unavailable for them.",
+      ));
+      setTrackingResult(null);
       return;
     }
     const figiHoldings = selectedPortfolio.holdings.filter((holding) => holding.figi);
@@ -283,7 +297,10 @@ export function PortfolioAnalysisPage() {
                       <button
                         type="button"
                         onClick={refreshTracking}
-                        disabled={isRefreshing}
+                        disabled={isRefreshing || !supportsTBankTracking}
+                        title={!supportsTBankTracking
+                          ? t("Для этого класса активов доступно сохранение состава и метрик.", "Holdings and metrics are saved for this asset class.")
+                          : undefined}
                         className="ui-primary-button px-3 py-2 text-xs"
                       >
                         <RefreshCw className={`h-4 w-4 ${isRefreshing ? "animate-spin" : ""}`} />
@@ -352,7 +369,12 @@ export function PortfolioAnalysisPage() {
                 <SectionCard
                   title={t("Динамика портфеля", "Portfolio dynamics")}
                   description={
-                    trackingResult
+                    !supportsTBankTracking
+                      ? t(
+                        "Для индексов и товаров отображаются сохранённый состав и расчётные метрики анализа.",
+                        "Saved holdings and calculated analysis metrics are shown for indexes and commodities.",
+                      )
+                      : trackingResult
                       ? t("Фактическая накопленная доходность с даты создания портфеля.", "Factual cumulative return since the portfolio creation date.")
                       : t("Нажмите обновить динамику, чтобы загрузить свечи и пересчитать текущую доходность.", "Click refresh dynamics to load candles and recalculate current return.")
                   }
@@ -377,7 +399,12 @@ export function PortfolioAnalysisPage() {
                     </ResponsiveContainer>
                   ) : (
                     <div className="ui-surface-muted text-sm text-slate-600 dark:text-slate-300">
-                      {error ?? t("Динамика ещё не рассчитана.", "Dynamics has not been calculated yet.")}
+                      {error ?? (!supportsTBankTracking
+                        ? t(
+                          "Фактическое обновление динамики для этого класса активов пока недоступно.",
+                          "Factual tracking is not currently available for this asset class.",
+                        )
+                        : t("Динамика ещё не рассчитана.", "Dynamics has not been calculated yet."))}
                     </div>
                   )}
                 </SectionCard>

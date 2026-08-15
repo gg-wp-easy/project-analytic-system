@@ -2,9 +2,16 @@ import type { AssetFundamentalRecord, ShareRecord } from "../../../entities/fund
 
 export const SAVED_PORTFOLIOS_STORAGE_KEY = "analytic-system.saved-portfolios.v1";
 
-export type SavedPortfolioAssetClass = "stock" | "bond";
+export type SavedPortfolioAssetClass = "stock" | "bond" | "index" | "commodity";
 
-export type SavedPortfolioSourceKey = "cluster" | "decision-tree" | "neural-network" | "hybrid" | "bonds";
+export type SavedPortfolioSourceKey =
+  | "cluster"
+  | "decision-tree"
+  | "neural-network"
+  | "hybrid"
+  | "bonds"
+  | "indexes"
+  | "commodities";
 
 export type SavedPortfolioMetric = {
   label: string;

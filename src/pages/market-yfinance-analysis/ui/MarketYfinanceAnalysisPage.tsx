@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   AlertCircle,
   BarChart3,
@@ -24,6 +24,7 @@ import {
 } from "recharts";
 import { API_BASE_URL } from "../../../config";
 import { useAppSettings } from "../../../app/context/AppSettingsContext";
+import { SavePortfolioButton } from "../../../features/saved-portfolios";
 import {
   downloadAnalysisResultsAsXlsx,
   downloadSvgAsPng,
@@ -41,51 +42,16 @@ import {
   PageHero,
   SectionCard,
 } from "../../../shared/ui/analysis-shell";
-
-type MarketMode = "indexes" | "commodities";
-
-type SourceAsset = {
-  key: string;
-  ticker: string;
-  name: string;
-  region?: string;
-  group?: string;
-  loaded?: boolean;
-};
-
-type MarketPosition = {
-  asset: string;
-  ticker: string;
-  name: string;
-  weight: number;
-};
-
-type MarketMetricMap = Record<string, number | string | null | undefined>;
-
-type MarketAnalysisResponse = {
-  statistics?: Array<Record<string, unknown>>;
-  correlation_matrix?: Array<Record<string, unknown>>;
-  top_correlations?: Array<Record<string, unknown>>;
-  portfolios?: {
-    max_sharpe?: {
-      metrics?: MarketMetricMap;
-      positions?: Array<{ asset?: string; weight?: number }>;
-    };
-  };
-  efficient_frontier?: Array<Record<string, unknown>>;
-  source?: {
-    provider?: string;
-    frequency?: string;
-    period?: string;
-    assets?: SourceAsset[];
-    loaded_assets_count?: number;
-    observations?: number;
-    start_date?: string;
-    end_date?: string;
-  };
-};
-
-const PERIOD_OPTIONS = ["1y", "2y", "3y", "5y"] as const;
+import { readMarketAnalysisCache, saveMarketAnalysisCache } from "../lib";
+import {
+  DEFAULT_MARKET_ANALYSIS_PERIOD,
+  MARKET_ANALYSIS_PERIOD_OPTIONS,
+  type MarketAnalysisResponse,
+  type MarketMetricMap,
+  type MarketMode,
+  type MarketPosition,
+  type SourceAsset,
+} from "../model";
 
 const MARKET_PALETTE = [
   "#2563eb",
@@ -170,10 +136,11 @@ function normalizePositions(response: MarketAnalysisResponse): MarketPosition[] 
   return (response.portfolios?.max_sharpe?.positions ?? [])
     .map((row) => {
       const asset = String(row.asset ?? "");
+      const sourceAsset = sourceAssets.find((item) => item.key === asset);
       return {
         asset,
-        ticker: asset,
-        name: pickAssetName(asset, sourceAssets),
+        ticker: sourceAsset?.ticker ?? asset,
+        name: sourceAsset?.name ?? asset,
         weight: formatWeight(row.weight),
       };
     })
@@ -267,10 +234,16 @@ function metricRows(metrics: MarketMetricMap | undefined, isCommodities: boolean
 }
 
 function MarketYfinanceAnalysisPage({ mode }: { mode: MarketMode }) {
-  const { t } = useAppSettings();
+  const { locale, t } = useAppSettings();
   const config = MODE_CONFIG[mode];
-  const [period, setPeriod] = useState<(typeof PERIOD_OPTIONS)[number]>("3y");
-  const [result, setResult] = useState<MarketAnalysisResponse | null>(null);
+  const initialCache = useMemo(
+    () => readMarketAnalysisCache(mode, DEFAULT_MARKET_ANALYSIS_PERIOD),
+    [mode],
+  );
+  const [period, setPeriod] = useState(DEFAULT_MARKET_ANALYSIS_PERIOD);
+  const [result, setResult] = useState<MarketAnalysisResponse | null>(initialCache?.result ?? null);
+  const [cachedAt, setCachedAt] = useState<string | null>(initialCache?.savedAt ?? null);
+  const [isCachedResult, setIsCachedResult] = useState(Boolean(initialCache));
   const [isRunning, setIsRunning] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const portfolioChartRef = useRef<HTMLDivElement | null>(null);
@@ -297,6 +270,14 @@ function MarketYfinanceAnalysisPage({ mode }: { mode: MarketMode }) {
     ].filter((row) => Number.isFinite(row.return) && Number.isFinite(row.volatility));
   }, [result]);
 
+  useEffect(() => {
+    const cached = readMarketAnalysisCache(mode, period);
+    setResult(cached?.result ?? null);
+    setCachedAt(cached?.savedAt ?? null);
+    setIsCachedResult(Boolean(cached));
+    setError(null);
+  }, [mode, period]);
+
   const runAnalysis = async () => {
     setIsRunning(true);
     setError(null);
@@ -308,7 +289,11 @@ function MarketYfinanceAnalysisPage({ mode }: { mode: MarketMode }) {
         const detail = (parsed as { detail?: unknown }).detail;
         throw new Error(typeof detail === "string" ? detail : t("Не удалось выполнить анализ.", "Analysis failed."));
       }
-      setResult(parsed as MarketAnalysisResponse);
+      const nextResult = parsed as MarketAnalysisResponse;
+      const cacheEntry = saveMarketAnalysisCache(mode, period, nextResult);
+      setResult(nextResult);
+      setCachedAt(cacheEntry?.savedAt ?? null);
+      setIsCachedResult(false);
     } catch (err) {
       setError(err instanceof Error ? err.message : t("Не удалось выполнить анализ.", "Analysis failed."));
     } finally {
@@ -366,6 +351,11 @@ function MarketYfinanceAnalysisPage({ mode }: { mode: MarketMode }) {
               <div className="text-xs text-slate-600 dark:text-white/75">
                 {source.loaded_assets_count} {t("активов", "assets")} / {source.observations} {t("месяцев", "months")}
               </div>
+              {cachedAt ? (
+                <div className="pt-1 text-xs text-slate-500 dark:text-white/70">
+                  {isCachedResult ? t("Из кэша", "From cache") : t("Сохранено", "Saved")}: {new Date(cachedAt).toLocaleString(locale === "en" ? "en-US" : "ru-RU")}
+                </div>
+              ) : null}
             </div>
           ) : undefined}
         />
@@ -387,12 +377,13 @@ function MarketYfinanceAnalysisPage({ mode }: { mode: MarketMode }) {
                   {t("Период", "Period")}
                 </label>
                 <div className="grid grid-cols-4 gap-2">
-                  {PERIOD_OPTIONS.map((item) => (
+                  {MARKET_ANALYSIS_PERIOD_OPTIONS.map((item) => (
                     <button
                       key={item}
                       type="button"
+                      disabled={isRunning}
                       onClick={() => setPeriod(item)}
-                      className={`rounded-md border px-3 py-2 text-sm font-semibold ${
+                      className={`rounded-md border px-3 py-2 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-60 ${
                         period === item
                           ? "border-primary bg-primary text-primary-foreground"
                           : "border-border bg-card text-slate-700 hover:bg-muted dark:text-slate-200"
@@ -405,7 +396,11 @@ function MarketYfinanceAnalysisPage({ mode }: { mode: MarketMode }) {
               </div>
               <button type="button" className="ui-primary-button w-full" disabled={isRunning} onClick={() => void runAnalysis()}>
                 {isRunning ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />}
-                {isRunning ? t("Считаем...", "Running...") : t("Запустить анализ", "Run analysis")}
+                {isRunning
+                  ? t("Считаем...", "Running...")
+                  : result
+                    ? t("Обновить анализ", "Refresh analysis")
+                    : t("Запустить анализ", "Run analysis")}
               </button>
             </div>
           </AnalysisSidebarCard>
@@ -493,6 +488,22 @@ function MarketYfinanceAnalysisPage({ mode }: { mode: MarketMode }) {
                       <Download className="h-4 w-4" />
                       PNG
                     </button>
+                    <SavePortfolioButton
+                      holdings={positions}
+                      metrics={metrics.map((metric) => ({
+                        label: metric.label,
+                        value: metric.value,
+                        rawValue: metric.value,
+                      }))}
+                      sourceKey={mode}
+                      sourceLabel={t({ ru: config.titleRu, en: config.titleEn })}
+                      assetClass={mode === "indexes" ? "index" : "commodity"}
+                      defaultName={t(
+                        mode === "indexes" ? "Портфель индексов" : "Портфель товаров",
+                        mode === "indexes" ? "Index Portfolio" : "Commodity Portfolio",
+                      )}
+                      disabled={!positions.length}
+                    />
                   </div>
                 )}
               >
