@@ -1,6 +1,5 @@
-import { jsPDF } from "jspdf";
-import autoTable from "jspdf-autotable";
-import * as XLSX from "xlsx";
+import type { jsPDF as JsPdf } from "jspdf";
+import type { ColInfo } from "xlsx";
 import {
   DEFAULT_XLSX_SHEET_NAME,
   EXCEL_HTML_MIME_TYPE,
@@ -57,7 +56,7 @@ export function getAoa<Row>(rows: Row[], columns: ExportColumn<Row>[]): Array<Ar
   ];
 }
 
-export function estimateSheetWidths(table: Array<Array<string | number>>): XLSX.ColInfo[] {
+export function estimateSheetWidths(table: Array<Array<string | number>>): ColInfo[] {
   if (!table.length) {
     return [];
   }
@@ -143,12 +142,13 @@ export function downloadRowsAsExcel<Row>(rows: Row[], columns: ExportColumn<Row>
   downloadBlob(blob, filename);
 }
 
-export function downloadRowsAsXlsx<Row>(
+export async function downloadRowsAsXlsx<Row>(
   rows: Row[],
   columns: ExportColumn<Row>[],
   filename: string,
   sheetName = DEFAULT_XLSX_SHEET_NAME,
-): void {
+): Promise<void> {
+  const XLSX = await import("xlsx");
   const table = getAoa(rows, columns);
   const workbook = XLSX.utils.book_new();
   const worksheet = XLSX.utils.aoa_to_sheet(table);
@@ -164,6 +164,7 @@ export async function downloadAnalysisResultsAsXlsx<Row>({
   columns,
   metrics = [],
 }: AnalysisExportOptions<Row>): Promise<void> {
+  const XLSX = await import("xlsx");
   const workbook = XLSX.utils.book_new();
 
   const summaryRows: Array<Array<string | number>> = [
@@ -213,6 +214,10 @@ export async function downloadAnalysisResultsAsPdf<Row>({
   metrics = [],
   chartSvg,
 }: AnalysisExportOptions<Row>): Promise<void> {
+  const [{ jsPDF }, { default: autoTable }] = await Promise.all([
+    import("jspdf"),
+    import("jspdf-autotable"),
+  ]);
   const doc = new jsPDF({ unit: "pt", format: "a4" });
   const pageWidth = doc.internal.pageSize.getWidth();
   const pageHeight = doc.internal.pageSize.getHeight();
@@ -240,7 +245,7 @@ export async function downloadAnalysisResultsAsPdf<Row>({
       styles: { fontSize: 9, cellPadding: 6, lineColor: [226, 232, 240] },
       headStyles: { fillColor: [241, 245, 249], textColor: [15, 23, 42] },
     });
-    currentY = ((doc as jsPDF & { lastAutoTable?: { finalY: number } }).lastAutoTable?.finalY ?? currentY) + 18;
+    currentY = ((doc as JsPdf & { lastAutoTable?: { finalY: number } }).lastAutoTable?.finalY ?? currentY) + 18;
   }
 
   if (chartSvg) {

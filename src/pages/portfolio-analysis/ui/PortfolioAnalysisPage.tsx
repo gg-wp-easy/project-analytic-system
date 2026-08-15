@@ -15,7 +15,7 @@ import { useFundamentals } from "../../../entities/fundamentals";
 import { createTBankInstrumentsApi } from "../../../shared/api/tbank";
 import { numberOr } from "../../../shared/lib/number/numberOr";
 import { MetricCard, MetricGrid, PageHero, SectionCard } from "../../../shared/ui/analysis-shell";
-import { ChartSkeleton } from "../../../shared/ui/loading-state";
+import { ChartSkeleton, MetricSkeletonGrid } from "../../../shared/ui/loading-state";
 import {
   buildMonthlyReturns,
   buildSimulation,
@@ -319,6 +319,10 @@ export function PortfolioAnalysisPage() {
                   </div>
                 </SectionCard>
 
+                {isRefreshing ? (
+                  <MetricSkeletonGrid count={8} />
+                ) : (
+                <>
                 <MetricGrid className="xl:grid-cols-5">
                   <MetricCard label={t("Текущая доходность", "Current return")} value={trackingResult ? formatPercent(trackingResult.totalReturn) : "-"} />
                   <MetricCard label={t("Годовая доходность", "Annualized return")} value={trackingResult ? formatPercent(trackingResult.annualizedReturn) : "-"} />
@@ -332,6 +336,8 @@ export function PortfolioAnalysisPage() {
                   <MetricCard label={t("Пассивный доход в месяц", "Monthly passive income")} value={formatCurrency(monthlyPassiveIncome, currency, locale)} />
                   <MetricCard label={t("Текущая прибыль", "Current profit")} value={trackingResult ? formatCurrency(currentProfit, currency, locale) : "-"} />
                 </MetricGrid>
+                </>
+                )}
 
                 {!!expectedMetricRows.length && (
                   <SectionCard title={t("Ожидаемые метрики анализа", "Expected analysis metrics")}>

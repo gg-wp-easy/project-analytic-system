@@ -1,4 +1,4 @@
-import * as XLSX from "xlsx";
+import type { ColInfo, WorkBook } from "xlsx";
 import type { TBankCandle } from "../../../shared/api/tbank";
 import { numberOr } from "../../../shared/lib/number/numberOr";
 import {
@@ -131,10 +131,12 @@ export function buildSimulation(
   };
 }
 
-export function appendSheet(workbook: XLSX.WorkBook, name: string, rows: Array<Array<string | number>>): void {
-  const sheet = XLSX.utils.aoa_to_sheet(rows);
+type XlsxUtils = typeof import("xlsx")["utils"];
+
+export function appendSheet(utils: XlsxUtils, workbook: WorkBook, name: string, rows: Array<Array<string | number>>): void {
+  const sheet = utils.aoa_to_sheet(rows);
   sheet["!cols"] = estimateSheetWidths(rows);
-  XLSX.utils.book_append_sheet(workbook, sheet, name);
+  utils.book_append_sheet(workbook, sheet, name);
 }
 
 function loadSimulationCache(): Record<string, SimulationCacheEntry> {
@@ -197,7 +199,7 @@ function calculateMetrics(returns: number[], riskFreeRate: number): SimulationRe
   };
 }
 
-function estimateSheetWidths(table: Array<Array<string | number>>): XLSX.ColInfo[] {
+function estimateSheetWidths(table: Array<Array<string | number>>): ColInfo[] {
   const count = Math.max(...table.map((row) => row.length), 0);
   return Array.from({ length: count }, (_, colIndex) => {
     const width = table.reduce((max, row) => Math.max(max, String(row[colIndex] ?? "").length), 10);

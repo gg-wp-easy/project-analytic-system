@@ -24,6 +24,12 @@ import {
   PageHero,
   SectionCard,
 } from "../../../shared/ui/analysis-shell";
+import {
+  ChartSkeleton,
+  MetricSkeletonGrid,
+  PageLoadingState,
+  TableSkeleton,
+} from "../../../shared/ui/loading-state";
 import { StockAvatar } from "../../../shared/ui/stock-avatar";
 import { FundamentalsTabs } from "../../fundamentals/ui/FundamentalsTabs";
 import type { ScatterSectionProps, ScreeningRow, SummaryMetricConfig } from "../model";
@@ -71,13 +77,21 @@ function ScatterTooltip({ payload }: { payload?: Array<{ payload: ScreeningRow }
 function ScatterSection({ title, description, rows, sectors, xKey, yKey, xLabel, yLabel, xUnit = "", yUnit = "" }: ScatterSectionProps) {
   const chartRanges = useMemo(() => buildMetricRanges(rows), [rows]);
   const visibleRows = useMemo(() => chartRows(rows, xKey, yKey, chartRanges), [chartRanges, rows, xKey, yKey]);
-  const sectorColor = new Map(sectors.map((sector) => [sector.sector, sector.color]));
-  const grouped = sectors
-    .map((sector) => ({
-      ...sector,
-      rows: visibleRows.filter((row) => row.sector === sector.sector),
-    }))
-    .filter((sector) => sector.rows.length > 0);
+  const sectorColor = useMemo(
+    () => new Map(sectors.map((sector) => [sector.sector, sector.color])),
+    [sectors],
+  );
+  const grouped = useMemo(() => {
+    const rowsBySector = new Map<string, ScreeningRow[]>();
+    visibleRows.forEach((row) => {
+      const sectorRows = rowsBySector.get(row.sector) ?? [];
+      sectorRows.push(row);
+      rowsBySector.set(row.sector, sectorRows);
+    });
+    return sectors
+      .map((sector) => ({ ...sector, rows: rowsBySector.get(sector.sector) ?? [] }))
+      .filter((sector) => sector.rows.length > 0);
+  }, [sectors, visibleRows]);
 
   return (
     <SectionCard title={title} description={description}>
@@ -171,7 +185,12 @@ export function DataPreprocessingPage() {
   const sectorRows = useMemo(() => buildSectorRows(rows, unknownSector), [rows, unknownSector]);
   const selectedRows = useMemo(() => rows.filter((row) => row.score >= 60).slice(0, 30), [rows]);
   const topRows = useMemo(() => rows.slice(0, 25), [rows]);
-  const medianScore = rows.length ? [...rows].sort((a, b) => a.score - b.score)[Math.floor(rows.length / 2)]?.score ?? 0 : 0;
+  const medianScore = useMemo(
+    () => rows.length
+      ? [...rows].sort((a, b) => a.score - b.score)[Math.floor(rows.length / 2)]?.score ?? 0
+      : 0,
+    [rows],
+  );
   const summaryMetricConfigs = useMemo<SummaryMetricConfig[]>(() => [
     { key: "pe", label: "P/E" },
     { key: "pbv", label: "P/BV" },
@@ -237,6 +256,35 @@ export function DataPreprocessingPage() {
         </AnalysisSidebarCard>
       )}
     >
+      {isLoading ? (
+        <div className="space-y-6">
+          <SectionCard>
+            <PageLoadingState
+              title={t("Обновляем первичную обработку", "Refreshing preprocessing")}
+              subtitle={t(
+                "Готовим мультипликаторы, секторные группы и итоговый рейтинг акций.",
+                "Preparing valuation metrics, sector groups, and the stock ranking.",
+              )}
+              accentClassName="text-blue-600"
+            />
+          </SectionCard>
+          <MetricSkeletonGrid count={4} />
+          <TableSkeleton rows={8} columns={7} />
+          <div className="grid gap-6 xl:grid-cols-2">
+            <ChartSkeleton variant="scatter" />
+            <ChartSkeleton variant="bars" />
+          </div>
+        </div>
+      ) : !hasData ? (
+        <SectionCard
+          title={t("Нет данных для обработки", "No data to preprocess")}
+          description={t(
+            "Загрузите фундаментальные данные в панели слева, чтобы построить сводку и диаграммы.",
+            "Load fundamentals from the left panel to build the summary and charts.",
+          )}
+        />
+      ) : (
+      <>
       <MetricGrid>
         <MetricCard label={t("Акций в срезе", "Stocks in universe")} value={rows.length} />
         <MetricCard label={t("Первичный отбор", "Initial selection")} value={selectedRows.length} helper={t("Score >= 60", "Score >= 60")} />
@@ -400,6 +448,8 @@ export function DataPreprocessingPage() {
           </BarChart>
         </ResponsiveContainer>
       </SectionCard>
+      </>
+      )}
       </AnalysisPageFrame>
     </div>
   );

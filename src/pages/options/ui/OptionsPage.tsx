@@ -5,7 +5,7 @@ import { useAppSettings } from "../../../app/context/AppSettingsContext";
 import { useOptionsData } from "../../../entities/options";
 import { AppErrorDialog } from "../../../shared/ui/app-error-dialog";
 import { MetricCard, MetricGrid, PageHero, SectionCard } from "../../../shared/ui/analysis-shell";
-import { PageLoadingState, TableSkeleton } from "../../../shared/ui/loading-state";
+import { MetricSkeletonGrid, PageLoadingState, TableSkeleton } from "../../../shared/ui/loading-state";
 import {
   buildUnderlyingSummaries,
   formatTimestamp,
@@ -89,13 +89,13 @@ export function OptionsPage() {
         accent="amber"
         aside={
           <div className="space-y-2">
-            <div className="text-xs uppercase tracking-[0.18em] text-white/60">
+            <div className="text-xs uppercase tracking-[0.18em] text-slate-500 dark:text-white/60">
               {t({ ru: "Источник данных", en: "Data source" })}
             </div>
             <div className="text-lg font-semibold">
               {hasData ? t({ ru: "Сохранённые данные", en: "Saved data" }) : t({ ru: "Нет данных", en: "No data" })}
             </div>
-            <div className="text-sm text-white/80">
+            <div className="text-sm text-slate-600 dark:text-white/80">
               {t({ ru: "Обновлено", en: "Updated" })}: {formatTimestamp(cache.lastUpdated, locale)}
             </div>
           </div>
@@ -106,7 +106,7 @@ export function OptionsPage() {
               type="button"
               onClick={handleLoadOptions}
               disabled={isLoading}
-              className="ui-secondary-button border-white/20 bg-white/10 text-white hover:bg-white/16 dark:border-white/20 dark:bg-white/10 dark:text-white"
+              className="ui-secondary-button border-amber-300 bg-white text-amber-800 hover:bg-amber-100 disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-500 dark:border-white/20 dark:bg-white/10 dark:text-white dark:hover:bg-white/16 dark:disabled:text-white/50"
             >
               {isLoading ? <RefreshCw className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
               {hasData
@@ -117,7 +117,7 @@ export function OptionsPage() {
               type="button"
               onClick={clearCache}
               disabled={isLoading || !hasData}
-              className="ui-secondary-button border-white/20 bg-white/10 text-white hover:bg-white/16 dark:border-white/20 dark:bg-white/10 dark:text-white"
+              className="ui-secondary-button border-amber-300 bg-white text-amber-800 hover:bg-amber-100 disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-500 dark:border-white/20 dark:bg-white/10 dark:text-white dark:hover:bg-white/16 dark:disabled:text-white/50"
             >
               <Trash2 className="h-4 w-4" />
               {t({ ru: "Удалить данные", en: "Remove data" })}
@@ -171,6 +171,9 @@ export function OptionsPage() {
         </div>
       </SectionCard>
 
+      {isLoading ? (
+        <MetricSkeletonGrid count={5} />
+      ) : (
       <MetricGrid className="xl:grid-cols-5">
         <MetricCard
           label={t({ ru: "Тикеров в списке", en: "Tickers in list" })}
@@ -193,6 +196,7 @@ export function OptionsPage() {
           value={getCategoryLabel(groupFilter, locale)}
         />
       </MetricGrid>
+      )}
 
       {isLoading ? (
         <SectionCard>
@@ -214,7 +218,7 @@ export function OptionsPage() {
           en: "Each ticker has a button that opens the dedicated page for that asset and its options.",
         })}
       >
-        {isLoading && !hasData ? (
+        {isLoading ? (
           <TableSkeleton rows={8} columns={6} />
         ) : !hasData ? (
           <div className="ui-surface-muted text-center text-sm leading-7 text-slate-600 dark:text-slate-300">

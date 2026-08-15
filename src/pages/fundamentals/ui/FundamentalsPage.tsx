@@ -223,7 +223,7 @@ export function FundamentalsPage() {
           </div>
         </div>
 
-        {isLoading && !hasData ? (
+        {isLoading ? (
           <MetricSkeletonGrid count={2} />
         ) : (
           <MetricGrid className="xl:grid-cols-2">
@@ -250,11 +250,12 @@ export function FundamentalsPage() {
               type="text"
               value={searchQuery}
               onChange={(event) => setSearchQuery(event.target.value)}
+              disabled={isLoading}
               placeholder={isEn ? "Search by ticker, name, or sector" : "Поиск по тикеру, названию или сектору"}
               className="ui-input md:w-80"
             />
           </div>
-          {isLoading && !hasData ? (
+          {isLoading ? (
             <TableSkeleton rows={10} columns={metricColumns.length + 4} />
           ) : (
           <div className="ui-table-shell overflow-x-auto">
@@ -323,7 +324,7 @@ export function FundamentalsPage() {
             </table>
           </div>
           )}
-          {isLoading && !hasData ? null : (
+          {isLoading ? null : (
           <div className="mt-4 flex items-center justify-between gap-3">
             <div className="text-sm text-slate-600 dark:text-slate-300">
               Page {page} / {pageCount}

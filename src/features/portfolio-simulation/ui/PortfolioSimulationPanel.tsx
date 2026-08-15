@@ -10,7 +10,6 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import * as XLSX from "xlsx";
 import { useAppSettings } from "../../../app/context/AppSettingsContext";
 import { createTBankInstrumentsApi } from "../../../shared/api/tbank";
 import { numberOr } from "../../../shared/lib/number/numberOr";
@@ -49,6 +48,7 @@ export function PortfolioSimulationPanel({
   const [result, setResult] = useState<SimulationResult | null>(null);
   const [cachedAt, setCachedAt] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const tickerToShare = useMemo(() => {
@@ -250,44 +250,52 @@ export function PortfolioSimulationPanel({
     }
   };
 
-  const exportToXlsx = () => {
+  const exportToXlsx = async () => {
     if (!result) {
       return;
     }
 
-    const workbook = XLSX.utils.book_new();
-    appendSheet(workbook, "Summary", [
-      ["Analysis", analysisName],
-      ["Formation Date", formationDate],
-      ["Risk Free Rate", `${riskFreeRate}%`],
-      ["Dividend Gap Adjustment", includeDividendGap ? "Enabled" : "Disabled"],
-      ["Dividend Gap Method", "Monthly return = price return + annual dividend yield / 12"],
-      ["Months", result.metrics.months],
-      ["Total Return", result.metrics.totalReturn],
-      ["Annualized Return", result.metrics.annualizedReturn],
-      ["Volatility", result.metrics.volatility],
-      ["Sharpe", result.metrics.sharpe],
-      ["Sortino", result.metrics.sortino],
-    ]);
-    appendSheet(workbook, "Portfolio Dynamics", [
-      ["Month", "Monthly Return", "Cumulative Return"],
-      ...result.portfolioRows.map((row) => [row.month, row.monthlyReturn, row.cumulativeReturn]),
-    ]);
-    appendSheet(workbook, "Asset Dynamics", [
-      ["Month", "Ticker", "Monthly Return", "Cumulative Return"],
-      ...result.assetRows.map((row) => [row.month, row.ticker, row.monthlyReturn, row.cumulativeReturn]),
-    ]);
-    appendSheet(workbook, "Monthly Matrix", [
-      ["Ticker", "Name", ...monthlyMatrix.months, "Total"],
-      ...monthlyMatrix.rows.map((row) => [row.ticker, row.name, ...row.values, row.total]),
-      ["Portfolio Total", "", ...monthlyMatrix.portfolioValues, monthlyMatrix.portfolioTotal],
-    ]);
-    appendSheet(workbook, "Holdings", [
-      ["Ticker", "Name", "Weight", "Annual Dividend Yield"],
-      ...normalizedHoldings.map((row) => [row.ticker, row.name ?? "", row.normalizedWeight, row.annualDividendYield]),
-    ]);
+    setIsExporting(true);
+    try {
+      const XLSX = await import("xlsx");
+      const workbook = XLSX.utils.book_new();
+      appendSheet(XLSX.utils, workbook, "Summary", [
+        ["Analysis", analysisName],
+        ["Formation Date", formationDate],
+        ["Risk Free Rate", `${riskFreeRate}%`],
+        ["Dividend Gap Adjustment", includeDividendGap ? "Enabled" : "Disabled"],
+        ["Dividend Gap Method", "Monthly return = price return + annual dividend yield / 12"],
+        ["Months", result.metrics.months],
+        ["Total Return", result.metrics.totalReturn],
+        ["Annualized Return", result.metrics.annualizedReturn],
+        ["Volatility", result.metrics.volatility],
+        ["Sharpe", result.metrics.sharpe],
+        ["Sortino", result.metrics.sortino],
+      ]);
+      appendSheet(XLSX.utils, workbook, "Portfolio Dynamics", [
+        ["Month", "Monthly Return", "Cumulative Return"],
+        ...result.portfolioRows.map((row) => [row.month, row.monthlyReturn, row.cumulativeReturn]),
+      ]);
+      appendSheet(XLSX.utils, workbook, "Asset Dynamics", [
+        ["Month", "Ticker", "Monthly Return", "Cumulative Return"],
+        ...result.assetRows.map((row) => [row.month, row.ticker, row.monthlyReturn, row.cumulativeReturn]),
+      ]);
+      appendSheet(XLSX.utils, workbook, "Monthly Matrix", [
+        ["Ticker", "Name", ...monthlyMatrix.months, "Total"],
+        ...monthlyMatrix.rows.map((row) => [row.ticker, row.name, ...row.values, row.total]),
+        ["Portfolio Total", "", ...monthlyMatrix.portfolioValues, monthlyMatrix.portfolioTotal],
+      ]);
+      appendSheet(XLSX.utils, workbook, "Holdings", [
+        ["Ticker", "Name", "Weight", "Annual Dividend Yield"],
+        ...normalizedHoldings.map((row) => [row.ticker, row.name ?? "", row.normalizedWeight, row.annualDividendYield]),
+      ]);
 
-    XLSX.writeFile(workbook, `${filenamePrefix}-performance.xlsx`, { compression: true });
+      XLSX.writeFile(workbook, `${filenamePrefix}-performance.xlsx`, { compression: true });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : t("Не удалось сохранить Excel-файл.", "Failed to save the Excel file."));
+    } finally {
+      setIsExporting(false);
+    }
   };
 
   if (!holdings.length) {
@@ -304,11 +312,11 @@ export function PortfolioSimulationPanel({
       action={(
         <button
           type="button"
-          onClick={exportToXlsx}
-          disabled={!result || isLoading}
+          onClick={() => void exportToXlsx()}
+          disabled={!result || isLoading || isExporting}
           className="ui-secondary-button px-3 py-2 text-xs"
         >
-          <FileSpreadsheet className="h-4 w-4" />
+          {isExporting ? <RefreshCw className="h-4 w-4 animate-spin" /> : <FileSpreadsheet className="h-4 w-4" />}
           XLSX
         </button>
       )}

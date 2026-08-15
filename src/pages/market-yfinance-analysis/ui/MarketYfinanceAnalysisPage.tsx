@@ -28,8 +28,11 @@ import {
   downloadAnalysisResultsAsXlsx,
   downloadSvgAsPng,
 } from "../../../shared/lib/export/download";
-import { PortfolioHoldingsPanel } from "../../../shared/ui/analysis/PortfolioHoldingsPanel";
-import { AnalysisRunningIndicator } from "../../../shared/ui/analysis/AnalysisRunningIndicator";
+import {
+  AnalysisLoadingPreview,
+  AnalysisRunningIndicator,
+  PortfolioHoldingsPanel,
+} from "../../../shared/ui/analysis";
 import {
   AnalysisPageFrame,
   AnalysisSidebarCard,
@@ -438,13 +441,32 @@ function MarketYfinanceAnalysisPage({ mode }: { mode: MarketMode }) {
         ) : null}
 
         {isRunning ? (
-          <AnalysisRunningIndicator
-            title={t({ ru: config.titleRu, en: config.titleEn })}
-            subtitle={t("Загружаем yfinance и оптимизируем портфель по max Sharpe", "Loading yfinance data and optimizing the max-Sharpe portfolio")}
-          />
+          <>
+            <AnalysisRunningIndicator
+              title={t({ ru: config.titleRu, en: config.titleEn })}
+              subtitle={t("Загружаем yfinance и оптимизируем портфель по max Sharpe", "Loading yfinance data and optimizing the max-Sharpe portfolio")}
+              accentClassName={mode === "indexes" ? "text-blue-600" : "text-amber-600"}
+            />
+            <AnalysisLoadingPreview
+              accentClassName={mode === "indexes" ? "text-blue-600" : "text-amber-600"}
+              metricCount={8}
+              metricsTitle={t("Метрики портфеля", "Portfolio metrics")}
+              metricsDescription={t("Рассчитываем доходность, риск и коэффициенты.", "Calculating return, risk, and ratios.")}
+              chartsTitle={t("Портфель и эффективная граница", "Portfolio and efficient frontier")}
+              chartsDescription={t("Строим веса активов и пространство доступных портфелей.", "Building asset weights and the available portfolio set.")}
+              charts={[
+                { title: t("Распределение весов", "Weight allocation"), variant: "bars" },
+                { title: t("Эффективная граница", "Efficient frontier"), variant: "scatter" },
+              ]}
+              tableTitle={t("Метрики активов", "Asset metrics")}
+              tableDescription={t("Готовим итоговую таблицу по инструментам.", "Preparing the final instrument table.")}
+              tableRows={8}
+              tableColumns={5}
+            />
+          </>
         ) : null}
 
-        {result ? (
+        {!isRunning && result ? (
           <>
             {!!metrics.length && (
               <MetricGrid>
@@ -568,7 +590,7 @@ function MarketYfinanceAnalysisPage({ mode }: { mode: MarketMode }) {
               </SectionCard>
             )}
           </>
-        ) : (
+        ) : !isRunning ? (
           <SectionCard
             title={t("Готово к запуску", "Ready to Run")}
             description={t(
@@ -589,7 +611,7 @@ function MarketYfinanceAnalysisPage({ mode }: { mode: MarketMode }) {
               ))}
             </div>
           </SectionCard>
-        )}
+        ) : null}
       </div>
     </AnalysisPageFrame>
   );

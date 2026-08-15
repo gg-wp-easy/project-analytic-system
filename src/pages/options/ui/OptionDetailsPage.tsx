@@ -418,7 +418,7 @@ export function UnderlyingOptionsPage() {
               </div>
             }
           >
-            {isLoadingMarketAnalysis && !movementForecast ? (
+            {isLoadingMarketAnalysis ? (
               <div className="space-y-4">
                 <PageLoadingState
                   title={t({ ru: "Загружаем рыночные данные", en: "Loading market data" })}
@@ -661,7 +661,7 @@ export function UnderlyingOptionsPage() {
               en: "The table below contains options for the selected underlying asset only for the selected expiration date and current filter.",
             })}
           >
-            {isLoading && !sortedFilteredOptions.length ? (
+            {isLoading || isLoadingClosePrices ? (
               <TableSkeleton rows={10} columns={7} />
             ) : sortedFilteredOptions.length === 0 ? (
               <div className="ui-surface-muted text-center text-sm leading-7 text-slate-600 dark:text-slate-300">
