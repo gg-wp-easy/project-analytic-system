@@ -13,6 +13,10 @@ All orchestration is now done through Node.js scripts from `scripts/`. No `.sh` 
 - `npm run dev` - start Vite in browser mode
 - `npm run build` - build the frontend
 
+### Frontend asset splitting
+
+Vite keeps route-level lazy loading and separates stable runtime groups (`react`, `mui`, and `radix`) into cacheable chunks. Spreadsheet and PDF packages remain lazy and are isolated in `spreadsheet`, `pdf`, and `pdf-canvas` chunks, so they load only when an export is requested. Run `npm run build` to inspect production chunk sizes; the current largest JS chunk is 429.53 kB, below 500 kB.
+
 ### Server Repository Sync
 
 - `npm run servers:prepare` - fetch/pull the server repository

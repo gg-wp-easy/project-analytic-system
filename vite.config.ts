@@ -6,6 +6,27 @@ import react from '@vitejs/plugin-react'
 
 const rootDir = path.dirname(fileURLToPath(import.meta.url))
 
+const VENDOR_CHUNKS: ReadonlyArray<[string, ReadonlyArray<string>]> = [
+  ['react', ['/react/', '/react-dom/', '/scheduler/', '/react-router/']],
+  ['mui', ['/@mui/', '/@emotion/', '/@popperjs/']],
+  ['radix', ['/@radix-ui/', '/cmdk/', '/vaul/']],
+  ['spreadsheet', ['/xlsx/']],
+  ['pdf', ['/jspdf/', '/jspdf-autotable/']],
+  ['pdf-canvas', ['/html2canvas/']],
+]
+
+function vendorChunk(id: string): string | undefined {
+  const normalizedId = id.replaceAll('\\', '/')
+
+  if (!normalizedId.includes('/node_modules/')) {
+    return undefined
+  }
+
+  return VENDOR_CHUNKS.find(([, modules]) =>
+    modules.some((modulePath) => normalizedId.includes(modulePath)),
+  )?.[0]
+}
+
 export default defineConfig({
   base: "./",
   plugins: [
@@ -18,6 +39,13 @@ export default defineConfig({
     alias: {
       // Alias @ to the src directory
       '@': path.resolve(rootDir, './src'),
+    },
+  },
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks: vendorChunk,
+      },
     },
   },
   server: {
