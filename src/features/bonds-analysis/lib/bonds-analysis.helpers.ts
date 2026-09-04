@@ -1,5 +1,5 @@
 import { API_BASE_URL } from "../../../config";
-import type { BondAnalysisPreferences, BondCashFlowAnalysisResponse } from "../model";
+import type { BondAnalysisPreferences, BondPortfolioConstructionResponse } from "../model";
 
 function errorMessage(status: number, payload: unknown): string {
   if (payload && typeof payload === "object" && "detail" in payload) {
@@ -8,21 +8,29 @@ function errorMessage(status: number, payload: unknown): string {
       return detail;
     }
   }
-  return `Сервер не смог построить желаемый денежный поток (HTTP ${status}).`;
+  return `Сервер не смог построить портфель облигаций (HTTP ${status}).`;
 }
 
-export async function runBondCashFlowMatching(
+export async function runBondPortfolioConstruction(
   preferences: BondAnalysisPreferences,
-): Promise<BondCashFlowAnalysisResponse> {
-  const response = await fetch(`${API_BASE_URL}/analysis-bonds-cash-flow`, {
+  options: { refreshSource?: boolean } = {},
+): Promise<BondPortfolioConstructionResponse> {
+  const response = await fetch(`${API_BASE_URL}/analysis-bonds-portfolio`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
-      desired_cash_flows: preferences.desiredCashFlows,
+      investment_amount: Number(preferences.investmentAmount),
+      target_yield_percent: Number(preferences.targetYieldPercent),
       currency: preferences.currency,
-      max_risk_level: Number(preferences.targetRiskLevel),
+      risk_profile: preferences.riskProfile,
+      min_positions: Number(preferences.minPositions),
       max_positions: Number(preferences.maxPositions),
+      payout_frequency: preferences.payoutFrequency,
+      method: preferences.method,
+      target_duration_years:
+        preferences.method === "immunization" ? Number(preferences.targetDurationYears) : null,
       universe_limit: 160,
+      refresh_source: options.refreshSource === true,
     }),
   });
   const text = await response.text();
@@ -37,5 +45,5 @@ export async function runBondCashFlowMatching(
   if (!response.ok) {
     throw new Error(errorMessage(response.status, payload));
   }
-  return payload as BondCashFlowAnalysisResponse;
+  return payload as BondPortfolioConstructionResponse;
 }

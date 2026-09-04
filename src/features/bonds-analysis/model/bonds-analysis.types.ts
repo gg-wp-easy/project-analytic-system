@@ -55,7 +55,7 @@ export type BondPortfolioPosition = BondAnalysisBond & {
   weight: number;
   quantity?: number;
   estimatedNominal?: number;
-  cashFlowToTarget?: number;
+  cashFlowNextYear?: number;
 };
 
 export type BondPortfolioStatistics = {
@@ -67,37 +67,50 @@ export type BondPortfolioStatistics = {
   bondsCount: number;
 };
 
-export type BondCashFlowPeriod = {
-  date: string;
-  desiredCashFlow: number;
+export type BondPortfolioMethod = "matching" | "immunization";
+export type BondRiskProfile = "mixed" | "0" | "1" | "2" | "3";
+export type BondPayoutFrequency = "monthly" | "quarterly";
+export type BondPayoutScheduleItem = {
+  period: string;
+  startDate: string;
+  endDate: string;
+  targetCashFlow: number;
   projectedCashFlow: number;
-  cumulativeDesired: number;
-  cumulativeProjected: number;
-  cumulativeSurplus: number;
-  isCovered: boolean;
 };
 
-export type BondCashFlowMatching = {
-  status: "matched";
+export type BondPortfolioConstruction = {
+  status: "constructed";
+  method: BondPortfolioMethod;
+  methodLabel: string;
   currency: string;
+  investmentAmount: number;
   estimatedNominal: number;
-  totalDesiredCashFlow: number;
-  totalProjectedCashFlow: number;
-  periods: BondCashFlowPeriod[];
+  budgetRemaining: number;
+  targetYieldPercent: number;
+  targetAnnualCashFlow: number;
+  projectedAnnualCashFlow: number;
+  targetDurationYears: number | null;
+  portfolioDurationYears: number;
+  durationDeviationYears: number | null;
+  riskProfile: BondRiskProfile;
+  minimumPositions: number;
+  positionWeightLimitPercent: number;
+  payoutFrequency: BondPayoutFrequency;
+  payoutFrequencyLabel: string;
+  payoutSchedule: BondPayoutScheduleItem[];
   assumptions: string[];
 };
 
-export type BondCashFlowAnalysisResponse = {
+export type BondPortfolioConstructionResponse = {
   portfolio: {
     positions: BondPortfolioPosition[];
     statistics: BondPortfolioStatistics;
   };
   bonds: BondAnalysisBond[];
   summary: BondAnalysisSummary;
-  matching: BondCashFlowMatching;
+  construction: BondPortfolioConstruction;
   source?: Record<string, unknown>;
 };
-
 export type BondRiskPortfolio = {
   key: string;
   riskLevel: number;
@@ -139,12 +152,16 @@ export type BondSourceSummary = {
 };
 
 export type BondAnalysisPreferences = {
-  desiredCashFlows: string;
+  investmentAmount: string;
+  targetYieldPercent: string;
   currency: "RUB" | "CNY" | "USD" | "EUR";
-  targetRiskLevel: "0" | "1" | "2" | "3";
+  riskProfile: BondRiskProfile;
+  minPositions: string;
   maxPositions: string;
+  payoutFrequency: BondPayoutFrequency;
+  method: BondPortfolioMethod;
+  targetDurationYears: string;
 };
-
 export type BondsAnalysisPersistedState = {
   analysisPreferences?: BondAnalysisPreferences;
   positions?: BondPortfolioPosition[];
@@ -153,6 +170,6 @@ export type BondsAnalysisPersistedState = {
   byRiskStats?: BondRiskStatRow[];
   byCurrencyStats?: BondCurrencyStatRow[];
   summary?: BondAnalysisSummary | null;
-  matching?: BondCashFlowMatching | null;
+  construction?: BondPortfolioConstruction | null;
   error?: string | null;
 };

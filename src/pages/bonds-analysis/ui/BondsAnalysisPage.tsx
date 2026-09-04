@@ -12,14 +12,14 @@ import {
   ZAxis,
 } from "recharts";
 import { useAppSettings } from "../../../app/context/AppSettingsContext";
-import { runBondCashFlowMatching } from "../../../features/bonds-analysis";
+import { runBondPortfolioConstruction } from "../../../features/bonds-analysis";
 
 import { SavePortfolioButton } from "../../../features/saved-portfolios";
 import type {
   BondAnalysisBond,
   BondAnalysisPreferences,
   BondAnalysisSummary,
-  BondCashFlowMatching,
+  BondPortfolioConstruction,
   BondPortfolioPosition,
   BondsAnalysisPersistedState,
 } from "../../../features/bonds-analysis";
@@ -60,7 +60,9 @@ import {
   isCurrencyBond,
   isGovernmentBond,
   isMunicipalBond,
+  isPositiveNumberString,
   isValidBondCountString,
+  normalizeMethod,
   normalizeRiskPreference,
   riskLabel,
 } from "../lib";
@@ -135,7 +137,7 @@ export function BondsAnalysisPage() {
   const [positions, setPositions] = useState<BondPortfolioPosition[]>([]);
   const [allBonds, setAllBonds] = useState<BondAnalysisBond[]>([]);
   const [summary, setSummary] = useState<BondAnalysisSummary | null>(null);
-  const [matching, setMatching] = useState<BondCashFlowMatching | null>(null);
+  const [construction, setConstruction] = useState<BondPortfolioConstruction | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [errorDialogMessage, setErrorDialogMessage] = useState<string | null>(null);
   const [isLoadingSource, setIsLoadingSource] = useState(false);
@@ -162,19 +164,20 @@ export function BondsAnalysisPage() {
           : DEFAULT_BOND_ANALYSIS_PREFERENCES.currency;
         setAnalysisPreferences({
           ...DEFAULT_BOND_ANALYSIS_PREFERENCES,
-          desiredCashFlows:
-            typeof preferences.desiredCashFlows === "string"
-              ? preferences.desiredCashFlows
-              : DEFAULT_BOND_ANALYSIS_PREFERENCES.desiredCashFlows,
+          investmentAmount: String(preferences.investmentAmount ?? DEFAULT_BOND_ANALYSIS_PREFERENCES.investmentAmount),
+          targetYieldPercent: String(preferences.targetYieldPercent ?? DEFAULT_BOND_ANALYSIS_PREFERENCES.targetYieldPercent),
           currency,
-          targetRiskLevel: normalizeRiskPreference(preferences.targetRiskLevel),
-          maxPositions: String(preferences.maxPositions ?? DEFAULT_BOND_ANALYSIS_PREFERENCES.maxPositions),
+          riskProfile: normalizeRiskPreference(preferences.riskProfile),
+          minPositions: String(Math.max(10, Number(preferences.minPositions ?? DEFAULT_BOND_ANALYSIS_PREFERENCES.minPositions))),
+          maxPositions: String(Math.max(10, Number(preferences.maxPositions ?? DEFAULT_BOND_ANALYSIS_PREFERENCES.maxPositions))),
+          payoutFrequency: preferences.payoutFrequency === "monthly" ? "monthly" : "quarterly",
+          method: normalizeMethod(preferences.method),
+          targetDurationYears: String(preferences.targetDurationYears ?? DEFAULT_BOND_ANALYSIS_PREFERENCES.targetDurationYears),
         });
-      }
-      if (Array.isArray(parsed.positions)) setPositions(parsed.positions);
+      }      if (Array.isArray(parsed.positions)) setPositions(parsed.positions);
       if (Array.isArray(parsed.allBonds)) setAllBonds(parsed.allBonds);
       if (parsed.summary && typeof parsed.summary === "object") setSummary(parsed.summary);
-      if (parsed.matching && typeof parsed.matching === "object") setMatching(parsed.matching);
+      if (parsed.construction && typeof parsed.construction === "object") setConstruction(parsed.construction);
       if (typeof parsed.error === "string" || parsed.error === null) setError(parsed.error ?? null);
     } catch {
       // Ignore broken persisted state.
@@ -187,16 +190,20 @@ export function BondsAnalysisPage() {
       positions,
       allBonds,
       summary,
-      matching,
+      construction,
       error,
     };
     window.localStorage.setItem(BONDS_STATE_KEY, JSON.stringify(payload));
-  }, [allBonds, analysisPreferences, error, matching, positions, summary]);
+  }, [allBonds, analysisPreferences, error, construction, positions, summary]);
 
   const isBusy = isLoadingSource || isRecalculating;
   const canRunAnalysis =
-    analysisPreferences.desiredCashFlows.trim().length > 0 &&
-    isValidBondCountString(analysisPreferences.maxPositions);
+    isPositiveNumberString(analysisPreferences.investmentAmount) &&
+    isPositiveNumberString(analysisPreferences.targetYieldPercent) &&
+    isValidBondCountString(analysisPreferences.minPositions, 10) &&
+    isValidBondCountString(analysisPreferences.maxPositions, 10) &&
+    Number(analysisPreferences.minPositions) <= Number(analysisPreferences.maxPositions) &&
+    (analysisPreferences.method !== "immunization" || isPositiveNumberString(analysisPreferences.targetDurationYears));
   const totalPages = Math.max(1, Math.ceil(allBonds.length / BONDS_PAGE_SIZE));
   const pageStartIndex = (currentPage - 1) * BONDS_PAGE_SIZE;
   const pageEndIndex = Math.min(pageStartIndex + BONDS_PAGE_SIZE, allBonds.length);
@@ -265,27 +272,26 @@ export function BondsAnalysisPage() {
     }
   }, [riskChartPage, riskGroups.length]);
 
-  const selectedRiskLabel = t(
-    `Риск до ${analysisPreferences.targetRiskLevel}`,
-    `Risk up to ${analysisPreferences.targetRiskLevel}`,
-  );
-  const selectedRiskDescription = t(
-    `риск до ${analysisPreferences.targetRiskLevel}`,
-    `risk up to ${analysisPreferences.targetRiskLevel}`,
-  );
+  const selectedRiskLabel = riskLabel(analysisPreferences.riskProfile, t);
+  const selectedRiskDescription = analysisPreferences.riskProfile === "mixed"
+    ? t("смешанный риск", "mixed risk")
+    : t(`риск до ${analysisPreferences.riskProfile}`, `risk up to ${analysisPreferences.riskProfile}`);
   const exportMetrics = useMemo<ExportMetric[]>(
     () =>
       summary
         ? [
-            { label: t("Проанализировано облигаций", "Analyzed bonds"), value: summary.analyzedBondsCount },
-            { label: t("Выбрано выпусков", "Selected issues"), value: summary.selectedBondsCount },
-            { label: t("Желаемый поток", "Desired cash flow"), value: matching ? `${matching.totalDesiredCashFlow.toLocaleString()} ${matching.currency}` : "—" },
-            { label: t("Расчётный поток", "Projected cash flow"), value: matching ? `${matching.totalProjectedCashFlow.toLocaleString()} ${matching.currency}` : "—" },
-            { label: t("Расчётный номинал", "Estimated nominal"), value: matching ? `${matching.estimatedNominal.toLocaleString()} ${matching.currency}` : "—" },
-            { label: t("Допустимый риск", "Maximum risk"), value: selectedRiskLabel },
+            { label: t("Метод", "Method"), value: construction?.methodLabel ?? "—" },
+            { label: t("Сумма вложения", "Investment amount"), value: construction ? `${construction.investmentAmount.toLocaleString()} ${construction.currency}` : "—" },
+            { label: t("Целевой годовой поток", "Target annual cash flow"), value: construction ? `${construction.targetAnnualCashFlow.toLocaleString()} ${construction.currency}` : "—" },
+            { label: t("Расчётный поток за год", "Projected annual cash flow"), value: construction ? `${construction.projectedAnnualCashFlow.toLocaleString()} ${construction.currency}` : "—" },
+            { label: t("Расчётный номинал", "Estimated nominal"), value: construction ? `${construction.estimatedNominal.toLocaleString()} ${construction.currency}` : "—" },
+            { label: t("Минимум выпусков", "Minimum issues"), value: construction?.minimumPositions ?? "—" },
+            { label: t("Регулярность выплат", "Payout frequency"), value: construction?.payoutFrequencyLabel ?? "—" },
+            { label: t("Лимит на выпуск", "Issue weight limit"), value: construction ? `${construction.positionWeightLimitPercent}%` : "—" },
+            { label: t("Профиль риска", "Risk profile"), value: selectedRiskLabel },
           ]
         : [],
-    [matching, selectedRiskLabel, summary, t],
+    [construction, selectedRiskLabel, summary, t],
   );
   const portfolioColumns = useMemo<ExportColumn<BondPortfolioPosition>[]>(
     () => [
@@ -317,18 +323,18 @@ export function BondsAnalysisPage() {
     setPositions([]);
     setAllBonds([]);
     setSummary(null);
-    setMatching(null);
+    setConstruction(null);
     setError(null);
     setErrorDialogMessage(null);
     setCurrentPage(1);
   };
 
-  const applyAnalysis = async () => {
-    const result = await runBondCashFlowMatching(analysisPreferences);
+  const applyAnalysis = async (refreshSource = false) => {
+    const result = await runBondPortfolioConstruction(analysisPreferences, { refreshSource });
     setPositions(result.portfolio.positions);
     setAllBonds(result.bonds);
     setSummary(result.summary);
-    setMatching(result.matching);
+    setConstruction(result.construction);
     setCurrentPage(1);
   };
 
@@ -343,17 +349,17 @@ export function BondsAnalysisPage() {
 
   const handleRefresh = async () => {
     if (!canRunAnalysis) {
-      showError(t("Заполните желаемый денежный поток и максимальное число позиций.", "Enter the desired cash flow and maximum number of positions."));
+      showError(t("Укажите желаемый поток, минимум и максимум выпусков.", "Enter the desired cash flow and the minimum and maximum number of issues."));
       return;
     }
     setIsLoadingSource(true);
     setError(null);
     setErrorDialogMessage(null);
     try {
-      await applyAnalysis();
+      await applyAnalysis(true);
     } catch (err) {
       clearResults();
-      showError(err instanceof Error ? err.message : t("Не удалось построить денежный поток.", "Could not build the cash flow."));
+      showError(err instanceof Error ? err.message : t("Не удалось обновить данные по облигациям.", "Could not refresh bond data."));
     } finally {
       setIsLoadingSource(false);
     }
@@ -361,7 +367,7 @@ export function BondsAnalysisPage() {
 
   const handleRecalculate = async () => {
     if (!canRunAnalysis) {
-      showError(t("Заполните желаемый денежный поток и максимальное число позиций.", "Enter the desired cash flow and maximum number of positions."));
+      showError(t("Укажите желаемый поток, минимум и максимум выпусков.", "Enter the desired cash flow and the minimum and maximum number of issues."));
       return;
     }
     setIsRecalculating(true);
@@ -429,8 +435,8 @@ export function BondsAnalysisPage() {
             icon={Landmark}
             title={t("Анализ облигаций", "Bond Analysis")}
             description={t(
-              "Задайте желаемые суммы по будущим датам. Сервер сопоставит их с известными купонами и номиналом облигаций, а интерфейс покажет полученный сценарий.",
-              "Enter desired amounts on future dates. The server matches them to known bond coupons and principal; the interface shows the resulting scenario.",
+              "Укажите сумму вложения, целевой годовой процент и риск. Сервер построит портфель методом мэтчинга или иммунизации, а интерфейс покажет готовый расчёт.",
+              "Enter the investment amount, target annual percentage, and risk. The server builds matching or immunization portfolio; the interface shows the completed calculation.",
             )}
             accent="amber"
           />
@@ -440,11 +446,11 @@ export function BondsAnalysisPage() {
             icon={Settings}
             title={(
               <span className="inline-flex items-center gap-2">
-                {t("Параметры денежного потока", "Cash-flow parameters")}
-                <InfoTooltip label={t("Справка по мэтчингу облигаций", "Bond matching help")} side="right">
+                {t("Параметры построения", "Construction parameters")}
+                <InfoTooltip label={t("Справка по построению облигаций", "Bond construction help")} side="right">
                   <div className="space-y-2">
-                    <p>{t("Сервер получает известный календарь купонов и номинал при погашении, затем подбирает целые количества облигаций для покрытия накопленных сумм к заданным датам.", "The server reads known coupon dates and principal at maturity, then selects integer bond quantities to cover cumulative amounts by the requested dates.")}</p>
-                    <p>{t("Не включаются выпуски с плавающим купоном, амортизацией, бессрочностью и пометкой callable. Это расчётный сценарий, не обязательство и не гарантия выплат.", "Floating-rate, amortizing, perpetual, and callable-flagged issues are excluded. This is a calculation scenario, not an obligation or payment guarantee.")}</p>
+                    <p>{t("Сумма задаёт номинальный лимит, а процент — целевой поток за ближайшие 12 месяцев. При смешанном риске сервер рассматривает уровни 0–3.", "The amount is a nominal limit and the percentage is the target cash flow for the next 12 months. Mixed risk lets the server consider levels 0–3.")}</p>
+                    <p>{t("Мэтчинг подбирает известные выплаты в пределах лимита. Иммунизация дополнительно удерживает оценочную модифицированную дюрацию рядом с заданной. Это сценарий без обязательств и гарантий.", "Matching selects known payments within the limit. Immunization also keeps estimated modified duration near the target. This is a scenario without obligations or guarantees.")}</p>
                   </div>
                 </InfoTooltip>
               </span>
@@ -453,66 +459,85 @@ export function BondsAnalysisPage() {
           >
             <div className="space-y-4">
               <label className="block text-xs text-slate-600 dark:text-slate-400">
-                {t("Желаемый денежный поток", "Desired cash flow")}
-                <textarea
-                  rows={5}
-                  className="ui-input mt-1 min-h-32 font-mono"
-                  value={analysisPreferences.desiredCashFlows}
-                  onChange={(event) => setAnalysisPreferences((current) => ({ ...current, desiredCashFlows: event.target.value }))}
-                  placeholder={'2027-06-15; 50000\n2028-06-15; 75000'}
+                {t("Сумма вложения", "Investment amount")}
+                <input
+                  type="number"
+                  min="1"
+                  step="1"
+                  className="ui-input mt-1"
+                  value={analysisPreferences.investmentAmount}
+                  onChange={(event) => setAnalysisPreferences((current) => ({ ...current, investmentAmount: event.target.value }))}
                 />
-                <span className="mt-1 block text-[11px] text-slate-500">{t("Одна строка: ГГГГ-ММ-ДД; сумма. Даты должны быть в будущем.", "One line: YYYY-MM-DD; amount. Dates must be in the future.")}</span>
+              </label>
+
+              <label className="block text-xs text-slate-600 dark:text-slate-400">
+                {t("Целевой годовой поток, %", "Target annual cash flow, %")}
+                <input
+                  type="number"
+                  min="0.01"
+                  max="100"
+                  step="0.01"
+                  className="ui-input mt-1"
+                  value={analysisPreferences.targetYieldPercent}
+                  onChange={(event) => setAnalysisPreferences((current) => ({ ...current, targetYieldPercent: event.target.value }))}
+                />
               </label>
 
               <label className="block text-xs text-slate-600 dark:text-slate-400">
                 {t("Валюта", "Currency")}
-                <select
-                  className="ui-input mt-1"
-                  value={analysisPreferences.currency}
-                  onChange={(event) => setAnalysisPreferences((current) => ({ ...current, currency: event.target.value as BondAnalysisPreferences["currency"] }))}
-                >
+                <select className="ui-input mt-1" value={analysisPreferences.currency} onChange={(event) => setAnalysisPreferences((current) => ({ ...current, currency: event.target.value as BondAnalysisPreferences["currency"] }))}>
                   {(["RUB", "CNY", "USD", "EUR"] as const).map((currency) => <option key={currency} value={currency}>{currency}</option>)}
                 </select>
               </label>
 
               <label className="block text-xs text-slate-600 dark:text-slate-400">
-                {t("Максимальный риск", "Maximum risk")}
-                <select
-                  className="ui-input mt-1"
-                  value={analysisPreferences.targetRiskLevel}
-                  onChange={(event) => setAnalysisPreferences((current) => ({ ...current, targetRiskLevel: event.target.value as BondAnalysisPreferences["targetRiskLevel"] }))}
-                >
-                  {BOND_RISK_LEVEL_OPTIONS.map((level) => <option key={level} value={level}>{riskLabel(Number(level), t)} ({level})</option>)}
+                {t("Профиль риска", "Risk profile")}
+                <select className="ui-input mt-1" value={analysisPreferences.riskProfile} onChange={(event) => setAnalysisPreferences((current) => ({ ...current, riskProfile: event.target.value as BondAnalysisPreferences["riskProfile"] }))}>
+                  {BOND_RISK_LEVEL_OPTIONS.map((level) => <option key={level} value={level}>{riskLabel(level, t)}</option>)}
                 </select>
               </label>
 
               <label className="block text-xs text-slate-600 dark:text-slate-400">
-                {t("Максимум выпусков", "Maximum issues")}
-                <input
-                  type="number"
-                  min="1"
-                  max="50"
-                  step="1"
-                  className="ui-input mt-1"
-                  value={analysisPreferences.maxPositions}
-                  onChange={(event) => setAnalysisPreferences((current) => ({ ...current, maxPositions: event.target.value }))}
-                />
+                {t("Метод", "Method")}
+                <select className="ui-input mt-1" value={analysisPreferences.method} onChange={(event) => setAnalysisPreferences((current) => ({ ...current, method: event.target.value as BondAnalysisPreferences["method"] }))}>
+                  <option value="matching">{t("Мэтчинг потока", "Cash-flow matching")}</option>
+                  <option value="immunization">{t("Иммунизация дюрации", "Duration immunization")}</option>
+                </select>
               </label>
 
-              <button
-                type="button"
-                onClick={handleRecalculate}
-                disabled={isBusy || !canRunAnalysis}
-                className="ui-secondary-button w-full justify-center px-3 py-2 text-xs"
-              >
+              {analysisPreferences.method === "immunization" ? (
+                <label className="block text-xs text-slate-600 dark:text-slate-400">
+                  {t("Целевая дюрация, лет", "Target duration, years")}
+                  <input type="number" min="0.01" max="50" step="0.1" className="ui-input mt-1" value={analysisPreferences.targetDurationYears} onChange={(event) => setAnalysisPreferences((current) => ({ ...current, targetDurationYears: event.target.value }))} />
+                </label>
+              ) : null}
+
+              <label className="block text-xs text-slate-600 dark:text-slate-400">
+                {t("Регулярность выплат", "Payout frequency")}
+                <select className="ui-input mt-1" value={analysisPreferences.payoutFrequency} onChange={(event) => setAnalysisPreferences((current) => ({ ...current, payoutFrequency: event.target.value as BondAnalysisPreferences["payoutFrequency"] }))}>
+                  <option value="monthly">{t("Ежемесячно", "Monthly")}</option>
+                  <option value="quarterly">{t("Ежеквартально", "Quarterly")}</option>
+                </select>
+              </label>
+
+              <label className="block text-xs text-slate-600 dark:text-slate-400">
+                {t("Минимум разных выпусков", "Minimum distinct issues")}
+                <input type="number" min="10" max="50" step="1" className="ui-input mt-1" value={analysisPreferences.minPositions} onChange={(event) => setAnalysisPreferences((current) => ({ ...current, minPositions: event.target.value }))} />
+              </label>
+
+              <label className="block text-xs text-slate-600 dark:text-slate-400">
+                {t("Максимум выпусков", "Maximum issues")}
+                <input type="number" min={Math.max(10, Number(analysisPreferences.minPositions) || 10)} max="50" step="1" className="ui-input mt-1" value={analysisPreferences.maxPositions} onChange={(event) => setAnalysisPreferences((current) => ({ ...current, maxPositions: event.target.value }))} />
+              </label>
+
+              <button type="button" onClick={handleRecalculate} disabled={isBusy || !canRunAnalysis} className="ui-secondary-button w-full justify-center px-3 py-2 text-xs">
                 <RefreshCw className={`h-4 w-4 ${isRecalculating ? "animate-spin" : ""}`} />
-                {isRecalculating ? t("Считаем...", "Calculating...") : t("Построить поток", "Build cash flow")}
+                {isRecalculating ? t("Считаем...", "Calculating...") : t("Построить портфель", "Build portfolio")}
               </button>
             </div>
           </AnalysisSidebarCard>
         )}
-      >
-        {isBusy ? (
+      >        {isBusy ? (
           <AnalysisRunningIndicator
             title={t("Выполняем анализ облигаций", "Running bond analysis")}
             subtitle={t(
@@ -556,12 +581,21 @@ export function BondsAnalysisPage() {
             <div className="flex flex-wrap items-center gap-2">
               <button
                 type="button"
-                onClick={handleRefresh}
+                onClick={handleRecalculate}
                 disabled={isBusy || !canRunAnalysis}
                 className="ui-primary-button bg-gradient-to-r from-amber-600 to-orange-600 px-3 py-2 text-xs hover:from-amber-700 hover:to-orange-700"
               >
+                <RefreshCw className={`h-4 w-4 ${isRecalculating ? "animate-spin" : ""}`} />
+                {isRecalculating ? t("Считаем...", "Calculating...") : t("Построить по кэшу", "Build from cache")}
+              </button>
+              <button
+                type="button"
+                onClick={handleRefresh}
+                disabled={isBusy || !canRunAnalysis}
+                className="ui-secondary-button px-3 py-2 text-xs"
+              >
                 <RefreshCw className={`h-4 w-4 ${isLoadingSource ? "animate-spin" : ""}`} />
-                {isLoadingSource ? t("Строим...", "Building...") : t("Построить поток", "Build cash flow")}
+                {isLoadingSource ? t("Обновляем...", "Refreshing...") : t("Обновить облигации", "Refresh bonds")}
               </button>
               <button
                 type="button"
@@ -812,40 +846,47 @@ export function BondsAnalysisPage() {
 
         {summary ? (
           <MetricGrid>
-            <MetricCard label={t("Проанализировано выпусков", "Analyzed issues")} value={summary.analyzedBondsCount} />
-            <MetricCard label={t("Выбрано выпусков", "Selected issues")} value={summary.selectedBondsCount} />
-            <MetricCard label={t("Желаемый поток", "Desired cash flow")} value={matching ? `${matching.totalDesiredCashFlow.toLocaleString()} ${matching.currency}` : "—"} />
-            <MetricCard label={t("Расчётный номинал", "Estimated nominal")} value={matching ? `${matching.estimatedNominal.toLocaleString()} ${matching.currency}` : "—"} />
+            <MetricCard label={t("Метод", "Method")} value={construction?.methodLabel ?? "—"} />
+            <MetricCard label={t("Сумма вложения", "Investment amount")} value={construction ? `${construction.investmentAmount.toLocaleString()} ${construction.currency}` : "—"} />
+            <MetricCard label={t("Целевой поток за год", "Target annual cash flow")} value={construction ? `${construction.targetAnnualCashFlow.toLocaleString()} ${construction.currency}` : "—"} />
+            <MetricCard label={t("Расчётный поток за год", "Projected annual cash flow")} value={construction ? `${construction.projectedAnnualCashFlow.toLocaleString()} ${construction.currency}` : "—"} />
           </MetricGrid>
         ) : null}
 
-        {matching ? (
+        {construction ? (
           <SectionCard
-            title={t("Покрытие желаемого денежного потока", "Desired cash-flow coverage")}
-            description={t("Сервер суммирует известные платежи, пришедшие не позднее каждой целевой даты. Ранний остаток переносится без доходности.", "The server sums known payments received no later than each target date. Earlier surplus is carried at a zero return.")}
+            title={t("Результат серверного построения", "Server construction result")}
+            description={t("Известные купоны и погашения агрегированы за следующие 12 месяцев. Для иммунизации показано отклонение дюрации от цели.", "Known coupons and principal are aggregated over the next 12 months. Immunization shows duration deviation from the target.")}
           >
-            <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-950 dark:border-amber-900/70 dark:bg-amber-950/30 dark:text-amber-100">
-              {t("Расчётный сценарий: суммы не учитывают цену покупки, налоги, комиссии, дефолт и изменения условий. Это не обязательство и не гарантия выплат.", "Calculation scenario: amounts do not include purchase price, taxes, fees, default, or changing terms. It is not an obligation or payment guarantee.")}
+            <div className="grid gap-3 text-sm sm:grid-cols-2 lg:grid-cols-3">
+              <div className="ui-surface-muted"><div className="text-xs text-slate-500">{t("Расчётный номинал", "Estimated nominal")}</div><div className="mt-1 font-semibold">{construction.estimatedNominal.toLocaleString()} {construction.currency}</div></div>
+              <div className="ui-surface-muted"><div className="text-xs text-slate-500">{t("Остаток лимита", "Remaining limit")}</div><div className="mt-1 font-semibold">{construction.budgetRemaining.toLocaleString()} {construction.currency}</div></div>
+              <div className="ui-surface-muted"><div className="text-xs text-slate-500">{t("Оценочная дюрация", "Estimated duration")}</div><div className="mt-1 font-semibold">{construction.portfolioDurationYears.toFixed(2)} {t("лет", "years")}</div></div>
+              {construction.targetDurationYears !== null ? <div className="ui-surface-muted"><div className="text-xs text-slate-500">{t("Цель / отклонение дюрации", "Duration target / deviation")}</div><div className="mt-1 font-semibold">{construction.targetDurationYears.toFixed(2)} / {construction.durationDeviationYears?.toFixed(2)} {t("лет", "years")}</div></div> : null}
+              <div className="ui-surface-muted"><div className="text-xs text-slate-500">{t("Профиль риска", "Risk profile")}</div><div className="mt-1 font-semibold">{riskLabel(construction.riskProfile, t)}</div></div>
+              <div className="ui-surface-muted"><div className="text-xs text-slate-500">{t("Минимум выпусков", "Minimum issues")}</div><div className="mt-1 font-semibold">{construction.minimumPositions}</div></div>
+              <div className="ui-surface-muted"><div className="text-xs text-slate-500">{t("Регулярность выплат", "Payout frequency")}</div><div className="mt-1 font-semibold">{construction.payoutFrequencyLabel}</div></div>
+              <div className="ui-surface-muted"><div className="text-xs text-slate-500">{t("Лимит на выпуск", "Issue weight limit")}</div><div className="mt-1 font-semibold">{construction.positionWeightLimitPercent.toFixed(0)}%</div></div>
             </div>
+            <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-950 dark:border-amber-900/70 dark:bg-amber-950/30 dark:text-amber-100">
+              {t("Расчётный сценарий: номинал не является ценой покупки и не учитывает НКД, налоги, комиссии, ликвидность, дефолт или изменение условий. Это не обязательство и не гарантия выплат.", "Calculation scenario: nominal is not a purchase price and does not include accrued interest, taxes, fees, liquidity, default, or changing terms. It is not an obligation or payment guarantee.")}
+            </div>
+          </SectionCard>
+        ) : null}
+        {construction?.payoutSchedule.length ? (
+          <SectionCard
+            title={t("График расчётных выплат", "Projected payout schedule")}
+            description={t("Сервер проверил целевой поток в каждом выбранном периоде. Это календарь известных выплат, а не гарантия.", "The server checked the target flow in every selected period. This is a known-payment calendar, not a guarantee.")}
+          >
             <div className="ui-table-shell overflow-x-auto">
-              <table className="ui-data-table min-w-[48rem]">
-                <thead>
-                  <tr>
-                    <th>{t("Дата", "Date")}</th>
-                    <th>{t("Желаемый поток", "Desired flow")}</th>
-                    <th>{t("Расчётный поток", "Projected flow")}</th>
-                    <th>{t("Накопленный остаток", "Cumulative surplus")}</th>
-                    <th>{t("Покрытие", "Coverage")}</th>
-                  </tr>
-                </thead>
+              <table className="ui-data-table">
+                <thead><tr><th>{t("Период", "Period")}</th><th>{t("Цель", "Target")}</th><th>{t("Расчётный поток", "Projected flow")}</th></tr></thead>
                 <tbody>
-                  {matching.periods.map((period) => (
-                    <tr key={period.date}>
-                      <td>{period.date}</td>
-                      <td>{period.desiredCashFlow.toLocaleString("ru-RU", { maximumFractionDigits: 2 })} {matching.currency}</td>
-                      <td>{period.projectedCashFlow.toLocaleString("ru-RU", { maximumFractionDigits: 2 })} {matching.currency}</td>
-                      <td className={period.cumulativeSurplus >= 0 ? "text-emerald-700 dark:text-emerald-300" : "text-rose-700 dark:text-rose-300"}>{period.cumulativeSurplus.toLocaleString("ru-RU", { maximumFractionDigits: 2 })} {matching.currency}</td>
-                      <td><span className={period.isCovered ? "rounded-full bg-emerald-100 px-2 py-1 text-xs font-medium text-emerald-800 dark:bg-emerald-950 dark:text-emerald-200" : "rounded-full bg-rose-100 px-2 py-1 text-xs font-medium text-rose-800 dark:bg-rose-950 dark:text-rose-200"}>{period.isCovered ? t("Покрыт", "Covered") : t("Не покрыт", "Not covered")}</span></td>
+                  {construction.payoutSchedule.map((item) => (
+                    <tr key={item.period}>
+                      <td>{item.period}</td>
+                      <td>{item.targetCashFlow.toLocaleString()} {construction.currency}</td>
+                      <td>{item.projectedCashFlow.toLocaleString()} {construction.currency}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -857,10 +898,9 @@ export function BondsAnalysisPage() {
           <SectionCard
             title={t("Оптимальный портфель облигаций", "Optimal bond portfolio")}
             description={t(
-              `Сервер сопоставил известные купоны и номинал с желаемыми датами в ${matching?.currency ?? analysisPreferences.currency}; ${selectedRiskDescription}. Количества и номинал расчётные.`,
-              `The server matched known coupons and principal to desired dates in ${matching?.currency ?? analysisPreferences.currency}; ${selectedRiskDescription}. Quantities and nominal are estimates.`,
-            )}
-            action={(
+              `Сервер построил портфель методом ${construction?.methodLabel.toLowerCase() ?? "мэтчинга"}: ${selectedRiskDescription}. Количества и номинал расчётные.`,
+              `The server built a ${construction?.methodLabel.toLowerCase() ?? "matching"} portfolio with ${selectedRiskDescription}. Quantities and nominal are estimates.`,
+            )}            action={(
               <div className="flex flex-wrap items-center gap-2">
                 <button onClick={exportPortfolioToXlsx} className="ui-secondary-button px-3 py-2 text-xs">
                   <FileSpreadsheet className="h-4 w-4" />
@@ -902,7 +942,7 @@ export function BondsAnalysisPage() {
                     <th>{t("Облигация", "Bond")}</th>
                     <th>{t("Количество", "Quantity")}</th>
                     <th>{t("Расчётный номинал", "Estimated nominal")}</th>
-                    <th>{t("Поток до последней даты", "Flow through last date")}</th>
+                    <th>{t("Поток за 12 месяцев", "Cash flow over 12 months")}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -911,8 +951,8 @@ export function BondsAnalysisPage() {
                       <td className="font-medium text-slate-900 dark:text-slate-100">{position.ticker}</td>
                       <td className="ui-cell-name max-w-[28rem] whitespace-normal break-words pr-6 leading-5">{position.name}</td>
                       <td>{position.quantity ?? "—"}</td>
-                      <td>{position.estimatedNominal?.toLocaleString("ru-RU", { maximumFractionDigits: 2 }) ?? "—"} {matching?.currency ?? analysisPreferences.currency}</td>
-                      <td>{position.cashFlowToTarget?.toLocaleString("ru-RU", { maximumFractionDigits: 2 }) ?? "—"} {matching?.currency ?? analysisPreferences.currency}</td>
+                      <td>{position.estimatedNominal?.toLocaleString("ru-RU", { maximumFractionDigits: 2 }) ?? "—"} {construction?.currency ?? analysisPreferences.currency}</td>
+                      <td>{position.cashFlowNextYear?.toLocaleString("ru-RU", { maximumFractionDigits: 2 }) ?? "—"} {construction?.currency ?? analysisPreferences.currency}</td>
                     </tr>
                   ))}
                 </tbody>

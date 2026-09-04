@@ -1,19 +1,15 @@
-export { runBondCashFlowMatching } from "./lib";
+export { runBondPortfolioConstruction } from "./lib";
 export type {
   BondAnalysisBond,
   BondAnalysisPreferences,
   BondAnalysisSummary,
-  BondCashFlowAnalysisResponse,
-  BondCashFlowMatching,
-  BondCashFlowPeriod,
-  BondCouponScheduleItem,
-  BondCurrencyStatRow,
+  BondPortfolioConstruction,
+  BondPortfolioConstructionResponse,
+  BondPortfolioMethod,
+  BondPayoutFrequency,
+  BondPayoutScheduleItem,
   BondPortfolioPosition,
   BondPortfolioStatistics,
-  BondPreviewRow,
-  BondRiskPortfolio,
-  BondRiskStatRow,
-  BondSourceRow,
-  BondSourceSummary,
+  BondRiskProfile,
   BondsAnalysisPersistedState,
 } from "./model";

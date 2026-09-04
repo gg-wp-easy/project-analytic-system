@@ -1,1 +1,1 @@
-export { runBondCashFlowMatching } from "./bonds-analysis.helpers";
+export { runBondPortfolioConstruction } from "./bonds-analysis.helpers";
