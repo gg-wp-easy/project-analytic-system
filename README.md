@@ -17,6 +17,15 @@ All orchestration is now done through Node.js scripts from `scripts/`. No `.sh` 
 
 Vite keeps route-level lazy loading and separates stable runtime groups (`react`, `mui`, and `radix`) into cacheable chunks. Spreadsheet and PDF packages remain lazy and are isolated in `spreadsheet`, `pdf`, and `pdf-canvas` chunks, so they load only when an export is requested. Run `npm run build` to inspect production chunk sizes; the current largest JS chunk is 429.53 kB, below 500 kB.
 
+### Bond desired cash-flow matching
+
+The bond screen sends a desired schedule to `POST /analysis-bonds-cash-flow`; the browser only renders the response. Enter one future payment per line: `YYYY-MM-DD; amount`, then choose one currency, a maximum risk level, and 1–50 issues.
+
+The server requests the available T-Bank coupon calendar, adds principal at maturity, and selects integer quantities of eligible bonds so cumulative known payments cover the cumulative requested amount by every target date. An early surplus is carried at zero return: the calculation does not assume reinvestment income. It is cash-flow matching, not duration immunization or a target-yield promise.
+
+Only same-currency issues with a known fixed payment schedule are considered. Floating-rate, amortizing, perpetual, and callable-flagged issues are excluded. `estimatedNominal` is a nominal proxy, not a tradable purchase price. The scenario excludes price changes, accrued interest, taxes, fees, default, liquidity, missing data, and changing issuer terms; it creates no obligation and gives no payment guarantee.
+
+References: [CFA Institute overview of fixed-income cash-flow matching](https://www.cfainstitute.org/insights/professional-learning/refresher-readings/2026/overview-fixed-income-portfolio-management), [T-Bank `GetBondCoupons` API](https://developer.tbank.ru/invest/api/instruments-service-get-bond-coupons), and [Investor.gov bond basics](https://www.investor.gov/introduction-investing/investing-basics/investment-products/bonds-or-fixed-income-products).
 ### Server Repository Sync
 
 - `npm run servers:prepare` - fetch/pull the server repository

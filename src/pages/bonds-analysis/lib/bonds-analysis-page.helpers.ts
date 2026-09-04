@@ -1,15 +1,11 @@
-import type { BondAnalysisBond, BondAnalysisPreferences, BondSourceRow } from "../../../features/bonds-analysis";
+import type { BondAnalysisBond, BondAnalysisPreferences } from "../../../features/bonds-analysis";
 import { DEFAULT_BOND_ANALYSIS_PREFERENCES } from "../model";
 import type { BondBubblePoint, BondsTranslationFn } from "../model";
 
 export function normalizeRiskPreference(value: unknown): BondAnalysisPreferences["targetRiskLevel"] {
-  return value === "mixed" || value === "0" || value === "1" || value === "2" || value === "3"
+  return value === "0" || value === "1" || value === "2" || value === "3"
     ? value
     : DEFAULT_BOND_ANALYSIS_PREFERENCES.targetRiskLevel;
-}
-
-export function normalizeSelectionMethod(value: unknown): BondAnalysisPreferences["selectionMethod"] {
-  return value === "immunization" ? "immunization" : "matching";
 }
 
 export function getVisiblePages(currentPage: number, totalPages: number): Array<number | null> {
@@ -25,22 +21,9 @@ export function getVisiblePages(currentPage: number, totalPages: number): Array<
   return [1, null, currentPage - 1, currentPage, currentPage + 1, null, totalPages];
 }
 
-export function isPositiveNumberString(value: string): boolean {
-  const parsed = Number(value.replace(",", "."));
-  return Number.isFinite(parsed) && parsed > 0;
-}
-
 export function isValidBondCountString(value: string): boolean {
   const parsed = Math.trunc(Number(value.replace(",", ".")));
-  return Number.isFinite(parsed) && parsed >= 20;
-}
-
-export function isFixedCouponSourceRow(row: BondSourceRow): boolean {
-  return !row.floating_coupon_flag && Number.isFinite(row.coupon_rate) && row.coupon_rate > 0;
-}
-
-export function isPositiveYieldBond(row: BondAnalysisBond): boolean {
-  return Number.isFinite(row.currentYield) && row.currentYield > 0;
+  return Number.isFinite(parsed) && parsed >= 1 && parsed <= 50;
 }
 
 export function riskLabel(level: number, t: BondsTranslationFn): string {

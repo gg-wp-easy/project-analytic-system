@@ -1,3 +1,9 @@
+export type BondCouponScheduleItem = {
+  payment_date: string;
+  amount: number;
+  coupon_period_days?: number;
+};
+
 export type BondSourceRow = {
   ticker: string;
   name: string;
@@ -8,9 +14,11 @@ export type BondSourceRow = {
   risk_level: number;
   coupon_rate: number;
   coupon_payments_per_year?: number;
+  coupon_schedule?: BondCouponScheduleItem[];
   floating_coupon_flag?: boolean;
   amortization_flag?: boolean;
   perpetual_flag?: boolean;
+  callable_flag?: boolean;
   liquidity_flag?: boolean;
   issue_size?: number;
   source?: string;
@@ -45,15 +53,49 @@ export type BondAnalysisBond = {
 
 export type BondPortfolioPosition = BondAnalysisBond & {
   weight: number;
+  quantity?: number;
+  estimatedNominal?: number;
+  cashFlowToTarget?: number;
 };
 
 export type BondPortfolioStatistics = {
   yield: number;
   duration: number;
   riskScore: number;
-  convexity: number;
+  convexity?: number;
   diversification: number;
   bondsCount: number;
+};
+
+export type BondCashFlowPeriod = {
+  date: string;
+  desiredCashFlow: number;
+  projectedCashFlow: number;
+  cumulativeDesired: number;
+  cumulativeProjected: number;
+  cumulativeSurplus: number;
+  isCovered: boolean;
+};
+
+export type BondCashFlowMatching = {
+  status: "matched";
+  currency: string;
+  estimatedNominal: number;
+  totalDesiredCashFlow: number;
+  totalProjectedCashFlow: number;
+  periods: BondCashFlowPeriod[];
+  assumptions: string[];
+};
+
+export type BondCashFlowAnalysisResponse = {
+  portfolio: {
+    positions: BondPortfolioPosition[];
+    statistics: BondPortfolioStatistics;
+  };
+  bonds: BondAnalysisBond[];
+  summary: BondAnalysisSummary;
+  matching: BondCashFlowMatching;
+  source?: Record<string, unknown>;
 };
 
 export type BondRiskPortfolio = {
@@ -97,16 +139,13 @@ export type BondSourceSummary = {
 };
 
 export type BondAnalysisPreferences = {
-  targetYield: string;
-  targetDuration: string;
-  paymentFrequency: "monthly" | "quarterly";
-  targetRiskLevel: "mixed" | "0" | "1" | "2" | "3";
-  selectionMethod: "matching" | "immunization";
-  portfolioBondsCount: string;
+  desiredCashFlows: string;
+  currency: "RUB" | "CNY" | "USD" | "EUR";
+  targetRiskLevel: "0" | "1" | "2" | "3";
+  maxPositions: string;
 };
 
 export type BondsAnalysisPersistedState = {
-  sourceRows?: BondSourceRow[];
   analysisPreferences?: BondAnalysisPreferences;
   positions?: BondPortfolioPosition[];
   allBonds?: BondAnalysisBond[];
@@ -114,5 +153,6 @@ export type BondsAnalysisPersistedState = {
   byRiskStats?: BondRiskStatRow[];
   byCurrencyStats?: BondCurrencyStatRow[];
   summary?: BondAnalysisSummary | null;
+  matching?: BondCashFlowMatching | null;
   error?: string | null;
 };
