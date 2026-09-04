@@ -69,3 +69,14 @@ To replace a local server checkout from scratch:
 2. `npm run servers:prepare`
 3. `npm run servers:build`
 4. `npm run electron:build`
+
+## Server portfolio risk and return
+
+The stock-analysis server uses one annual methodology in the AI, hybrid, tree, and cluster portfolio paths. All rates are decimal annual rates (`0.20` means 20%).
+
+- **Expected return:** CAPM-implied return: `risk_free_rate + beta * market_risk_premium`. The risk-free rate comes from the saved optimizer settings; the default market risk premium is `5.5%` in `analysis/analysis_stocks/common/markowitz_constants.py` and must be reviewed when the target market or investment horizon changes.
+- **Stock risk:** single-index total volatility: `sqrt(beta^2 * market_volatility^2 + idiosyncratic_volatility^2)`. The default market and idiosyncratic volatilities are 20% and 10%, respectively. The existing market-cap multiplier scales volatility only.
+- **Portfolio risk:** the covariance matrix has a shared market factor and a diagonal idiosyncratic component; portfolio volatility remains `sqrt(w.T * Cov * w)`.
+- Value, quality, dividend, and ML scores select and rank candidates but do **not** add arbitrary percentage points to `expected_return`. For transparency, AI/hybrid responses additionally include `income_growth_return_estimate` (dividend yield plus sustainable-growth proxy); it is diagnostic only and is not optimized as a return forecast.
+
+The CAPM formula and the interpretation of beta as systematic risk are documented by [OpenStax](https://openstax.org/books/principles-finance/pages/15-3-the-capital-asset-pricing-model-capm). The portfolio approach follows Markowitz mean-variance selection; the original article is available from [The Journal of Finance](https://doi.org/10.1111/J.1540-6261.1952.TB01525.X). Dividend-plus-growth is kept separate because the Gordon model applies to an expected **dividend** growth stream and requires a stable-growth assumption; see [OpenStax's DDM discussion](https://openstax.org/books/principles-finance-2e/pages/11-2-dividend-discount-models-ddms).
