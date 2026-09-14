@@ -16,3 +16,4 @@ release/
 *.exe
 server-analytic-system/
 *.spec
+.venv/
