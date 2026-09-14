@@ -30,6 +30,7 @@ import {
   downloadSvgAsPng,
   getPortfolioHoldingColumns,
 } from "../../../shared/lib/export/download";
+import { numberOr } from "../../../shared/lib/number/numberOr";
 import {
   AnalysisPageFrame,
   AnalysisSidebarCard,
@@ -73,6 +74,11 @@ export function HybridAnalysis() {
   const [isRunning, setIsRunning] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [errorDialogMessage, setErrorDialogMessage] = useState<string | null>(null);
+  const [weights, setWeights] = useState({
+    clusterWeight: "50",
+    treeWeight: "25",
+    neuralWeight: "25",
+  });
   const [modelComparison, setModelComparison] = useState<ModelScore[]>([]);
   const [metrics, setMetrics] = useState<MetricItem[]>([]);
   const [portfolioStrategies, setPortfolioStrategies] = useState<StrategyPortfolio[]>([]);
@@ -181,6 +187,7 @@ export function HybridAnalysis() {
         return;
       }
       const parsed = JSON.parse(raw) as {
+        weights?: { clusterWeight?: string; treeWeight?: string; neuralWeight?: string };
         modelComparison?: ModelScore[];
         metrics?: MetricItem[];
         portfolioStrategies?: StrategyPortfolio[];
@@ -189,6 +196,13 @@ export function HybridAnalysis() {
         portfolioAssetsCount?: number;
         error?: string | null;
       };
+      if (parsed.weights) {
+        setWeights({
+          clusterWeight: String(parsed.weights.clusterWeight ?? "50"),
+          treeWeight: String(parsed.weights.treeWeight ?? "25"),
+          neuralWeight: String(parsed.weights.neuralWeight ?? "25"),
+        });
+      }
       if (Array.isArray(parsed.modelComparison)) setModelComparison(parsed.modelComparison);
       if (Array.isArray(parsed.metrics)) setMetrics(parsed.metrics.filter((item) => isVisibleAnalysisMetric(item.label)));
       if (Array.isArray(parsed.portfolioStrategies)) setPortfolioStrategies(parsed.portfolioStrategies);
@@ -203,6 +217,7 @@ export function HybridAnalysis() {
 
   useEffect(() => {
     const payload = {
+      weights,
       modelComparison,
       metrics,
       portfolioStrategies,
@@ -212,7 +227,7 @@ export function HybridAnalysis() {
       error,
     };
     window.localStorage.setItem(HYBRID_STATE_KEY, JSON.stringify(payload));
-  }, [modelComparison, metrics, portfolioStrategies, portfolio, trainingHistory, portfolioAssetsCount, error]);
+  }, [weights, modelComparison, metrics, portfolioStrategies, portfolio, trainingHistory, portfolioAssetsCount, error]);
 
   const resetAnalysisResults = () => {
     setModelComparison([]);
@@ -250,7 +265,11 @@ export function HybridAnalysis() {
     setErrorDialogMessage(null);
     setIsRunning(true);
 
-    const numericWeights = { cluster: 50, tree: 25, neural: 25 };
+    const numericWeights = {
+      cluster: numberOr(weights.clusterWeight, 0),
+      tree: numberOr(weights.treeWeight, 0),
+      neural: numberOr(weights.neuralWeight, 0),
+    };
 
     try {
       if (!optimizerSettings.autoPortfolioOptimization) {
@@ -356,6 +375,28 @@ export function HybridAnalysis() {
     }
   };
 
+  const analysisWeightFields = [
+    {
+      key: "clusterWeight" as const,
+      label: t("Кластерный анализ", "Cluster analysis"),
+      defaultValue: 50,
+    },
+    {
+      key: "treeWeight" as const,
+      label: t("Дерево решений", "Decision tree"),
+      defaultValue: 25,
+    },
+    {
+      key: "neuralWeight" as const,
+      label: t("Нейросетевой анализ", "Neural analysis"),
+      defaultValue: 25,
+    },
+  ];
+  const analysisWeightTotal = analysisWeightFields.reduce(
+    (sum, item) => sum + Math.max(numberOr(weights[item.key], item.defaultValue), 0),
+    0,
+  );
+
   return (
     <>
       <AnalysisPageFrame
@@ -375,8 +416,8 @@ export function HybridAnalysis() {
             icon={Settings}
             title={t("Параметры портфеля", "Portfolio Parameters")}
             description={t(
-              "Модели и признаки подбираются автоматически; здесь настраивается только итоговый портфель.",
-              "Models and features are selected automatically; only the final portfolio is configured here.",
+              "Параметры моделей и признаки подбираются автоматически; здесь задаются доли моделей и итоговый портфель.",
+              "Model parameters and features are selected automatically; model shares and the final portfolio are configured here.",
             )}
             accent="cyan"
           >
@@ -384,6 +425,31 @@ export function HybridAnalysis() {
               <div className="ui-surface-muted">
                 <p className="text-sm text-slate-700 dark:text-slate-300">{t("Источник: загруженные фундаментальные данные", "Source: loaded fundamentals")}</p>
                 <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">{t("Записей", "Records")}: {requestData.length}</p>
+              </div>
+              <div className="ui-surface-muted space-y-3">
+                <p className="text-sm font-medium text-slate-700 dark:text-slate-300">
+                  {t("Доли моделей в итоговой оценке", "Model shares in the final score")}
+                </p>
+                {analysisWeightFields.map((field) => {
+                  const rawValue = Math.max(numberOr(weights[field.key], field.defaultValue), 0);
+                  const share = analysisWeightTotal > 0 ? (rawValue / analysisWeightTotal) * 100 : 0;
+                  return (
+                    <label key={field.key} className="block text-xs text-slate-600 dark:text-slate-400">
+                      <span className="flex items-center justify-between gap-3">
+                        <span>{field.label}</span>
+                        <span className="font-semibold text-cyan-700 dark:text-cyan-300">{share.toFixed(0)}%</span>
+                      </span>
+                      <input
+                        type="number"
+                        min="0"
+                        step="1"
+                        className="ui-input mt-1"
+                        value={weights[field.key]}
+                        onChange={(event) => setWeights((current) => ({ ...current, [field.key]: event.target.value }))}
+                      />
+                    </label>
+                  );
+                })}
               </div>
               <OptimizerSettingsFields
                 settings={optimizerSettings}
