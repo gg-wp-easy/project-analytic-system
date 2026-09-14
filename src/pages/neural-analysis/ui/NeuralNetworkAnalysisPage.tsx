@@ -709,28 +709,7 @@ export function NeuralNetworkAnalysis() {
           auto_portfolio_optimization: optimizerSettings.autoPortfolioOptimization,
           portfolio_assets_count: requestedAssetsCount,
           use_cache: true,
-          parameters: {
-            model_type: neuralSettings.autoTune ? "auto" : neuralSettings.modelType,
-            activation: neuralSettings.activation,
-            optimizer: neuralSettings.optimizer,
-            hidden_layers: hiddenLayerSizes,
-            hidden_layers_raw: neuralSettings.hiddenLayers,
-            epochs: neuralSettings.epochs,
-            batch_size: neuralSettings.batchSize,
-            learning_rate: neuralSettings.learningRate,
-            dropout: neuralSettings.dropout,
-            validation_split: neuralSettings.validationSplit / 100,
-            random_state: neuralSettings.randomState,
-            early_stopping: neuralSettings.earlyStopping,
-            auto_tune: optimizerSettings.autoModelTuning ? true : neuralSettings.autoTune,
-            search_feature_combinations: neuralSettings.searchFeatureCombinations,
-            dividend_priority: neuralSettings.dividendPriority,
-            reuse_cached_models: neuralSettings.reuseCachedModels,
-            tuning_metric: neuralSettings.tuningMetric,
-            tuning_budget: neuralSettings.tuningBudget,
-            tuning_scope: "neural_analysis",
-            features: neuralSettings.features,
-          },
+          parameters: { auto_tune: true },
           selected_figis: selectedFigisForRequest,
           selected_tickers: selectedTickers,
           selection: {
@@ -965,8 +944,8 @@ export function NeuralNetworkAnalysis() {
           icon={Brain}
           title={t("Анализ нейросети", "Neural Network Analysis")}
           description={t(
-            "Выберите акции, признаки и параметры, чтобы обучить и оценить нейросеть.",
-            "Select stocks, features, and settings to train and evaluate the neural model.",
+            "Выберите акции; независимые признаки и параметры нейросети сервер подберёт автоматически.",
+            "Select stocks; the server will choose independent features and neural parameters automatically.",
           )}
           accent="orange"
         />
@@ -974,9 +953,9 @@ export function NeuralNetworkAnalysis() {
       sidebar={(
         <AnalysisSidebarCard
           icon={Settings}
-          title={t("Настройки", "Settings")}
+          title={t("Параметры портфеля", "Portfolio Parameters")}
           description={
-            t("Модель, признаки и портфель.", "Model, features, and portfolio.")
+            t("Модель и признаки подбираются автоматически.", "Model and features are selected automatically.")
           }
           accent="orange"
         >
@@ -988,6 +967,7 @@ export function NeuralNetworkAnalysis() {
               </p>
             </div>
 
+            {!optimizerSettings.autoModelTuning && (
             <div className="space-y-3">
               <div className="flex items-center justify-between gap-3">
                 <div className="flex items-center gap-2 text-sm font-semibold text-slate-800 dark:text-slate-100">
@@ -1279,6 +1259,7 @@ export function NeuralNetworkAnalysis() {
                 </>
               )}
             </div>
+            )}
 
             {!optimizerSettings.autoModelTuning && (
             <div className="space-y-3">

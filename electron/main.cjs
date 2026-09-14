@@ -330,35 +330,35 @@ function resolveAnalyticsExecutablePath() {
 }
 
 function resolveAnalyticsRunConfig() {
-  const exePath = resolveAnalyticsExecutablePath();
-  if (exePath) {
-    const dirs = createServiceUserDirs("analytics-server");
+  if (!app.isPackaged) {
+    const serverDir = path.join(getProjectRoot(), "server-analytic-system");
+    const mainPy = path.join(serverDir, "main.py");
+    if (!fs.existsSync(mainPy)) {
+      return null;
+    }
+
     return {
-      command: exePath,
-      args: [],
-      cwd: path.dirname(exePath),
-      env: {
-        ...process.env,
-        ANALYTIC_LOG_DIR: dirs.logDir,
-        ANALYTIC_DATA_DIR: dirs.dataDir,
-      },
+      command: resolveProjectPython(serverDir),
+      args: ["main.py"],
+      cwd: serverDir,
     };
   }
 
-  if (app.isPackaged) {
+  const exePath = resolveAnalyticsExecutablePath();
+  if (!exePath) {
     return null;
   }
 
-  const serverDir = path.join(getProjectRoot(), "server-analytic-system");
-  const mainPy = path.join(serverDir, "main.py");
-  if (!fs.existsSync(mainPy)) {
-    return null;
-  }
-
+  const dirs = createServiceUserDirs("analytics-server");
   return {
-    command: resolveProjectPython(serverDir),
-    args: ["main.py"],
-    cwd: serverDir,
+    command: exePath,
+    args: [],
+    cwd: path.dirname(exePath),
+    env: {
+      ...process.env,
+      ANALYTIC_LOG_DIR: dirs.logDir,
+      ANALYTIC_DATA_DIR: dirs.dataDir,
+    },
   };
 }
 

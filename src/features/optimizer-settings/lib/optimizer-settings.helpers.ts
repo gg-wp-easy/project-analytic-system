@@ -34,7 +34,7 @@ export function normalizeOptimizerSettings(value: Partial<OptimizerSettings>): O
     targetRisk: String(value.targetRisk ?? DEFAULT_OPTIMIZER_SETTINGS.targetRisk),
     portfolioAssetsCount: String(value.portfolioAssetsCount ?? DEFAULT_OPTIMIZER_SETTINGS.portfolioAssetsCount),
     hideAnalysisDetails: value.hideAnalysisDetails !== false,
-    autoModelTuning: value.autoModelTuning !== false,
+    autoModelTuning: true,
     autoPortfolioOptimization: value.autoPortfolioOptimization !== false,
   };
 }

@@ -629,7 +629,6 @@ export function ClusterAnalysis() {
       if (!optimizerSettings.autoPortfolioOptimization) {
         await submitOptimizerSettings(optimizerSettings);
       }
-      const sanitizedClustersCount = Math.max(2, Math.min(clusterSettings.clustersCount, selectedRequestData.length));
       const selectedTickers = selectedRequestData.map((row) => row.ticker);
       const selectedFigisForRequest = selectedRequestData.map((row) => row.figi);
       const requestedAssetsCount = optimizerSettings.autoPortfolioOptimization
@@ -641,22 +640,7 @@ export function ClusterAnalysis() {
         auto_portfolio_optimization: optimizerSettings.autoPortfolioOptimization,
         portfolio_assets_count: requestedAssetsCount,
         use_cache: true,
-        parameters: {
-          algorithm: clusterSettings.algorithm,
-          n_clusters: sanitizedClustersCount,
-          clusters_count: sanitizedClustersCount,
-          distance_metric: clusterSettings.distanceMetric,
-          scaling_method: clusterSettings.scalingMethod,
-          standardize: clusterSettings.scalingMethod !== "none",
-          random_state: clusterSettings.randomState,
-          include_outliers: clusterSettings.includeOutliers,
-          auto_tune: optimizerSettings.autoModelTuning ? true : clusterSettings.autoTune,
-          tuning_metric: clusterSettings.tuningMetric,
-          tuning_budget: clusterSettings.tuningBudget,
-          tuning_scope: "cluster_analysis",
-          dividend_priority: true,
-          features: clusterSettings.features,
-        },
+        parameters: { auto_tune: true },
         selected_figis: selectedFigisForRequest,
         selected_tickers: selectedTickers,
         selection: {
@@ -722,8 +706,8 @@ export function ClusterAnalysis() {
           icon={Network}
           title={t("Кластерный анализ", "Cluster Analysis")}
           description={t(
-            "Выберите акции и признаки, чтобы распределить компании по похожим группам.",
-            "Select stocks and features to group similar companies.",
+            "Выберите акции; независимые признаки и параметры кластеризации сервер подберёт автоматически.",
+            "Select stocks; the server will choose independent features and clustering parameters automatically.",
           )}
           accent="violet"
         />
@@ -731,10 +715,10 @@ export function ClusterAnalysis() {
       sidebar={(
         <AnalysisSidebarCard
           icon={Settings}
-          title={t("Настройки", "Settings")}
+          title={t("Параметры портфеля", "Portfolio Parameters")}
           description={t(
-            "Модель, признаки и портфель.",
-            "Model, features, and portfolio.",
+            "Модель и признаки подбираются автоматически.",
+            "Model and features are selected automatically.",
           )}
           accent="violet"
         >
@@ -748,6 +732,7 @@ export function ClusterAnalysis() {
               </p>
             </div>
 
+            {!optimizerSettings.autoModelTuning && (
             <div className="space-y-3">
               <div className="flex items-center justify-between gap-3">
                 <div className="flex items-center gap-2 text-sm font-semibold text-slate-800 dark:text-slate-100">
@@ -957,6 +942,7 @@ export function ClusterAnalysis() {
                 </>
               )}
             </div>
+            )}
 
             {!optimizerSettings.autoModelTuning && (
             <div className="space-y-3">

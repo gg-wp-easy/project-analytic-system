@@ -569,23 +569,7 @@ export function DecisionTreeAnalysis() {
           auto_portfolio_optimization: optimizerSettings.autoPortfolioOptimization,
           portfolio_assets_count: requestedAssetsCount,
           use_cache: true,
-          parameters: {
-            algorithm: treeSettings.algorithm,
-            criterion: treeSettings.criterion,
-            max_depth: treeSettings.maxDepth,
-            min_samples_split: treeSettings.minSamplesSplit,
-            min_samples_leaf: treeSettings.minSamplesLeaf,
-            test_size: treeSettings.testSize / 100,
-            random_state: treeSettings.randomState,
-            class_weight: treeSettings.classBalance ? "balanced" : null,
-            balance_classes: treeSettings.classBalance,
-            auto_tune: optimizerSettings.autoModelTuning ? true : treeSettings.autoTune,
-            tuning_metric: treeSettings.tuningMetric,
-            tuning_budget: treeSettings.tuningBudget,
-            tuning_scope: "decision_tree_analysis",
-            dividend_priority: true,
-            features: treeSettings.features,
-          },
+          parameters: { auto_tune: true },
           selected_figis: selectedFigisForRequest,
           selected_tickers: selectedTickers,
           selection: {
@@ -817,8 +801,8 @@ export function DecisionTreeAnalysis() {
           icon={GitBranch}
           title={t("Анализ дерева решений", "Decision Tree Analysis")}
           description={t(
-            "Выберите акции и признаки, чтобы построить и оценить дерево решений.",
-            "Select stocks and features to build and evaluate a decision tree.",
+            "Выберите акции; независимые признаки и параметры дерева сервер подберёт автоматически.",
+            "Select stocks; the server will choose independent features and tree parameters automatically.",
           )}
           accent="emerald"
         />
@@ -826,9 +810,9 @@ export function DecisionTreeAnalysis() {
       sidebar={(
         <AnalysisSidebarCard
           icon={Settings}
-          title={t("Настройки", "Settings")}
+          title={t("Параметры портфеля", "Portfolio Parameters")}
           description={
-            t("Модель, признаки и портфель.", "Model, features, and portfolio.")
+            t("Модель и признаки подбираются автоматически.", "Model and features are selected automatically.")
           }
           accent="emerald"
         >
@@ -840,6 +824,7 @@ export function DecisionTreeAnalysis() {
               </p>
             </div>
 
+            {!optimizerSettings.autoModelTuning && (
             <div className="space-y-3">
               <div className="flex items-center justify-between gap-3">
                 <div className="flex items-center gap-2 text-sm font-semibold text-slate-800 dark:text-slate-100">
@@ -1073,6 +1058,7 @@ export function DecisionTreeAnalysis() {
                 </>
               )}
             </div>
+            )}
 
             {!optimizerSettings.autoModelTuning && (
             <div className="space-y-3">

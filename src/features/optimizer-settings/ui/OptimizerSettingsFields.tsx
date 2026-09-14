@@ -13,14 +13,6 @@ export function OptimizerSettingsFields({ settings, onChange, autoFitWeights = f
 
       <label className="flex items-center gap-2 text-xs font-medium text-slate-700 dark:text-slate-300">
         <Checkbox
-          checked={settings.autoModelTuning}
-          onCheckedChange={(checked) => onChange({ ...settings, autoModelTuning: checked === true })}
-        />
-        <span>{t("Автоподбор параметров модели", "Auto-tune model parameters")}</span>
-      </label>
-
-      <label className="flex items-center gap-2 text-xs font-medium text-slate-700 dark:text-slate-300">
-        <Checkbox
           checked={settings.autoPortfolioOptimization}
           onCheckedChange={(checked) => onChange({ ...settings, autoPortfolioOptimization: checked === true })}
         />

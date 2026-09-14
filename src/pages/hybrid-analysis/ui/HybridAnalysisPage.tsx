@@ -2,7 +2,6 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { FileSpreadsheet, FileText, ImageDown, Layers, Play, Settings } from "lucide-react";
 import { useFundamentals } from "../../../entities/fundamentals";
 import { useAppSettings } from "../../../app/context/AppSettingsContext";
-import { Checkbox } from "../../../app/components/ui/checkbox";
 import {
   getOptimizationSummary,
   OptimizerSettingsFields,
@@ -31,7 +30,6 @@ import {
   downloadSvgAsPng,
   getPortfolioHoldingColumns,
 } from "../../../shared/lib/export/download";
-import { numberOr } from "../../../shared/lib/number/numberOr";
 import {
   AnalysisPageFrame,
   AnalysisSidebarCard,
@@ -52,8 +50,6 @@ import {
   HYBRID_STATE_KEY,
 } from "../model";
 import {
-  buildHybridPipelinePayload,
-  countSavedAutoTuneModels,
   extractErrorText,
   extractMetrics,
   extractModelScores,
@@ -61,9 +57,7 @@ import {
   extractPortfolioPositions,
   extractPortfolioStrategies,
   extractTrainingHistory,
-  getHybridAnalysisParameters,
   normalizePortfolioSettings,
-  readHybridModelSettings,
   safeParseJsonObject,
 } from "../lib";
 
@@ -79,12 +73,6 @@ export function HybridAnalysis() {
   const [isRunning, setIsRunning] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [errorDialogMessage, setErrorDialogMessage] = useState<string | null>(null);
-  const [weights, setWeights] = useState({
-    clusterWeight: "50",
-    treeWeight: "25",
-    neuralWeight: "25",
-  });
-  const [useSavedAnalysisSettings, setUseSavedAnalysisSettings] = useState(true);
   const [modelComparison, setModelComparison] = useState<ModelScore[]>([]);
   const [metrics, setMetrics] = useState<MetricItem[]>([]);
   const [portfolioStrategies, setPortfolioStrategies] = useState<StrategyPortfolio[]>([]);
@@ -144,8 +132,6 @@ export function HybridAnalysis() {
         tooltip: getMetricTooltip(item.label, isEn),
       }));
   }, [isEn, portfolio.length, portfolioAssetsCount, selectedPortfolioStrategy, t, visibleMetrics]);
-  const savedModelSettings = useMemo(() => readHybridModelSettings(), []);
-  const savedAutoTuneCount = useMemo(() => countSavedAutoTuneModels(savedModelSettings), [savedModelSettings]);
   const requestData = useMemo(
     () =>
       cache.shares
@@ -195,8 +181,6 @@ export function HybridAnalysis() {
         return;
       }
       const parsed = JSON.parse(raw) as {
-        weights?: { clusterWeight?: string; treeWeight?: string; neuralWeight?: string };
-        useSavedAnalysisSettings?: boolean;
         modelComparison?: ModelScore[];
         metrics?: MetricItem[];
         portfolioStrategies?: StrategyPortfolio[];
@@ -205,16 +189,6 @@ export function HybridAnalysis() {
         portfolioAssetsCount?: number;
         error?: string | null;
       };
-      if (parsed.weights) {
-        setWeights({
-          clusterWeight: String(parsed.weights.clusterWeight ?? "50"),
-          treeWeight: String(parsed.weights.treeWeight ?? "25"),
-          neuralWeight: String(parsed.weights.neuralWeight ?? "25"),
-        });
-      }
-      if (typeof parsed.useSavedAnalysisSettings === "boolean") {
-        setUseSavedAnalysisSettings(parsed.useSavedAnalysisSettings);
-      }
       if (Array.isArray(parsed.modelComparison)) setModelComparison(parsed.modelComparison);
       if (Array.isArray(parsed.metrics)) setMetrics(parsed.metrics.filter((item) => isVisibleAnalysisMetric(item.label)));
       if (Array.isArray(parsed.portfolioStrategies)) setPortfolioStrategies(parsed.portfolioStrategies);
@@ -229,8 +203,6 @@ export function HybridAnalysis() {
 
   useEffect(() => {
     const payload = {
-      weights,
-      useSavedAnalysisSettings,
       modelComparison,
       metrics,
       portfolioStrategies,
@@ -240,7 +212,7 @@ export function HybridAnalysis() {
       error,
     };
     window.localStorage.setItem(HYBRID_STATE_KEY, JSON.stringify(payload));
-  }, [weights, useSavedAnalysisSettings, modelComparison, metrics, portfolioStrategies, portfolio, trainingHistory, portfolioAssetsCount, error]);
+  }, [modelComparison, metrics, portfolioStrategies, portfolio, trainingHistory, portfolioAssetsCount, error]);
 
   const resetAnalysisResults = () => {
     setModelComparison([]);
@@ -278,19 +250,13 @@ export function HybridAnalysis() {
     setErrorDialogMessage(null);
     setIsRunning(true);
 
-    const numericWeights = {
-      cluster: numberOr(weights.clusterWeight, 0),
-      tree: numberOr(weights.treeWeight, 0),
-      neural: numberOr(weights.neuralWeight, 0),
-    };
+    const numericWeights = { cluster: 50, tree: 25, neural: 25 };
 
     try {
       if (!optimizerSettings.autoPortfolioOptimization) {
         await submitOptimizerSettings(optimizerSettings);
       }
-      const modelSettings = useSavedAnalysisSettings ? readHybridModelSettings() : {};
       const portfolioSettings = normalizePortfolioSettings(optimizerSettings);
-      const hybridPipeline = buildHybridPipelinePayload(modelSettings, portfolioSettings, numericWeights);
       const requestedAssetsCount = optimizerSettings.autoPortfolioOptimization
         ? 20
         : Number(portfolioSettings.portfolio_assets_count ?? 20);
@@ -300,23 +266,12 @@ export function HybridAnalysis() {
         body: JSON.stringify({
           data: requestData,
           weights: numericWeights,
-          parameters: getHybridAnalysisParameters(modelSettings),
           auto_model_tuning: optimizerSettings.autoModelTuning,
           auto_portfolio_optimization: optimizerSettings.autoPortfolioOptimization,
           portfolio_assets_count: requestedAssetsCount,
           use_cache: true,
           portfolio_settings: portfolioSettings,
           optimizer_settings: portfolioSettings,
-          model_settings: modelSettings,
-          base_model_requests: hybridPipeline.base_models,
-          hybrid_pipeline: hybridPipeline,
-          aggregation: hybridPipeline.aggregation,
-          final_portfolio: hybridPipeline.final_portfolio,
-          auto_tune: {
-            enabled: useSavedAnalysisSettings,
-            source: "saved_individual_analysis_settings",
-            models_count: useSavedAnalysisSettings ? countSavedAutoTuneModels(modelSettings) : 0,
-          },
         }),
       });
       const parsed = await parseHybridResponse(response);
@@ -401,28 +356,6 @@ export function HybridAnalysis() {
     }
   };
 
-  const analysisWeightFields = [
-    {
-      key: "clusterWeight" as const,
-      label: t("Кластерный анализ", "Cluster analysis"),
-      defaultValue: 50,
-    },
-    {
-      key: "treeWeight" as const,
-      label: t("Дерево решений", "Decision tree"),
-      defaultValue: 25,
-    },
-    {
-      key: "neuralWeight" as const,
-      label: t("Нейросетевой анализ", "Neural analysis"),
-      defaultValue: 25,
-    },
-  ];
-  const analysisWeightTotal = analysisWeightFields.reduce(
-    (sum, item) => sum + Math.max(numberOr(weights[item.key], item.defaultValue), 0),
-    0,
-  );
-
   return (
     <>
       <AnalysisPageFrame
@@ -440,10 +373,10 @@ export function HybridAnalysis() {
         sidebar={(
           <AnalysisSidebarCard
             icon={Settings}
-            title={t("Параметры ансамбля", "Ensemble Parameters")}
+            title={t("Параметры портфеля", "Portfolio Parameters")}
             description={t(
-              "Базовые анализы получают одинаковые параметры портфеля, затем активы объединяются по средневзвешенной важности.",
-              "Base analyses receive the same portfolio settings, then assets are combined by weighted importance.",
+              "Модели и признаки подбираются автоматически; здесь настраивается только итоговый портфель.",
+              "Models and features are selected automatically; only the final portfolio is configured here.",
             )}
             accent="cyan"
           >
@@ -451,55 +384,6 @@ export function HybridAnalysis() {
               <div className="ui-surface-muted">
                 <p className="text-sm text-slate-700 dark:text-slate-300">{t("Источник: загруженные фундаментальные данные", "Source: loaded fundamentals")}</p>
                 <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">{t("Записей", "Records")}: {requestData.length}</p>
-              </div>
-              <div className="ui-surface-muted space-y-3">
-                <p className="text-sm font-medium text-slate-700 dark:text-slate-300">
-                  {t("Коэффициенты важности анализов", "Analysis Importance Coefficients")}
-                </p>
-                {analysisWeightFields.map((field) => {
-                  const rawValue = Math.max(numberOr(weights[field.key], field.defaultValue), 0);
-                  const share = analysisWeightTotal > 0 ? (rawValue / analysisWeightTotal) * 100 : 0;
-                  return (
-                    <label key={field.key} className="block text-xs text-slate-600 dark:text-slate-400">
-                      <span className="flex items-center justify-between gap-3">
-                        <span>{field.label}</span>
-                        <span className="font-semibold text-cyan-700 dark:text-cyan-300">{share.toFixed(0)}%</span>
-                      </span>
-                      <input
-                        type="number"
-                        min="0"
-                        step="1"
-                        className="ui-input mt-1"
-                        value={weights[field.key]}
-                        onChange={(e) => setWeights((current) => ({ ...current, [field.key]: e.target.value }))}
-                      />
-                    </label>
-                  );
-                })}
-              </div>
-              <div className="ui-surface-muted space-y-2">
-                <label className="flex items-center gap-2 text-sm font-medium text-slate-700 dark:text-slate-200">
-                  <Checkbox
-                    checked={useSavedAnalysisSettings}
-                    onCheckedChange={(checked) => setUseSavedAnalysisSettings(checked === true)}
-                  />
-                  <span>{t("Использовать автоподборы моделей", "Use model auto-tuning")}</span>
-                </label>
-                <p className="text-xs leading-5 text-slate-500 dark:text-slate-400">
-                  {t(
-                    "Гибрид использует сохранённые настройки кластеров, дерева и нейросети.",
-                    "The hybrid model uses the saved cluster, tree, and neural settings.",
-                  )}
-                </p>
-                <p className="text-xs font-semibold text-cyan-700 dark:text-cyan-300">
-                  {t("Найдено моделей с автоподбором", "Models with auto-tune found")}: {savedAutoTuneCount} / 3
-                </p>
-              </div>
-              <div className="rounded-md border border-cyan-200 bg-cyan-50/70 p-3 text-xs leading-5 text-slate-700 dark:border-cyan-900 dark:bg-cyan-950/20 dark:text-slate-300">
-                {t(
-                  "Схема гибрида: кластерный анализ, дерево решений и нейросеть строят свои портфели с текущими настройками ниже. Финальный список активов выбирается по средневзвешенным весам моделей; если кандидатов меньше запрошенного количества, используется доступное число без жесткой ошибки.",
-                  "Hybrid flow: clustering, decision tree, and neural network build their portfolios with the settings below. The final assets are selected by model-weighted scores; if candidates are fewer than requested, the available count is used without a hard error.",
-                )}
               </div>
               <OptimizerSettingsFields
                 settings={optimizerSettings}
