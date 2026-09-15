@@ -1,9 +1,9 @@
 import type { BondAnalysisBond, BondAnalysisPreferences } from "../../../features/bonds-analysis";
 import { DEFAULT_BOND_ANALYSIS_PREFERENCES } from "../model";
-import type { BondBubblePoint, BondsTranslationFn } from "../model";
+import type { BondsTranslationFn } from "../model";
 
 export function normalizeRiskPreference(value: unknown): BondAnalysisPreferences["riskProfile"] {
-  return value === "mixed" || value === "0" || value === "1" || value === "2" || value === "3"
+  return value === "mixed" || value === "0" || value === "1" || value === "2"
     ? value
     : DEFAULT_BOND_ANALYSIS_PREFERENCES.riskProfile;
 }
@@ -33,8 +33,7 @@ export function riskLabel(level: string | number, t: BondsTranslationFn): string
   if (level === "mixed") return t("Смешанный риск", "Mixed risk");
   const numericLevel = Number(level);
   if (numericLevel <= 0) return t("Низкий риск", "Low risk");
-  if (numericLevel === 1) return t("Умеренный риск", "Moderate risk");
-  if (numericLevel === 2) return t("Повышенный риск", "Elevated risk");
+  if (numericLevel === 1) return t("Средний риск", "Medium risk");
   return t("Высокий риск", "High risk");
 }
 
@@ -47,6 +46,3 @@ export function isGovernmentBond(bond: BondAnalysisBond): boolean { return bond.
 export function isMunicipalBond(bond: BondAnalysisBond): boolean { return bond.currency === "RUB" && !isGovernmentBond(bond) && (bond.sector === "municipal" || bond.name.trim().toLowerCase().includes("муниц")); }
 export function isCurrencyBond(bond: BondAnalysisBond): boolean { return bond.currency !== "RUB"; }
 export function isCorporateBond(bond: BondAnalysisBond): boolean { return !isGovernmentBond(bond) && !isMunicipalBond(bond) && !isCurrencyBond(bond); }
-export function buildBubblePoints(bonds: BondAnalysisBond[]): BondBubblePoint[] {
-  return bonds.filter((bond) => Number.isFinite(bond.currentYield) && Number.isFinite(bond.yearsToMaturity)).map((bond) => ({ ...bond, yieldPct: bond.currentYield * 100, maturityYears: bond.yearsToMaturity, bubbleSize: Math.max(40, 70 + bond.totalScore * 260) }));
-}

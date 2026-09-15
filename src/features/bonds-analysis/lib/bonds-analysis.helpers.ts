@@ -1,11 +1,26 @@
 import { API_BASE_URL } from "../../../config";
-import type { BondAnalysisPreferences, BondPortfolioConstructionResponse } from "../model";
+import type { BondAnalysisBond, BondAnalysisPreferences, BondPortfolioConstructionResponse, BondRiskClassification } from "../model";
+
+export class BondPortfolioConstructionError extends Error {
+  constructor(
+    message: string,
+    readonly bonds: BondAnalysisBond[],
+    readonly riskClassification: BondRiskClassification | null,
+  ) {
+    super(message);
+    this.name = "BondPortfolioConstructionError";
+  }
+}
 
 function errorMessage(status: number, payload: unknown): string {
   if (payload && typeof payload === "object" && "detail" in payload) {
     const detail = (payload as { detail?: unknown }).detail;
     if (typeof detail === "string" && detail.trim()) {
       return detail;
+    }
+    if (detail && typeof detail === "object" && "message" in detail) {
+      const message = (detail as { message?: unknown }).message;
+      if (typeof message === "string" && message.trim()) return message;
     }
   }
   return `Сервер не смог построить портфель облигаций (HTTP ${status}).`;
@@ -43,6 +58,19 @@ export async function runBondPortfolioConstruction(
     }
   }
   if (!response.ok) {
+    const detail = payload && typeof payload === "object" && "detail" in payload
+      ? (payload as { detail?: unknown }).detail : null;
+    if (response.status === 422 && detail && typeof detail === "object" && "bonds" in detail) {
+      const partial = detail as { bonds?: unknown; risk_classification?: unknown };
+      if (Array.isArray(partial.bonds)) {
+        throw new BondPortfolioConstructionError(
+          errorMessage(response.status, payload),
+          partial.bonds as BondAnalysisBond[],
+          partial.risk_classification && typeof partial.risk_classification === "object"
+            ? partial.risk_classification as BondRiskClassification : null,
+        );
+      }
+    }
     throw new Error(errorMessage(response.status, payload));
   }
   return payload as BondPortfolioConstructionResponse;

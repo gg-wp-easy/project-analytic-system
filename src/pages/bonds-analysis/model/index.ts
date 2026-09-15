@@ -6,4 +6,4 @@ export {
   BOND_RISK_LEVEL_OPTIONS,
   DEFAULT_BOND_ANALYSIS_PREFERENCES,
 } from "./bonds-analysis-page.consts";
-export type { BondBubblePoint, BondChartGroup, BondsTranslationFn, BondViewMode } from "./bonds-analysis-page.types";
+export type { BondsTranslationFn } from "./bonds-analysis-page.types";

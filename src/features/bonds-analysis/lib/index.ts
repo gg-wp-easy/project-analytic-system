@@ -1,1 +1,1 @@
-export { runBondPortfolioConstruction } from "./bonds-analysis.helpers";
+export { BondPortfolioConstructionError, runBondPortfolioConstruction } from "./bonds-analysis.helpers";

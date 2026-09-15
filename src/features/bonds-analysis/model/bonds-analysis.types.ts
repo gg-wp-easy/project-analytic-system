@@ -6,15 +6,17 @@ export type BondCouponScheduleItem = {
 
 export type BondSourceRow = {
   ticker: string;
+  uid?: string;
   name: string;
   sector: string;
   currency: string;
   maturity_date: string;
   nominal: number;
   risk_level: number;
-  coupon_rate: number;
+  coupon_rate: number | null;
   coupon_payments_per_year?: number;
   coupon_schedule?: BondCouponScheduleItem[];
+  coupon_schedule_loaded?: boolean;
   floating_coupon_flag?: boolean;
   amortization_flag?: boolean;
   perpetual_flag?: boolean;
@@ -41,17 +43,25 @@ export type BondPreviewRow = {
 
 export type BondAnalysisBond = {
   ticker: string;
+  uid?: string | null;
   name: string;
   sector: string;
   currency: string;
   riskLevel: number;
+  riskName?: string | null;
+  riskConfidence?: number | null;
+  riskProbabilities?: Record<string, number> | null;
   yearsToMaturity: number;
+  currentYield: number | null;
+  modifiedDuration: number | null;
+  totalScore: number | null;
+  couponScheduleLoaded?: boolean;
+};
+
+export type BondPortfolioPosition = Omit<BondAnalysisBond, "currentYield" | "modifiedDuration" | "totalScore"> & {
   currentYield: number;
   modifiedDuration: number;
   totalScore: number;
-};
-
-export type BondPortfolioPosition = BondAnalysisBond & {
   weight: number;
   quantity?: number;
   estimatedNominal?: number;
@@ -68,7 +78,21 @@ export type BondPortfolioStatistics = {
 };
 
 export type BondPortfolioMethod = "matching" | "immunization";
-export type BondRiskProfile = "mixed" | "0" | "1" | "2" | "3";
+export type BondRiskProfile = "mixed" | "0" | "1" | "2";
+export type BondRiskClassification = {
+  status: "trained" | "source_fallback" | "unavailable";
+  reason?: string | null;
+  method: string;
+  target_source: string;
+  class_labels: Record<string, string>;
+  training_bonds_count: number;
+  distribution: Record<string, number>;
+  factor_analysis: {
+    selected_features: string[];
+    rejected_features: Array<{ feature: string; reason: string; related_feature?: string }>;
+    multicollinearity_detected?: boolean;
+  };
+};
 export type BondPayoutFrequency = "monthly" | "quarterly";
 export type BondPayoutScheduleItem = {
   period: string;
@@ -110,6 +134,7 @@ export type BondPortfolioConstructionResponse = {
   summary: BondAnalysisSummary;
   construction: BondPortfolioConstruction;
   source?: Record<string, unknown>;
+  risk_classification?: BondRiskClassification;
 };
 export type BondRiskPortfolio = {
   key: string;
@@ -171,5 +196,6 @@ export type BondsAnalysisPersistedState = {
   byCurrencyStats?: BondCurrencyStatRow[];
   summary?: BondAnalysisSummary | null;
   construction?: BondPortfolioConstruction | null;
+  riskClassification?: BondRiskClassification | null;
   error?: string | null;
 };

@@ -10,5 +10,6 @@ export type {
   BondPortfolioPosition,
   BondPortfolioStatistics,
   BondRiskProfile,
+  BondRiskClassification,
   BondsAnalysisPersistedState,
 } from "./bonds-analysis.types";

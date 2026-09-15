@@ -1,4 +1,4 @@
-export { runBondPortfolioConstruction } from "./lib";
+export { BondPortfolioConstructionError, runBondPortfolioConstruction } from "./lib";
 export type {
   BondAnalysisBond,
   BondAnalysisPreferences,
@@ -11,5 +11,6 @@ export type {
   BondPortfolioPosition,
   BondPortfolioStatistics,
   BondRiskProfile,
+  BondRiskClassification,
   BondsAnalysisPersistedState,
 } from "./model";
