@@ -79,6 +79,13 @@ export type BondPortfolioStatistics = {
 
 export type BondPortfolioMethod = "matching" | "immunization";
 export type BondRiskProfile = "mixed" | "0" | "1" | "2";
+export type BondRejectedFeature = {
+  feature: string;
+  reason: string;
+  related_feature?: string;
+  correlation?: number;
+  vif?: number | null;
+};
 export type BondRiskClassification = {
   status: "trained" | "source_fallback" | "unavailable";
   reason?: string | null;
@@ -89,7 +96,11 @@ export type BondRiskClassification = {
   distribution: Record<string, number>;
   factor_analysis: {
     selected_features: string[];
-    rejected_features: Array<{ feature: string; reason: string; related_feature?: string }>;
+    rejected_features: BondRejectedFeature[];
+    correlation_matrix?: Record<string, Record<string, number>>;
+    vif?: Record<string, number | null>;
+    correlation_threshold?: number;
+    vif_threshold?: number;
     multicollinearity_detected?: boolean;
   };
 };
@@ -198,4 +209,5 @@ export type BondsAnalysisPersistedState = {
   construction?: BondPortfolioConstruction | null;
   riskClassification?: BondRiskClassification | null;
   error?: string | null;
+  hideDetails?: boolean;
 };

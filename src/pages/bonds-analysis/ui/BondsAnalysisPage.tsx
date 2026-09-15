@@ -1,5 +1,16 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { FileSpreadsheet, FileText, ImageDown, Landmark, RefreshCw, Settings, Trash2 } from "lucide-react";
+import {
+  Bar,
+  BarChart,
+  CartesianGrid,
+  Cell,
+  ReferenceLine,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from "recharts";
 import { useAppSettings } from "../../../app/context/AppSettingsContext";
 import { BondPortfolioConstructionError, runBondPortfolioConstruction } from "../../../features/bonds-analysis";
 
@@ -70,6 +81,7 @@ export function BondsAnalysisPage() {
   const [isLoadingSource, setIsLoadingSource] = useState(false);
   const [isRecalculating, setIsRecalculating] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
+  const [hideDetails, setHideDetails] = useState(false);
 
   const portfolioChartRef = useRef<HTMLDivElement | null>(null);
 
@@ -107,6 +119,7 @@ export function BondsAnalysisPage() {
         if (parsed.construction && typeof parsed.construction === "object") setConstruction(parsed.construction);
         if (parsed.riskClassification && typeof parsed.riskClassification === "object") setRiskClassification(parsed.riskClassification);
         if (typeof parsed.error === "string" || parsed.error === null) setError(parsed.error ?? null);
+        if (typeof parsed.hideDetails === "boolean") setHideDetails(parsed.hideDetails);
       }
     } catch {
       // Ignore broken persisted state.
@@ -122,9 +135,10 @@ export function BondsAnalysisPage() {
       construction,
       riskClassification,
       error,
+      hideDetails,
     };
     window.localStorage.setItem(BONDS_STATE_KEY, JSON.stringify(payload));
-  }, [allBonds, analysisPreferences, error, construction, riskClassification, positions, summary]);
+  }, [allBonds, analysisPreferences, error, construction, riskClassification, positions, summary, hideDetails]);
 
   const isBusy = isLoadingSource || isRecalculating;
   const canRunAnalysis =
@@ -194,6 +208,81 @@ export function BondsAnalysisPage() {
       { header: t("Дюрация", "Duration"), render: (row) => row.modifiedDuration == null ? "—" : row.modifiedDuration.toFixed(2) },
     ],
     [t],
+  );
+
+  const rejectedFeatureReasonLabel = (reason: string): string => {
+    switch (reason) {
+      case "high_correlation":
+        return t("высокая корреляция", "high correlation");
+      case "high_vif":
+        return t("высокий VIF", "high VIF");
+      case "missing":
+        return t("нет данных", "missing data");
+      case "insufficient_data":
+        return t("недостаточно данных", "insufficient data");
+      case "constant":
+        return t("постоянное значение", "constant value");
+      default:
+        return reason;
+    }
+  };
+
+  const riskDistributionChartData = useMemo(
+    () =>
+      riskClassification
+        ? Object.entries(riskClassification.distribution)
+            .map(([level, count]) => ({
+              level,
+              label: riskClassification.class_labels[level] ?? level,
+              count,
+              fill: BONDS_RISK_PALETTE[Number(level)] ?? BONDS_RISK_PALETTE[0],
+            }))
+            .sort((a, b) => Number(a.level) - Number(b.level))
+        : [],
+    [riskClassification],
+  );
+
+  const riskConfidenceChartData = useMemo(
+    () =>
+      ([0, 1, 2] as const).map((level) => {
+        const bondsAtLevel = allBonds.filter((bond) => bond.riskLevel === level && bond.riskConfidence != null);
+        const avgConfidence = bondsAtLevel.length
+          ? bondsAtLevel.reduce((sum, bond) => sum + (bond.riskConfidence ?? 0), 0) / bondsAtLevel.length
+          : null;
+        return {
+          level: String(level),
+          label: riskLabel(level, t),
+          avgConfidence: avgConfidence == null ? null : Math.round(avgConfidence * 1000) / 10,
+          count: bondsAtLevel.length,
+          fill: BONDS_RISK_PALETTE[level] ?? BONDS_RISK_PALETTE[0],
+        };
+      }),
+    [allBonds, t],
+  );
+
+  const vifChartData = useMemo(() => {
+    const vif = riskClassification?.factor_analysis.vif;
+    if (!vif) return [];
+    return Object.entries(vif)
+      .filter((entry): entry is [string, number] => typeof entry[1] === "number" && Number.isFinite(entry[1]))
+      .map(([feature, value]) => ({ feature, vif: Math.round(value * 100) / 100 }))
+      .sort((a, b) => b.vif - a.vif);
+  }, [riskClassification]);
+
+  const rejectedFeaturesRows = useMemo(
+    () =>
+      (riskClassification?.factor_analysis.rejected_features ?? []).map((item) => {
+        const details: string[] = [];
+        if (item.related_feature) details.push(t(`связан с ${item.related_feature}`, `linked to ${item.related_feature}`));
+        if (typeof item.correlation === "number") details.push(`r=${item.correlation.toFixed(2)}`);
+        if (typeof item.vif === "number") details.push(`VIF=${item.vif.toFixed(2)}`);
+        return {
+          feature: item.feature,
+          reason: rejectedFeatureReasonLabel(item.reason),
+          details: details.join(", "),
+        };
+      }),
+    [riskClassification, t],
   );
 
   const clearResults = () => {
@@ -510,6 +599,15 @@ export function BondsAnalysisPage() {
               </div>
             </div>
 
+            <label className="flex items-center gap-2 self-start rounded-md border border-slate-200 px-3 py-2 text-sm text-slate-700 dark:border-slate-700 dark:text-slate-200 md:self-center">
+              <input
+                type="checkbox"
+                checked={hideDetails}
+                onChange={(event) => setHideDetails(event.target.checked)}
+                className="h-4 w-4 rounded border-slate-300"
+              />
+              {t("Скрыть подробности анализа", "Hide analysis details")}
+            </label>
           </div>
         </SectionCard>
 
@@ -532,7 +630,7 @@ export function BondsAnalysisPage() {
 
 
 
-        {riskClassification && allBonds.length ? (
+        {!hideDetails && riskClassification && allBonds.length ? (
           <SectionCard
             title={t("Логистическая регрессия: уровни риска", "Logistic regression: risk levels")}
             description={t(
@@ -540,7 +638,7 @@ export function BondsAnalysisPage() {
               "The estimate uses selected issue features. Source risk categories are training labels, not a credit rating or guarantee.",
             )}
           >
-            <div className="space-y-4">
+            <div className="space-y-5">
               <p className="text-sm text-slate-600 dark:text-slate-300">
                 {riskClassification.status === "trained"
                   ? t("Модель обучена: многоклассовая логистическая регрессия.", "Model trained: multiclass logistic regression.")
@@ -552,6 +650,30 @@ export function BondsAnalysisPage() {
                   {t("* Вероятности модели не калиброваны и не заменяют независимую оценку кредитного риска.", "* Model probabilities are not calibrated and do not replace an independent credit-risk assessment.")}
                 </p>
               ) : null}
+
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                <div className="ui-stat-card">
+                  <div className="text-slate-500 dark:text-slate-400">{t("Статус", "Status")}</div>
+                  <div className="text-lg font-semibold text-slate-900 dark:text-slate-100">
+                    {riskClassification.status === "trained" ? t("Обучена", "Trained") : t("Фолбэк", "Fallback")}
+                  </div>
+                </div>
+                <div className="ui-stat-card">
+                  <div className="text-slate-500 dark:text-slate-400">{t("Обучающих облигаций", "Training bonds")}</div>
+                  <div className="text-lg font-semibold text-slate-900 dark:text-slate-100">{riskClassification.training_bonds_count}</div>
+                </div>
+                <div className="ui-stat-card">
+                  <div className="text-slate-500 dark:text-slate-400">{t("Отобрано признаков", "Selected factors")}</div>
+                  <div className="text-lg font-semibold text-slate-900 dark:text-slate-100">{riskClassification.factor_analysis.selected_features.length}</div>
+                </div>
+                <div className="ui-stat-card">
+                  <div className="text-slate-500 dark:text-slate-400">{t("Мультиколлинеарность", "Multicollinearity")}</div>
+                  <div className="text-lg font-semibold text-slate-900 dark:text-slate-100">
+                    {riskClassification.factor_analysis.multicollinearity_detected ? t("Обнаружена", "Detected") : t("Не обнаружена", "None")}
+                  </div>
+                </div>
+              </div>
+
               <div className="grid gap-3 sm:grid-cols-3">
                 {([0, 1, 2] as const).map((level) => (
                   <div key={level} className="ui-surface-muted border-l-4" style={{ borderLeftColor: BONDS_RISK_PALETTE[level] }}>
@@ -560,22 +682,117 @@ export function BondsAnalysisPage() {
                   </div>
                 ))}
               </div>
+
+              <div className="grid gap-4 lg:grid-cols-2">
+                {!!riskDistributionChartData.length && (
+                  <div>
+                    <div className="mb-2 text-sm font-semibold text-slate-800 dark:text-slate-100">{t("Распределение по уровням риска", "Risk-level distribution")}</div>
+                    <div className="h-64">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <BarChart data={riskDistributionChartData} margin={{ top: 10, right: 18, left: 0, bottom: 8 }}>
+                          <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                          <XAxis dataKey="label" stroke="#64748b" />
+                          <YAxis allowDecimals={false} stroke="#64748b" />
+                          <Tooltip formatter={(value: number) => [String(value), t("Облигаций", "Bonds")]} />
+                          <Bar dataKey="count" radius={[6, 6, 0, 0]}>
+                            {riskDistributionChartData.map((row) => (
+                              <Cell key={row.level} fill={row.fill} />
+                            ))}
+                          </Bar>
+                        </BarChart>
+                      </ResponsiveContainer>
+                    </div>
+                  </div>
+                )}
+
+                {riskClassification.status === "trained" ? (
+                  <div>
+                    <div className="mb-2 text-sm font-semibold text-slate-800 dark:text-slate-100">{t("Средняя уверенность модели, %", "Average model confidence, %")}</div>
+                    <div className="h-64">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <BarChart data={riskConfidenceChartData} margin={{ top: 10, right: 18, left: 0, bottom: 8 }}>
+                          <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                          <XAxis dataKey="label" stroke="#64748b" />
+                          <YAxis unit="%" domain={[0, 100]} stroke="#64748b" />
+                          <Tooltip formatter={(value: number | null) => [value == null ? "—" : `${value}%`, t("Уверенность", "Confidence")]} />
+                          <Bar dataKey="avgConfidence" radius={[6, 6, 0, 0]}>
+                            {riskConfidenceChartData.map((row) => (
+                              <Cell key={row.level} fill={row.fill} />
+                            ))}
+                          </Bar>
+                        </BarChart>
+                      </ResponsiveContainer>
+                    </div>
+                  </div>
+                ) : null}
+              </div>
+
+              {!!vifChartData.length && (
+                <div>
+                  <div className="mb-2 flex items-center justify-between gap-3">
+                    <div className="text-sm font-semibold text-slate-800 dark:text-slate-100">{t("VIF отобранных факторов (мультиколлинеарность)", "VIF of selected factors (multicollinearity)")}</div>
+                    <InfoTooltip label={t("Справка по VIF", "VIF help")} side="left">
+                      <p>{t(
+                        `Фактор повышения дисперсии (VIF) показывает, насколько признак объясняется остальными. Порог отбора: ${riskClassification.factor_analysis.vif_threshold ?? 5}.`,
+                        `Variance inflation factor (VIF) shows how much a factor is explained by the others. Selection threshold: ${riskClassification.factor_analysis.vif_threshold ?? 5}.`,
+                      )}</p>
+                    </InfoTooltip>
+                  </div>
+                  <div className="h-64">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart data={vifChartData} layout="vertical" margin={{ top: 5, right: 24, left: 90, bottom: 5 }}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                        <XAxis type="number" stroke="#64748b" />
+                        <YAxis type="category" dataKey="feature" stroke="#64748b" width={90} />
+                        <Tooltip formatter={(value: number) => value.toFixed(2)} />
+                        {riskClassification.factor_analysis.vif_threshold ? (
+                          <ReferenceLine x={riskClassification.factor_analysis.vif_threshold} stroke="#dc2626" strokeDasharray="4 4" />
+                        ) : null}
+                        <Bar dataKey="vif" radius={[0, 4, 4, 0]}>
+                          {vifChartData.map((row, idx) => (
+                            <Cell key={row.feature} fill={BONDS_CHART_PALETTE[idx % BONDS_CHART_PALETTE.length]} />
+                          ))}
+                        </Bar>
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+                </div>
+              )}
+
               <div className="ui-surface-muted text-sm text-slate-600 dark:text-slate-300">
                 <div className="font-medium text-slate-800 dark:text-slate-100">{t("Отобранные факторы", "Selected factors")}</div>
                 <div className="mt-1">{riskClassification.factor_analysis.selected_features.length
                   ? riskClassification.factor_analysis.selected_features.join(", ")
                   : t("Не отобраны: используется исходная оценка", "None selected: source assessment is used")}</div>
-                {riskClassification.factor_analysis.rejected_features.length ? (
-                  <div className="mt-2 text-xs text-slate-500 dark:text-slate-400">
-                    {t("Исключено", "Excluded")}: {riskClassification.factor_analysis.rejected_features.map((item) => `${item.feature} (${item.reason})`).join(", ")}
-                  </div>
-                ) : null}
               </div>
+
+              {!!rejectedFeaturesRows.length && (
+                <div className="ui-table-shell overflow-x-auto">
+                  <table className="ui-data-table">
+                    <thead>
+                      <tr>
+                        <th>{t("Исключённый признак", "Excluded factor")}</th>
+                        <th>{t("Причина", "Reason")}</th>
+                        <th>{t("Детали", "Details")}</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {rejectedFeaturesRows.map((row) => (
+                        <tr key={row.feature}>
+                          <td className="font-medium text-slate-900 dark:text-slate-100">{row.feature}</td>
+                          <td>{row.reason}</td>
+                          <td className="text-slate-500 dark:text-slate-400">{row.details || "—"}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
             </div>
           </SectionCard>
         ) : null}
 
-        {allBonds.length ? (
+        {!hideDetails && allBonds.length ? (
           <SectionCard
             title={t("Список облигаций", "Bond list")}
             description={t(
