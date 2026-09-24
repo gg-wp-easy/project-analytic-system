@@ -3,7 +3,8 @@
 const { execFileSync } = require("child_process");
 const fs = require("fs");
 const path = require("path");
-const Jimp = require("jimp");
+const { createHash } = require("crypto");
+let Jimp;
 
 const PROJECT_ROOT = process.cwd();
 const SOURCE_ICON = path.join(PROJECT_ROOT, "icon-source.png");
@@ -30,6 +31,24 @@ const LEGACY_ICON_FILES = [
 
 async function main() {
   ensureSourceIcon();
+  const fingerprint = createHash("sha256")
+    .update(fs.readFileSync(SOURCE_ICON))
+    .update(fs.readFileSync(__filename))
+    .update(fs.readFileSync(path.join(PROJECT_ROOT, "package-lock.json")))
+    .digest("hex");
+  const stamp = path.join(BUILD_DIR, ".icons-cache.json");
+  try {
+    const cached = JSON.parse(fs.readFileSync(stamp, "utf8"));
+    if (!process.argv.includes("--force") && cached.fingerprint === fingerprint
+      && cached.outputs.length > 0
+      && cached.outputs.every(({ file, hash }) =>
+        createHash("sha256").update(fs.readFileSync(file)).digest("hex") === hash)) {
+      console.log("Icon assets unchanged; reusing generated files.");
+      return;
+    }
+  } catch { /* Missing or incomplete cache: regenerate. */ }
+  fs.rmSync(stamp, { force: true });
+  Jimp = require("jimp");
   prepareOutputDirs();
   await createRoundedSourceIcon();
   runElectronIconBuilder();
@@ -37,6 +56,14 @@ async function main() {
   syncRuntimeIcon();
   await createSplashImage();
   printSummary();
+  const outputs = [
+    ...fs.readdirSync(ICONS_DIR).map((file) => path.join(ICONS_DIR, file)),
+    GENERATED_SOURCE_ICON, RUNTIME_ICON, WINDOWS_RUNTIME_ICON, MAC_RUNTIME_ICON, SPLASH_IMAGE,
+  ].map((file) => ({
+    file,
+    hash: createHash("sha256").update(fs.readFileSync(file)).digest("hex"),
+  }));
+  fs.writeFileSync(stamp, JSON.stringify({ fingerprint, outputs }));
 }
 
 function ensureSourceIcon() {

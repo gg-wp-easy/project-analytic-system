@@ -18,7 +18,6 @@
     "build": "vite build",
     "dev": "vite",
     "icons:create": "node scripts/create-icons.cjs",
-    "prebuild": "npm run icons:create",
     "servers:install": "node scripts/servers.cjs install all",
     "servers:build": "node scripts/servers.cjs build all",
     "analytics-server:install": "node scripts/servers.cjs install analytics",
@@ -33,7 +32,8 @@
     "electron:build:win:store": "node scripts/electron.cjs build --platform=win --profile=store",
     "electron:build:linux": "node scripts/electron.cjs build --platform=linux",
     "electron:build:mac": "node scripts/electron.cjs build --platform=mac",
-    "protect:asar": "node scripts/protect-asar.cjs"
+    "protect:asar": "node scripts/protect-asar.cjs",
+    "electron:build:local": "node scripts/electron.cjs build --profile=local --version-mode=package"
   },
   "dependencies": {
     "@emotion/react": "11.14.0",

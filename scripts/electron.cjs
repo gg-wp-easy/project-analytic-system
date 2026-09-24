@@ -55,6 +55,7 @@ function parseArgs(argv) {
     platform: "current",
     profile: "standard",
     skipIcons: false,
+    clean: false,
     skipServerInstall: false,
     skipServerBuild: false,
     skipBuilder: false,
@@ -72,6 +73,8 @@ function parseArgs(argv) {
   for (const arg of argv.slice(1)) {
     if (arg === "--help" || arg === "-h") {
       options.help = true;
+    } else if (arg === "--clean") {
+      options.clean = true;
     } else if (arg === "--skip-icons") {
       options.skipIcons = true;
     } else if (arg === "--skip-server-install") {
@@ -107,6 +110,10 @@ function parseArgs(argv) {
     }
   }
 
+  if (!["standard", "msi", "store", "local"].includes(options.profile)) {
+    throw new Error(`Unsupported build profile: ${options.profile}`);
+  }
+
   if (!["branch", "package", "timestamp"].includes(options.versionMode)) {
     throw new Error(`Unsupported version mode: ${options.versionMode}`);
   }
@@ -123,8 +130,8 @@ function printHelp() {
   console.log(`
 Usage:
   node scripts/electron.cjs dev [--skip-server-install] [--vite-port=5173]
-  node scripts/electron.cjs build [--platform=current|win|linux|mac] [--profile=standard|msi|store]
-                                [--skip-icons] [--skip-server-build] [--skip-builder] [--skip-protect-asar]
+  node scripts/electron.cjs build [--platform=current|win|linux|mac] [--profile=standard|msi|store|local] [--clean]
+                                [--skip-icons] [--skip-server-install] [--skip-server-build] [--skip-builder] [--skip-protect-asar]
                                 [--version-mode=timestamp|package|branch] [--app-version=x.y.z]
                                 [--build-branch=name] [--build-number=n] [--arch=x64|ia32|arm64|armv7l]
 
@@ -191,11 +198,12 @@ async function runBuild(options) {
   assertFileExists(electronBuilderCli, "electron-builder CLI");
 
   const targetPlatform = resolveElectronPlatform(options.platform);
+  const localBuild = options.profile === "local";
   const buildVersion = resolveBuildVersion(options);
   const outputDir = options.outputDir || path.join(
     repoRoot,
     "release",
-    `${targetPlatform.label}-${timestamp()}`,
+    localBuild ? `${targetPlatform.label}-local` : `${targetPlatform.label}-${timestamp()}`,
   );
   const builderEnv = {
     ...process.env,
@@ -216,7 +224,10 @@ async function runBuild(options) {
 
   if (!options.skipServerBuild) {
     logStep("Building bundled Python backends");
-    await runCommand(nodeBinary, [serversScript, "build", "all"], {
+    await runCommand(nodeBinary, [serversScript, "build", "all",
+      ...(options.skipServerInstall ? ["--skip-install"] : []),
+      ...(options.clean ? ["--clean"] : []),
+    ], {
       cwd: repoRoot,
       env: process.env,
     });
@@ -238,7 +249,8 @@ async function runBuild(options) {
     const builderArgs = [
       electronBuilderCli,
       ...resolveBuilderArgs(targetPlatform.key, options.profile),
-      ...resolveBuilderArchArgs(options.arch),
+      ...resolveBuilderArchArgs(options.arch || (localBuild ? process.arch : null)),
+      ...(localBuild ? ["--config.compression=store"] : []),
       `--config.directories.output=${outputDir}`,
       `--config.extraMetadata.version=${buildVersion.value}`,
       `--config.buildVersion=${buildVersion.value}`,
@@ -255,7 +267,7 @@ async function runBuild(options) {
     console.log("Skipping electron-builder packaging.");
   }
 
-  if (!options.skipProtectAsar) {
+  if (!options.skipProtectAsar && !options.skipBuilder && !localBuild) {
     logStep("Protecting ASAR bundle");
     await runCommand(nodeBinary, [protectAsarScript], {
       cwd: repoRoot,
@@ -297,6 +309,10 @@ function currentPlatformKey() {
 
 
 function resolveBuilderArgs(platform, profile) {
+  if (profile === "local") {
+    return [`--${platform}`, "--dir"];
+  }
+
   if (platform === "win") {
     if (profile === "msi") {
       return ["--win", "msi"];

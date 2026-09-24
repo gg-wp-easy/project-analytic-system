@@ -11,7 +11,7 @@ All orchestration is now done through Node.js scripts from `scripts/`. No `.sh` 
 ### Frontend
 
 - `npm run dev` - start Vite in browser mode
-- `npm run build` - build the frontend
+- `npm run build` - build the frontend (no Electron icon generation)
 
 ### Frontend asset splitting
 
@@ -47,6 +47,7 @@ To replace a local server checkout from scratch:
 ### Electron
 
 - `npm run electron:dev` - start Electron in dev mode
+- `npm run electron:build:local` - build an unpacked app for the host architecture in `release/<os>-local`, without installers or ASAR backup; reuses the output directory
 - `npm run electron:build` - build Electron for the current OS
 - `npm run electron:build:win` - build Windows artifacts
 - `npm run electron:build:win:msi` - build Windows MSI profile
@@ -80,8 +81,7 @@ To replace a local server checkout from scratch:
 
 1. `npm install`
 2. `npm run servers:prepare`
-3. `npm run servers:build`
-4. `npm run electron:build`
+3. `npm run electron:build` (includes the backend build)
 
 ## Server portfolio risk and return
 
@@ -93,3 +93,24 @@ The stock-analysis server uses one annual methodology in the AI, hybrid, tree, a
 - Value, quality, dividend, and ML scores select and rank candidates but do **not** add arbitrary percentage points to `expected_return`. For transparency, AI/hybrid responses additionally include `income_growth_return_estimate` (dividend yield plus sustainable-growth proxy); it is diagnostic only and is not optimized as a return forecast.
 
 The CAPM formula and the interpretation of beta as systematic risk are documented by [OpenStax](https://openstax.org/books/principles-finance/pages/15-3-the-capital-asset-pricing-model-capm). The portfolio approach follows Markowitz mean-variance selection; the original article is available from [The Journal of Finance](https://doi.org/10.1111/J.1540-6261.1952.TB01525.X). Dividend-plus-growth is kept separate because the Gordon model applies to an expected **dividend** growth stream and requires a stable-growth assumption; see [OpenStax's DDM discussion](https://openstax.org/books/principles-finance-2e/pages/11-2-dividend-discount-models-ddms).
+
+## Local build resource usage
+
+Use `npm run electron:dev` for development and `npm run electron:build:local`
+when you need to test a packaged app. The local profile still builds the backend
+and frontend, but skips installer compression and additional architectures.
+Regular platform build commands retain their release targets.
+
+Python builds preserve the PyInstaller cache by default and use `dist` directly,
+without copying the entire backend into `dist/releases`. To rebuild from scratch:
+`npm run electron:build -- --clean` or `npm run servers:build -- --clean`.
+These options require the updated `server-analytic-system/build.py` in the backend checkout.
+
+After dependencies have been installed, use
+`npm run electron:build:local -- --skip-server-install` to avoid pip resolution.
+For frontend-only changes, `--skip-server-build` reuses the existing backend;
+rebuild it whenever backend sources or dependencies change.
+
+Icon generation now checks source, generator, lockfile and generated file hashes.
+Unchanged assets are reused; `npm run icons:create -- --force` regenerates them.
+The frontend build no longer runs this desktop-only step.

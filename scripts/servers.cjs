@@ -47,6 +47,7 @@ async function main() {
       await prepareServer(server, {
         install: !flags.skipInstall,
         build: !flags.skipBuild,
+        clean: flags.clean,
       });
     }
     return;
@@ -78,16 +79,19 @@ function parseArgs(argv) {
     help: rawArgs[0] === "--help" || rawArgs[0] === "-h",
     skipInstall: false,
     skipBuild: false,
+    clean: false,
   };
 
   const command = rawArgs[0] === "--help" || rawArgs[0] === "-h" ? null : rawArgs[0];
-  let target = rawArgs[1];
+  let target;
 
-  for (const arg of rawArgs.slice(command ? 2 : 1)) {
+  for (const arg of rawArgs.slice(1)) {
     if (arg === "--help" || arg === "-h") {
       flags.help = true;
     } else if (arg === "--skip-install") {
       flags.skipInstall = true;
+    } else if (arg === "--clean") {
+      flags.clean = true;
     } else if (arg === "--skip-build") {
       flags.skipBuild = true;
     } else if (!target) {
@@ -110,7 +114,7 @@ function printHelp() {
   console.log(`
 Usage:
   node scripts/servers.cjs install [analytics|all]
-  node scripts/servers.cjs build [analytics|all] [--skip-install] [--skip-build]
+  node scripts/servers.cjs build [analytics|all] [--skip-install] [--skip-build] [--clean]
   node scripts/servers.cjs dev [analytics] [--skip-install] [-- <extra args>]
 
 Examples:
@@ -208,7 +212,8 @@ async function prepareServer(server, options) {
         "current",
         "--project-name",
         server.projectName,
-        "--clean",
+        "--no-release-copy",
+        ...(options.clean ? ["--clean"] : []),
       ],
       {
         cwd: serverDir,
