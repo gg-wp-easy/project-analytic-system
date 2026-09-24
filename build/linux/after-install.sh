@@ -19,6 +19,12 @@ if [ -n "$INSTALL_DIR" ]; then
     ln -sf "$INSTALL_DIR/$APP_NAME" "$BIN_DIR/$APP_NAME"
     chmod +x "$INSTALL_DIR/$APP_NAME"
     echo "Created launcher: $BIN_DIR/$APP_NAME"
+
+    # Electron's setuid sandbox helper; a custom afterInstall replaces the
+    # electron-builder default that would otherwise set this.
+    if [ -f "$INSTALL_DIR/chrome-sandbox" ]; then
+        chmod 4755 "$INSTALL_DIR/chrome-sandbox" || true
+    fi
 fi
 
 mkdir -p /opt/nk-invest-data

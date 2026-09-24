@@ -9,6 +9,7 @@ const OPEN_LOGS_DIRECTORY_CHANNEL = "app:open-logs-directory";
 const TOGGLE_FULLSCREEN_CHANNEL = "app:toggle-fullscreen";
 const GET_FULLSCREEN_STATE_CHANNEL = "app:get-fullscreen-state";
 const FULLSCREEN_STATE_CHANGED_CHANNEL = "app:fullscreen-state-changed";
+const SET_THEME_CHANNEL = "app:set-theme";
 
 function normalizeForIpc(value) {
   if (value instanceof Error) {
@@ -56,6 +57,7 @@ contextBridge.exposeInMainWorld("electron", {
   openLogsDirectory: () => ipcRenderer.invoke(OPEN_LOGS_DIRECTORY_CHANNEL),
   toggleFullscreen: () => ipcRenderer.invoke(TOGGLE_FULLSCREEN_CHANNEL),
   getFullscreenState: () => ipcRenderer.invoke(GET_FULLSCREEN_STATE_CHANNEL),
+  setTheme: (theme) => ipcRenderer.send(SET_THEME_CHANNEL, theme),
   onUpdateStatus: (listener) => {
     const handler = (_event, payload) => listener(payload);
     ipcRenderer.on(UPDATE_STATUS_CHANNEL, handler);

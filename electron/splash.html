@@ -9,6 +9,25 @@
         color-scheme: light;
         --brand: #c8102e;
         --brand-dark: #5a0a14;
+        --bg: #ffffff;
+        --bg-accent: #fdf1f3;
+        --border: #e2e8f0;
+        --text: #1e293b;
+        --text-muted: #64748b;
+        --text-faint: #94a3b8;
+        --bar-track: #f1e4e6;
+      }
+      :root[data-theme="dark"] {
+        color-scheme: dark;
+        --brand: #f0596f;
+        --brand-dark: #e5edf5;
+        --bg: #0f172a;
+        --bg-accent: #1f1830;
+        --border: #202a3a;
+        --text: #e5edf5;
+        --text-muted: #94a3b8;
+        --text-faint: #64748b;
+        --bar-track: #202a3a;
       }
       * {
         box-sizing: border-box;
@@ -23,10 +42,10 @@
         align-items: center;
         justify-content: center;
         overflow: hidden;
-        background: #ffffff;
-        color: #1e293b;
+        background: var(--bg);
+        color: var(--text);
         font-family: "Segoe UI", Tahoma, sans-serif;
-        border: 1px solid #e2e8f0;
+        border: 1px solid var(--border);
       }
       .card {
         width: 100%;
@@ -35,13 +54,17 @@
         align-items: center;
         gap: 28px;
         padding: 0 36px;
-        background: linear-gradient(135deg, #ffffff 0%, #ffffff 60%, #fdf1f3 100%);
+        background: linear-gradient(135deg, var(--bg) 0%, var(--bg) 60%, var(--bg-accent) 100%);
       }
       .logo {
         width: 170px;
         height: 170px;
         flex-shrink: 0;
         object-fit: contain;
+      }
+      /* The logo has an opaque white background, so present it as a tile on dark. */
+      :root[data-theme="dark"] .logo {
+        border-radius: 24px;
       }
       .content {
         flex: 1;
@@ -64,12 +87,12 @@
       }
       p {
         margin: 10px 0 0;
-        color: #64748b;
+        color: var(--text-muted);
         font-size: 13px;
       }
       .meta {
         margin-top: 6px;
-        color: #94a3b8;
+        color: var(--text-faint);
         font-size: 12px;
       }
       .bar {
@@ -78,7 +101,7 @@
         height: 6px;
         border-radius: 999px;
         overflow: hidden;
-        background: #f1e4e6;
+        background: var(--bar-track);
       }
       .bar-fill {
         width: 36%;
@@ -96,6 +119,11 @@
         }
       }
     </style>
+    <script>
+      // Set before first paint so the splash never flashes the wrong theme.
+      const theme = new URLSearchParams(window.location.search).get("theme");
+      document.documentElement.dataset.theme = theme === "dark" ? "dark" : "light";
+    </script>
   </head>
   <body>
     <main class="card">
@@ -111,8 +139,7 @@
       </div>
     </main>
     <script>
-      const params = new URLSearchParams(window.location.search);
-      const version = params.get("version");
+      const version = new URLSearchParams(window.location.search).get("version");
       const versionNode = document.getElementById("app-version");
 
       if (version && versionNode) {

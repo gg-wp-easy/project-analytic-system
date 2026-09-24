@@ -34,6 +34,7 @@ export type DesktopApi = {
   openLogsDirectory?: () => Promise<{ status?: string; message?: string; logsDirectory?: string; logFilePath?: string }>;
   toggleFullscreen?: () => Promise<FullscreenState>;
   getFullscreenState?: () => Promise<FullscreenState>;
+  setTheme?: (theme: "light" | "dark") => void;
   onUpdateStatus?: (listener: (payload: UpdateStatusPayload) => void) => () => void;
   onFullscreenChange?: (listener: (payload: FullscreenState) => void) => () => void;
   log?: DesktopLogApi;

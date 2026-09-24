@@ -114,3 +114,4 @@ rebuild it whenever backend sources or dependencies change.
 Icon generation now checks source, generator, lockfile and generated file hashes.
 Unchanged assets are reused; `npm run icons:create -- --force` regenerates them.
 The frontend build no longer runs this desktop-only step.
+<!--  -->

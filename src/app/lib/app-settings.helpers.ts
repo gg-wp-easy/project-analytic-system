@@ -26,6 +26,8 @@ export function applyAppTheme(theme: Theme): void {
 export function persistAppTheme(theme: Theme): void {
   if (typeof window !== "undefined") {
     window.localStorage.setItem(APP_THEME_STORAGE_KEY, theme);
+    // Lets the desktop shell theme the startup splash before the app has loaded.
+    (window as Window & { electron?: { setTheme?: (theme: Theme) => void } }).electron?.setTheme?.(theme);
   }
 }
 

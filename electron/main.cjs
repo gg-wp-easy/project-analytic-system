@@ -16,6 +16,12 @@ const OPEN_LOGS_DIRECTORY_CHANNEL = "app:open-logs-directory";
 const TOGGLE_FULLSCREEN_CHANNEL = "app:toggle-fullscreen";
 const GET_FULLSCREEN_STATE_CHANNEL = "app:get-fullscreen-state";
 const FULLSCREEN_STATE_CHANGED_CHANNEL = "app:fullscreen-state-changed";
+const SET_THEME_CHANNEL = "app:set-theme";
+const THEME_FILE_NAME = "theme.json";
+const SPLASH_THEMES = {
+  light: "#ffffff",
+  dark: "#0f172a",
+};
 const LOG_LEVELS = new Set(["debug", "info", "warn", "error"]);
 const AUTO_UPDATE_INITIAL_DELAY_MS = 12_000;
 const AUTO_UPDATE_INTERVAL_MS = 4 * 60 * 60 * 1000;
@@ -142,7 +148,36 @@ function normalizeRendererLogArg(value) {
   return value;
 }
 
+function getThemeFilePath() {
+  return path.join(app.getPath("userData"), THEME_FILE_NAME);
+}
+
+// The renderer keeps the theme in localStorage, which the main process cannot read
+// before the main window exists, so the renderer mirrors it into a small file.
+function readSavedTheme() {
+  try {
+    const saved = JSON.parse(fs.readFileSync(getThemeFilePath(), "utf8"));
+    return saved?.theme === "dark" ? "dark" : "light";
+  } catch {
+    return "light";
+  }
+}
+
+function saveTheme(theme) {
+  try {
+    fs.writeFileSync(getThemeFilePath(), JSON.stringify({ theme }), "utf8");
+  } catch (error) {
+    log.warn("Failed to persist theme:", error);
+  }
+}
+
 function registerAppIpcHandlers() {
+  ipcMain.on(SET_THEME_CHANNEL, (_event, theme) => {
+    if (theme === "light" || theme === "dark") {
+      saveTheme(theme);
+    }
+  });
+
   ipcMain.on(LOG_IPC_CHANNEL, (_event, payload = {}) => {
     const level = LOG_LEVELS.has(payload.level) ? payload.level : "info";
     const data = Array.isArray(payload.data) ? payload.data.map(normalizeRendererLogArg) : [];
@@ -471,6 +506,7 @@ async function ensureBackendServices() {
 
 function createSplashWindow() {
   const iconPath = resolveWindowIconPath();
+  const theme = readSavedTheme();
   splashWindow = new BrowserWindow({
     width: 620,
     height: 300,
@@ -482,6 +518,7 @@ function createSplashWindow() {
     alwaysOnTop: true,
     center: true,
     autoHideMenuBar: true,
+    backgroundColor: SPLASH_THEMES[theme],
     icon: iconPath,
     webPreferences: {
       contextIsolation: true,
@@ -493,6 +530,7 @@ function createSplashWindow() {
   splashWindow.loadFile(path.join(__dirname, "splash.html"), {
     query: {
       version: app.getVersion(),
+      theme,
     },
   });
   splashWindow.on("closed", () => {
@@ -508,6 +546,7 @@ function createMainWindow() {
     minWidth: 1100,
     minHeight: 700,
     show: false,
+    backgroundColor: SPLASH_THEMES[readSavedTheme()],
     autoHideMenuBar: true,
     icon: iconPath,
     webPreferences: {
