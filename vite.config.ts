@@ -3,8 +3,10 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import tailwindcss from '@tailwindcss/vite'
 import react from '@vitejs/plugin-react'
+import { readFileSync } from 'node:fs'
 
 const rootDir = path.dirname(fileURLToPath(import.meta.url))
+const appVersion = JSON.parse(readFileSync(path.resolve(rootDir, 'package.json'), 'utf-8')).version as string
 
 const VENDOR_CHUNKS: ReadonlyArray<[string, ReadonlyArray<string>]> = [
   ['react', ['/react/', '/react-dom/', '/scheduler/', '/react-router/']],
@@ -29,6 +31,9 @@ function vendorChunk(id: string): string | undefined {
 
 export default defineConfig({
   base: "./",
+  define: {
+    __APP_VERSION__: JSON.stringify(appVersion),
+  },
   plugins: [
     // The React and Tailwind plugins are both required for Make, even if
     // Tailwind is not being actively used – do not remove them

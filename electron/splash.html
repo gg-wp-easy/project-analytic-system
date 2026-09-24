@@ -1,78 +1,90 @@
 <!doctype html>
-<html lang="en">
+<html lang="ru">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Загрузка приложения инвестиционной аналитики</title>
+    <title>NK-Tech Инвестиционная аналитика</title>
     <style>
       :root {
-        color-scheme: dark;
+        color-scheme: light;
+        --brand: #c8102e;
+        --brand-dark: #5a0a14;
       }
       * {
         box-sizing: border-box;
       }
+      html,
+      body {
+        height: 100%;
+      }
       body {
         margin: 0;
-        min-height: 100vh;
         display: flex;
         align-items: center;
         justify-content: center;
-        background: radial-gradient(120% 120% at 0% 0%, #0f172a 0%, #111827 45%, #020617 100%);
-        color: #e2e8f0;
+        overflow: hidden;
+        background: #ffffff;
+        color: #1e293b;
         font-family: "Segoe UI", Tahoma, sans-serif;
+        border: 1px solid #e2e8f0;
       }
       .card {
-        width: 86%;
-        padding: 28px;
-        border-radius: 18px;
-        border: 1px solid rgba(148, 163, 184, 0.25);
-        background: rgba(15, 23, 42, 0.68);
-        box-shadow: 0 20px 45px rgba(2, 6, 23, 0.45);
-      }
-      .header {
+        width: 100%;
+        height: 100%;
         display: flex;
         align-items: center;
-        gap: 12px;
-        margin-bottom: 10px;
+        gap: 28px;
+        padding: 0 36px;
+        background: linear-gradient(135deg, #ffffff 0%, #ffffff 60%, #fdf1f3 100%);
       }
-      .dot {
-        width: 12px;
-        height: 12px;
-        border-radius: 50%;
-        background: #38bdf8;
-        box-shadow: 0 0 0 0 rgba(56, 189, 248, 0.8);
-        animation: pulse 1.6s infinite;
+      .logo {
+        width: 170px;
+        height: 170px;
+        flex-shrink: 0;
+        object-fit: contain;
+      }
+      .content {
+        flex: 1;
+        min-width: 0;
+      }
+      .brand {
+        margin: 0 0 4px;
+        font-size: 12px;
+        font-weight: 600;
+        letter-spacing: 0.22em;
+        text-transform: uppercase;
+        color: var(--brand);
       }
       h1 {
         margin: 0;
-        font-size: 18px;
-        font-weight: 600;
-        letter-spacing: 0.2px;
+        font-size: 22px;
+        line-height: 1.2;
+        font-weight: 700;
+        color: var(--brand-dark);
       }
       p {
-        margin: 0;
-        color: #94a3b8;
+        margin: 10px 0 0;
+        color: #64748b;
         font-size: 13px;
       }
       .meta {
-        margin-top: 12px;
-        color: #64748b;
+        margin-top: 6px;
+        color: #94a3b8;
         font-size: 12px;
-        letter-spacing: 0.18px;
       }
       .bar {
-        margin-top: 20px;
+        margin-top: 22px;
         width: 100%;
-        height: 8px;
+        height: 6px;
         border-radius: 999px;
         overflow: hidden;
-        background: rgba(100, 116, 139, 0.28);
+        background: #f1e4e6;
       }
       .bar-fill {
         width: 36%;
         height: 100%;
         border-radius: inherit;
-        background: linear-gradient(90deg, #06b6d4 0%, #3b82f6 100%);
+        background: linear-gradient(90deg, var(--brand-dark) 0%, var(--brand) 100%);
         animation: loading 1.2s ease-in-out infinite;
       }
       @keyframes loading {
@@ -83,29 +95,19 @@
           transform: translateX(320%);
         }
       }
-      @keyframes pulse {
-        0% {
-          box-shadow: 0 0 0 0 rgba(56, 189, 248, 0.75);
-        }
-        70% {
-          box-shadow: 0 0 0 10px rgba(56, 189, 248, 0);
-        }
-        100% {
-          box-shadow: 0 0 0 0 rgba(56, 189, 248, 0);
-        }
-      }
     </style>
   </head>
   <body>
     <main class="card">
-      <div class="header">
-        <span class="dot"></span>
+      <img class="logo" src="logo_company.png" alt="NK-Tech" />
+      <div class="content">
+        <div class="brand">NK-Tech</div>
         <h1>Инвестиционная аналитика</h1>
-      </div>
-      <p>Запуск аналитического ядра и подключение сервисов...</p>
-      <div class="meta">Версия <span id="app-version">1.0.0</span></div>
-      <div class="bar">
-        <div class="bar-fill"></div>
+        <p>Запуск аналитического ядра и подключение сервисов...</p>
+        <div class="meta">Версия <span id="app-version">1.0.0</span></div>
+        <div class="bar">
+          <div class="bar-fill"></div>
+        </div>
       </div>
     </main>
     <script>

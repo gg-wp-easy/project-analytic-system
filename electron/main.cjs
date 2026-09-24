@@ -61,6 +61,13 @@ app.commandLine.appendSwitch("ignore-certificate-errors");
 const isDev = !app.isPackaged;
 const APP_ID = "com.invest.analytics.desktop";
 const DEFAULT_HOST = "127.0.0.1";
+// The product was renamed to "NK-Tech Инвестиционная аналитика"; keep using the previous
+// userData folder so saved tokens, portfolios and caches survive the update.
+const LEGACY_USER_DATA_DIR_NAME = "NK-Invest-Analytics";
+
+if (app.isPackaged) {
+  app.setPath("userData", path.join(app.getPath("appData"), LEGACY_USER_DATA_DIR_NAME));
+}
 
 let splashWindow = null;
 let mainWindow = null;
@@ -472,8 +479,8 @@ async function ensureBackendServices() {
 function createSplashWindow() {
   const iconPath = resolveWindowIconPath();
   splashWindow = new BrowserWindow({
-    width: 520,
-    height: 320,
+    width: 620,
+    height: 300,
     frame: false,
     transparent: false,
     resizable: false,

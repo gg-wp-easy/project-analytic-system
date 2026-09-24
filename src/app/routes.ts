@@ -80,6 +80,10 @@ const routes = [
         path: APP_ROUTE_PATHS.settings,
         lazy: () => import("../pages/settings").then(({ SettingsPage }) => ({ Component: SettingsPage })),
       },
+      {
+        path: APP_ROUTE_PATHS.about,
+        lazy: () => import("../pages/about").then(({ AboutPage }) => ({ Component: AboutPage })),
+      },
       { path: APP_ROUTE_PATHS.wildcard, Component: NotFound },
     ],
   },

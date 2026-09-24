@@ -3,12 +3,19 @@
 set -e
 
 APP_NAME="nk-invest-analytics"
-INSTALL_DIR="/opt/NK-Invest-Analytics"
+INSTALL_DIR=""
+# Install dir follows the product name (renamed from NK-Invest-Analytics to NK-Tech ...).
+for candidate in /opt/NK-Tech* /opt/NK-Invest-Analytics; do
+    if [ -f "$candidate/$APP_NAME" ]; then
+        INSTALL_DIR="$candidate"
+        break
+    fi
+done
 BIN_DIR="/usr/local/bin"
 
-echo "Configuring NK-Invest Analytics..."
+echo "Configuring NK-Tech Investment Analytics..."
 
-if [ -f "$INSTALL_DIR/$APP_NAME" ]; then
+if [ -n "$INSTALL_DIR" ]; then
     ln -sf "$INSTALL_DIR/$APP_NAME" "$BIN_DIR/$APP_NAME"
     chmod +x "$INSTALL_DIR/$APP_NAME"
     echo "Created launcher: $BIN_DIR/$APP_NAME"

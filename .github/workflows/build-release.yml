@@ -94,7 +94,7 @@ jobs:
           }
 
           $safeName = $rawName -replace '[^A-Za-z0-9_.-]', '-'
-          $zipName = "NK-Invest-Analytics-Windows-$safeName.zip"
+          $zipName = "NK-Tech-Investment-Analytics-Windows-$safeName.zip"
           $stagingDir = "release-artifacts"
 
           New-Item -ItemType Directory -Path $stagingDir -Force | Out-Null
@@ -188,7 +188,7 @@ jobs:
           fi
 
           safe_name="$(printf '%s' "$raw_name" | tr -c 'A-Za-z0-9_.-' '-')"
-          archive_name="NK-Invest-Analytics-Linux-${safe_name}.tar.gz"
+          archive_name="NK-Tech-Investment-Analytics-Linux-${safe_name}.tar.gz"
 
           tar -czf "$archive_name" -C release/linux .
 

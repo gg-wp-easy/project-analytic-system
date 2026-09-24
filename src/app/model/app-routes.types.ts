@@ -16,6 +16,7 @@ export type AppRoutePathMap = {
   options: string;
   optionAssetDetails: string;
   settings: string;
+  about: string;
   wildcard: string;
 };
 
@@ -34,4 +35,5 @@ export type AppAbsoluteRoutePathMap = {
   bonds: string;
   options: string;
   settings: string;
+  about: string;
 };

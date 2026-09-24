@@ -6,6 +6,7 @@ import {
   BriefcaseBusiness,
   Gem,
   Database,
+  Info,
   Landmark,
   Layers,
   Maximize2,
@@ -25,6 +26,7 @@ const appNavigationIcons: Record<AppNavigationIconKey, LucideIcon> = {
   briefcase: BriefcaseBusiness,
   database: Database,
   gem: Gem,
+  info: Info,
   landmark: Landmark,
   layers: Layers,
   settings: Settings,
@@ -197,7 +199,7 @@ export function Root() {
         ) : null}
       </header>
 
-      {location.pathname !== APP_ABSOLUTE_ROUTE_PATHS.settings ? <MarketIndicativesTicker /> : null}
+      {location.pathname !== APP_ABSOLUTE_ROUTE_PATHS.settings && location.pathname !== APP_ABSOLUTE_ROUTE_PATHS.about ? <MarketIndicativesTicker /> : null}
 
       <main className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
         <Outlet />

@@ -127,8 +127,8 @@
   },
   "build": {
     "appId": "com.invest.analytics.desktop",
-    "productName": "NK-Invest-Analytics",
-    "copyright": "Copyright © 2024 NK-Invest-Analytics",
+    "productName": "NK-Tech Инвестиционная аналитика",
+    "copyright": "Copyright © 2026 NK-Tech",
     "directories": {
       "output": "release"
     },
@@ -169,7 +169,7 @@
         }
       ],
       "icon": "build/icons/icon.ico",
-      "artifactName": "${productName}-Windows-${version}-${arch}.${ext}",
+      "artifactName": "NK-Tech-Investment-Analytics-Windows-${version}-${arch}.${ext}",
       "verifyUpdateCodeSignature": false
     },
     "nsis": {
@@ -179,7 +179,7 @@
       "deleteAppDataOnUninstall": false,
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
-      "shortcutName": "Инвестиционная аналитика",
+      "shortcutName": "NK-Tech Инвестиционная аналитика",
       "installerIcon": "build/icons/icon.ico",
       "uninstallerIcon": "build/icons/icon.ico",
       "installerHeaderIcon": "build/icons/icon.ico",
@@ -188,7 +188,7 @@
       "unicode": true
     },
     "portable": {
-      "artifactName": "${productName}-Windows-${version}-portable-${arch}.${ext}",
+      "artifactName": "NK-Tech-Investment-Analytics-Windows-${version}-portable-${arch}.${ext}",
       "splashImage": "build/splash.bmp",
       "unpackDirName": "data"
     },
@@ -222,8 +222,8 @@
       ],
       "icon": "build/icons",
       "category": "Finance",
-      "maintainer": "NK-Invest-Analytics <nikitakaev25@gmail.com>",
-      "vendor": "NK-Invest-Analytics",
+      "maintainer": "NK-Tech <nikitakaev25@gmail.com>",
+      "vendor": "NK-Tech",
       "description": "Профессиональная аналитическая система для инвестиций",
       "desktop": {
         "entry": {
@@ -232,8 +232,8 @@
           "MimeType": "x-scheme-handler/invest-analytics"
         }
       },
-      "artifactName": "${productName}-Linux-${version}-${arch}.${ext}",
-      "synopsis": "NK-Investment Analytics Desktop Application",
+      "artifactName": "NK-Tech-Investment-Analytics-Linux-${version}-${arch}.${ext}",
+      "synopsis": "NK-Tech Investment Analytics Desktop Application",
       "executableArgs": []
     },
     "deb": {
@@ -261,7 +261,7 @@
     "snap": {
       "confinement": "strict",
       "grade": "stable",
-      "summary": "NK-Invest-Analytics",
+      "summary": "NK-Tech Investment Analytics",
       "description": "Professional investment analytics system",
       "plugs": [
         "desktop",

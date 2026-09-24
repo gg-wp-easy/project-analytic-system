@@ -18,6 +18,7 @@ export const APP_ROUTE_PATHS: AppRoutePathMap = {
   options: "options",
   optionAssetDetails: "options/asset/:underlyingKey",
   settings: "settings",
+  about: "about",
   wildcard: "*",
 };
 
@@ -36,4 +37,5 @@ export const APP_ABSOLUTE_ROUTE_PATHS: AppAbsoluteRoutePathMap = {
   bonds: "/bonds",
   options: "/options",
   settings: "/settings",
+  about: "/about",
 };
