@@ -237,6 +237,11 @@
       "executableArgs": []
     },
     "deb": {
+      "packageName": "nk-tech-investment-analytics",
+      "fpm": [
+        "--conflicts=nk-invest-analytics",
+        "--replaces=nk-invest-analytics"
+      ],
       "priority": "optional",
       "packageCategory": "utils",
       "depends": [

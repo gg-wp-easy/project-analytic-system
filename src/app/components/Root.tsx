@@ -16,6 +16,7 @@ import {
   TrendingUp,
   X,
 } from "lucide-react";
+import appIcon from "../../assets/app-icon.png";
 import { useAppSettings } from "../context/AppSettingsContext";
 import { isNavItemActive } from "../lib";
 import { APP_ABSOLUTE_ROUTE_PATHS, APP_NAVIGATION_ITEMS, type AppNavigationIconKey } from "../model";
@@ -125,9 +126,7 @@ export function Root() {
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
           <div className="flex min-h-16 items-center justify-between gap-3 py-2">
             <div className="flex min-w-0 items-center gap-3 sm:gap-4">
-              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary text-primary-foreground">
-                <TrendingUp className="h-5 w-5" />
-              </div>
+              <img src={appIcon} alt="" className="h-10 w-10 shrink-0 rounded-lg" />
               <div className="min-w-0">
                 <h1 className="truncate text-base font-semibold leading-5 text-slate-900 dark:text-slate-100">{t("header.title")}</h1>
               </div>
