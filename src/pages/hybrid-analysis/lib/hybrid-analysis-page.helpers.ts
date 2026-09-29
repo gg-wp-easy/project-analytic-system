@@ -119,6 +119,8 @@ export function extractPortfolioStrategies(parsed: Record<string, unknown>): Str
   const mapping: Record<string, string> = {
     max_sharpe: "Max Sharpe",
     min_volatility: "Min Volatility",
+    max_return: "Max Return (target risk)",
+    target_return: "Min Risk (target return)",
     selected_portfolio: "Selected",
   };
 
@@ -395,7 +397,9 @@ export function normalizePortfolioSettings(settings: HybridPortfolioSettingsInpu
       ? "max_return_target_risk"
       : settings.optimizationObjective === "max_sharpe"
         ? "max_sharpe"
-        : "min_risk_target_return";
+        : settings.optimizationObjective === "min_risk"
+          ? "min_risk"
+          : "min_risk_target_return";
   const portfolioAssetsCount = settings.autoPortfolioOptimization
     ? 20
     : Math.max(0, Math.trunc(numberOr(settings.portfolioAssetsCount, 0)));
@@ -408,7 +412,10 @@ export function normalizePortfolioSettings(settings: HybridPortfolioSettingsInpu
       optimizationObjective === "max_sharpe" || optimizationObjective === "max_return_target_risk"
         ? Math.max(numberOr(settings.sharpeBlendWeight, 0), 100)
         : 0,
-    min_risk_blend_weight: optimizationObjective === "min_risk_target_return" ? Math.max(numberOr(settings.minRiskBlendWeight, 0), 100) : 0,
+    min_risk_blend_weight:
+      optimizationObjective === "min_risk_target_return" || optimizationObjective === "min_risk"
+        ? Math.max(numberOr(settings.minRiskBlendWeight, 0), 100)
+        : 0,
     optimization_objective: optimizationObjective,
     target_return: Math.max(0, numberOr(settings.targetReturn, 20)),
     target_risk: Math.max(0.1, numberOr(settings.targetRisk, 20)),

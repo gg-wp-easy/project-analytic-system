@@ -9,6 +9,9 @@ export function normalizeOptimizationObjective(value: unknown): OptimizationObje
   if (["max_return_target_risk", "max_return"].includes(normalized)) {
     return "max_return_target_risk";
   }
+  if (["min_risk", "min_volatility", "minimum_risk"].includes(normalized)) {
+    return "min_risk";
+  }
   return "min_risk_target_return";
 }
 
@@ -65,13 +68,18 @@ export function buildOptimizerSettingsPayload(settings: OptimizerSettings) {
     min_weight: minWeight,
     max_weight: maxWeight,
     sharpe_blend_weight: optimizationObjective === "max_sharpe" || optimizationObjective === "max_return_target_risk" ? Math.max(sharpeBlendWeight, 100) : 0,
-    min_risk_blend_weight: optimizationObjective === "min_risk_target_return" ? Math.max(minRiskBlendWeight, 100) : 0,
+    min_risk_blend_weight:
+      optimizationObjective === "min_risk_target_return" || optimizationObjective === "min_risk"
+        ? Math.max(minRiskBlendWeight, 100)
+        : 0,
     optimization_objective:
       optimizationObjective === "max_return_target_risk"
         ? "max_return"
         : optimizationObjective === "min_risk_target_return"
           ? "target_return"
-          : "max_sharpe",
+          : optimizationObjective === "min_risk"
+            ? "min_risk"
+            : "max_sharpe",
     target_return: targetReturn,
     target_risk: targetRisk,
     ...(portfolioAssetsCount > 0 ? { portfolio_assets_count: portfolioAssetsCount } : {}),
@@ -86,6 +94,9 @@ export function getOptimizationSummary(settings: OptimizerSettings, isEnglish = 
   }
   if (settings.optimizationObjective === "max_sharpe") {
     return isEnglish ? "Maximum Sharpe ratio" : "Максимальный коэффициент Шарпа";
+  }
+  if (settings.optimizationObjective === "min_risk") {
+    return isEnglish ? "Minimum risk" : "Минимальный риск";
   }
   if (settings.optimizationObjective === "max_return_target_risk") {
     return isEnglish

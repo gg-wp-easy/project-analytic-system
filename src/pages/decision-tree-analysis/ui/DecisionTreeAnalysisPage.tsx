@@ -26,7 +26,13 @@ import {
   Scatter,
   ZAxis,
 } from "recharts";
-import { useFundamentals } from "../../../entities/fundamentals";
+import { buildStockAnalysisRecords, useFundamentals } from "../../../entities/fundamentals";
+import {
+  ValuationReportPanel,
+  parseValuationReport,
+  selectedFactorLabels,
+  usePersistentValuationReport,
+} from "../../../features/valuation-report";
 import { useAppSettings } from "../../../app/context/AppSettingsContext";
 import { Checkbox } from "../../../app/components/ui/checkbox";
 import { Input } from "../../../app/components/ui/input";
@@ -185,6 +191,7 @@ function isBuyPrediction(value: string): boolean {
 
 export function DecisionTreeAnalysis() {
   const { cache, hasData } = useFundamentals();
+  const [valuationReport, setValuationReport] = usePersistentValuationReport(TREE_STATE_KEY);
   const { locale, t } = useAppSettings();
   const isEn = locale === "en";
   const { settings: optimizerSettings, setSettings: setOptimizerSettings } = useOptimizerSettings();
@@ -353,54 +360,7 @@ export function DecisionTreeAnalysis() {
       }))
       .sort((left, right) => right.count - left.count);
   }, [analysisRows]);
-  const requestData = useMemo(
-    () =>
-      cache.shares
-        .map((share) => {
-          const f = cache.fundamentalsByFigi[share.figi];
-          if (!f) {
-            return null;
-          }
-
-          return {
-            figi: share.figi,
-            ticker: share.ticker,
-            name: share.name,
-            exchange: share.exchange,
-            currency: share.currency,
-            lot: share.lot,
-            liquidity_flag: share.liquidityFlag,
-            api_trade_available_flag: share.apiTradeAvailableFlag,
-            buy_available_flag: share.buyAvailableFlag,
-            sell_available_flag: share.sellAvailableFlag,
-            otc_flag: share.otcFlag,
-            market_cap_bn: f.marketCapBn,
-            pe_ratio: f.peRatio,
-            pb_ratio: f.pbRatio,
-            ps_ratio: f.psRatio,
-            ev_to_ebitda: f.evToEbitda,
-            roa: f.roa,
-            net_margin: f.netMargin,
-            net_debt_to_ebitda: f.netDebtToEbitda,
-            total_debt: f.totalDebt,
-            roe: f.roe,
-            dividend_yield: f.dividendYield,
-            five_year_avg_dividend_yield: f.fiveYearAverageDividendYield,
-            five_year_dividend_growth_rate: f.fiveYearDividendGrowthRate,
-            payout_ratio: f.dividendPayoutRatio,
-            dividend_years_count: f.dividendYearsCount,
-            consecutive_dividend_years: f.consecutiveDividendYears,
-            dividend_consistency: f.dividendConsistency,
-            last_dividend_year: f.lastDividendYear,
-            beta: f.beta,
-            g: f.roe,
-            growth_rate: f.roe,
-            growthRate: f.roe,
-          };
-        })
-        .filter((row): row is NonNullable<typeof row> => Boolean(row)),
-    [cache.fundamentalsByFigi, cache.shares],
-  );
+  const requestData = useMemo(() => buildStockAnalysisRecords(cache), [cache]);
 
   const sortedRequestData = useMemo(
     () => [...requestData].sort((left, right) => left.ticker.localeCompare(right.ticker)),
@@ -439,13 +399,6 @@ export function DecisionTreeAnalysis() {
     });
   }, [sortedRequestData, stockSearch]);
 
-  const selectedFeatureLabels = useMemo(
-    () =>
-      TREE_FEATURE_OPTIONS
-        .filter((option) => treeSettings.features.includes(option.key))
-        .map((option) => (isEn ? option.labelEn : option.labelRu)),
-    [isEn, treeSettings.features],
-  );
 
   const treeHelp = useMemo(() => {
     if (treeSettings.algorithm === "random_forest") {
@@ -549,6 +502,7 @@ export function DecisionTreeAnalysis() {
     }
 
     setIsRunning(true);
+    setValuationReport(null);
 
     try {
       const optimizerPayload = buildOptimizerSettingsPayload(optimizerSettings);
@@ -585,6 +539,7 @@ export function DecisionTreeAnalysis() {
         throw new Error(t("Не удалось построить дерево решений. Проверьте данные и повторите попытку.", "The decision tree could not be built. Check the data and try again."));
       }
       const parsed = text ? (JSON.parse(text) as Record<string, unknown>) : {};
+      setValuationReport(parseValuationReport(parsed));
 
       const parsedMetrics = [...extractMetrics(parsed), ...extractPortfolioMetrics(parsed)];
       const parsedAnalysisRows = extractAnalysisRows(parsed);
@@ -689,7 +644,7 @@ export function DecisionTreeAnalysis() {
     { label: t("Акций в анализе", "Stocks in analysis"), value: analysisSummary.sampleSize },
     { label: t("Компаний с прогнозом", "Companies with prediction"), value: analysisSummary.resultCount },
     { label: t("Сигналов покупки", "Buy signals"), value: analysisSummary.buyCount },
-    { label: t("Средняя уверенность", "Average confidence"), value: formatPercentValue(analysisSummary.averageConfidence) },
+    { label: t("Средняя вероятность недооценки", "Average P(undervalued)"), value: formatPercentValue(analysisSummary.averageConfidence) },
     { label: t("Средняя ожидаемая доходность", "Average expected return"), value: formatPercentValue(analysisSummary.averageExpectedReturn) },
     { label: t("Средний риск", "Average risk"), value: formatPercentValue(analysisSummary.averageRisk) },
     { label: t("Лучший прогноз", "Top prediction"), value: analysisSummary.topTicker + " - " + analysisSummary.topPrediction },
@@ -719,7 +674,7 @@ export function DecisionTreeAnalysis() {
     { header: t("Компания", "Company"), render: (row: AnalysisResultRow) => row.name },
     { header: t("Сектор", "Sector"), render: (row: AnalysisResultRow) => row.sector },
     { header: t("Прогноз", "Prediction"), render: (row: AnalysisResultRow) => row.prediction },
-    { header: t("Уверенность, %", "Confidence, %"), render: (row: AnalysisResultRow) => formatPercentValue(row.confidence) },
+    { header: t("P(недооценена), %", "P(undervalued), %"), render: (row: AnalysisResultRow) => formatPercentValue(row.confidence) },
     { header: t("Ожидаемая доходность, %", "Expected return, %"), render: (row: AnalysisResultRow) => formatPercentValue(row.expectedReturn) },
     { header: t("Риск, %", "Risk, %"), render: (row: AnalysisResultRow) => formatPercentValue(row.risk) },
     { header: "P/E", render: (row: AnalysisResultRow) => formatOptionalNumber(row.pe, 2) },
@@ -1160,8 +1115,10 @@ export function DecisionTreeAnalysis() {
                   <div className="text-xl font-semibold text-slate-900 dark:text-slate-100">{selectedRequestData.length}</div>
                 </div>
                 <div className="ui-stat-card">
-                  <div className="text-slate-500 dark:text-slate-400">{t("Признаков", "Features")}</div>
-                  <div className="text-xl font-semibold text-slate-900 dark:text-slate-100">{treeSettings.features.length}</div>
+                  <div className="text-slate-500 dark:text-slate-400">{t("Факторов", "Factors")}</div>
+                  <div className="text-xl font-semibold text-slate-900 dark:text-slate-100">
+                    {valuationReport ? selectedFactorLabels(valuationReport, isEn).length : t("авто", "auto")}
+                  </div>
                 </div>
               </div>
 
@@ -1174,7 +1131,10 @@ export function DecisionTreeAnalysis() {
                         : t("Используется ручной список акций", "Manual stock list is used")}
                     </div>
                     <div className="mt-1 text-xs text-slate-500 dark:text-slate-400">
-                      {t("Параметры:", "Parameters:")} {selectedFeatureLabels.join(", ")}
+                      {t("Факторы:", "Factors:")}{" "}
+                      {valuationReport
+                        ? selectedFactorLabels(valuationReport, isEn).join(", ")
+                        : t("подбирает факторный анализ при запуске", "chosen by the factor analysis on run")}
                     </div>
                   </div>
                   <div className="flex flex-wrap items-center gap-2">
@@ -1284,7 +1244,7 @@ export function DecisionTreeAnalysis() {
                     variant: "bars",
                   },
                   {
-                    title: t("Уверенность vs доходность", "Confidence vs return"),
+                    title: t("Вероятность недооценки vs доходность", "P(undervalued) vs return"),
                     subtitle: t("Готовим точки риска и ожидаемой доходности.", "Preparing risk and expected return points."),
                     variant: "scatter",
                   },
@@ -1301,7 +1261,7 @@ export function DecisionTreeAnalysis() {
                 ]}
                 chartColumnsClassName="xl:grid-cols-2"
                 tableTitle={t("Готовим таблицу результатов", "Preparing result table")}
-                tableDescription={t("Скоро появятся прогнозы, уверенность и портфельные веса.", "Predictions, confidence, and portfolio weights will appear shortly.")}
+                tableDescription={t("Скоро появятся оценки, вероятность недооценки и портфельные веса.", "Valuations, P(undervalued) and portfolio weights will appear shortly.")}
                 tableRows={8}
                 tableColumns={8}
               />
@@ -1382,7 +1342,7 @@ export function DecisionTreeAnalysis() {
                     <div className="text-xl font-semibold text-slate-900 dark:text-slate-100">{analysisSummary.resultCount}</div>
                   </div>
                   <div className="ui-stat-card">
-                    <div className="text-slate-500 dark:text-slate-400">{t("Средняя уверенность", "Average confidence")}</div>
+                    <div className="text-slate-500 dark:text-slate-400">{t("Средняя вероятность недооценки", "Average P(undervalued)")}</div>
                     <div className="text-xl font-semibold text-slate-900 dark:text-slate-100">{formatPercentValue(analysisSummary.averageConfidence)}</div>
                   </div>
                   <div className="ui-stat-card">
@@ -1427,7 +1387,7 @@ export function DecisionTreeAnalysis() {
                         <ResponsiveContainer width="100%" height="100%">
                           <ScatterChart margin={{ top: 12, right: 24, left: 28, bottom: 42 }}>
                             <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                            <XAxis type="number" dataKey="confidence" name={t("Уверенность", "Confidence")} unit="%" stroke="#64748b" label={{ value: t("Уверенность, %", "Confidence, %"), position: "insideBottom", offset: -14 }} />
+                            <XAxis type="number" dataKey="confidence" name={t("Уверенность", "Confidence")} unit="%" stroke="#64748b" label={{ value: t("P(недооценена), %", "P(undervalued), %"), position: "insideBottom", offset: -14 }} />
                             <YAxis type="number" dataKey="expectedReturn" name={t("Ожидаемая доходность", "Expected return")} unit="%" stroke="#64748b" label={{ value: t("Ожидаемая доходность, %", "Expected return, %"), angle: -90, position: "insideLeft" }} />
                             <ZAxis dataKey="risk" range={[70, 230]} />
                             <Tooltip formatter={(value: number, name: string) => [formatPercentValue(value), name]} cursor={{ strokeDasharray: "3 3" }} />
@@ -1580,6 +1540,8 @@ export function DecisionTreeAnalysis() {
 
             </>
           )}
+
+          {valuationReport && <ValuationReportPanel report={valuationReport} />}
 
           {!!portfolioPositions.length && (
             <SectionCard

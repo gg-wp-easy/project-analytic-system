@@ -1,0 +1,563 @@
+/*
+ * Motion layer for the ui-* design system: entrance, hover and ambient animations.
+ *
+ * Entrance animations only define a `from` keyframe and use `backwards` fill, so once
+ * they finish the element falls back to its own styles and hover transforms still work.
+ * Everything stays inside `components` so Tailwind utilities can override it, and all
+ * of it is switched off under prefers-reduced-motion at the bottom of the file.
+ */
+
+@keyframes ui-fade-in {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes ui-rise-in {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+}
+
+@keyframes ui-pop-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px) scale(0.96);
+  }
+}
+
+@keyframes ui-row-in {
+  from {
+    opacity: 0;
+    transform: translateX(-8px);
+  }
+}
+
+@keyframes ui-aurora {
+  from {
+    transform: translate3d(-5%, -3%, 0) rotate(0deg);
+  }
+
+  to {
+    transform: translate3d(5%, 4%, 0) rotate(8deg);
+  }
+}
+
+@keyframes ui-drift-a {
+  from {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+
+  to {
+    transform: translate3d(12vmax, 8vmax, 0) scale(1.15);
+  }
+}
+
+@keyframes ui-drift-b {
+  from {
+    transform: translate3d(0, 0, 0) scale(1.1);
+  }
+
+  to {
+    transform: translate3d(-10vmax, -9vmax, 0) scale(0.95);
+  }
+}
+
+@keyframes ui-float {
+  50% {
+    transform: translateY(-4px);
+  }
+}
+
+@keyframes ui-sheen {
+  from {
+    transform: translateX(-100%);
+  }
+
+  to {
+    transform: translateX(100%);
+  }
+}
+
+@keyframes ui-shimmer {
+  to {
+    transform: translateX(100%);
+  }
+}
+
+@keyframes ui-indeterminate {
+  from {
+    transform: translateX(-100%);
+  }
+
+  to {
+    transform: translateX(300%);
+  }
+}
+
+@keyframes ui-draw {
+  from {
+    stroke-dashoffset: 1;
+  }
+}
+
+@keyframes ui-scale-in {
+  from {
+    opacity: 0;
+    transform: scale(0);
+  }
+}
+
+@keyframes ui-pulse-ring {
+  from {
+    opacity: 0.55;
+    transform: scale(1);
+  }
+
+  to {
+    opacity: 0;
+    transform: scale(3.2);
+  }
+}
+
+@layer components {
+  :root {
+    --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
+    --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+
+  /* ---- Page entrance ---------------------------------------------------- */
+
+  .ui-route-enter {
+    animation: ui-fade-in 320ms ease-out backwards;
+  }
+
+  .ui-page-hero,
+  .ui-rise-in {
+    animation: ui-rise-in 640ms var(--ease-out-expo) backwards;
+  }
+
+  .ui-surface {
+    animation: ui-rise-in 620ms var(--ease-out-expo) backwards;
+    animation-delay: 80ms;
+  }
+
+  .ui-surface:nth-child(2) {
+    animation-delay: 140ms;
+  }
+
+  .ui-surface:nth-child(3) {
+    animation-delay: 200ms;
+  }
+
+  .ui-surface:nth-child(4) {
+    animation-delay: 260ms;
+  }
+
+  .ui-surface:nth-child(n + 5) {
+    animation-delay: 300ms;
+  }
+
+  .ui-stat-card,
+  .ui-metric-card {
+    animation: ui-pop-in 520ms var(--ease-out-expo) backwards;
+    animation-delay: 120ms;
+    transition:
+      transform 280ms var(--ease-out-expo),
+      box-shadow 280ms ease,
+      border-color 280ms ease;
+  }
+
+  .ui-stat-card:nth-child(2),
+  .ui-metric-card:nth-child(2) {
+    animation-delay: 170ms;
+  }
+
+  .ui-stat-card:nth-child(3),
+  .ui-metric-card:nth-child(3) {
+    animation-delay: 220ms;
+  }
+
+  .ui-stat-card:nth-child(4),
+  .ui-metric-card:nth-child(4) {
+    animation-delay: 270ms;
+  }
+
+  .ui-stat-card:nth-child(n + 5),
+  .ui-metric-card:nth-child(n + 5) {
+    animation-delay: 310ms;
+  }
+
+  .ui-stat-card:hover,
+  .ui-metric-card:hover {
+    transform: translateY(-2px);
+    border-color: color-mix(in srgb, var(--primary) 34%, var(--border));
+    box-shadow: 0 16px 30px -24px color-mix(in srgb, var(--primary) 75%, transparent);
+  }
+
+  /* Only the first rows animate: long tables should not queue hundreds of animations. */
+  .ui-data-table tbody tr {
+    transition: background-color 160ms ease;
+  }
+
+  .ui-data-table tbody tr:hover {
+    background-color: color-mix(in srgb, var(--primary) 5%, transparent);
+  }
+
+  .ui-data-table tbody tr:nth-child(-n + 12) {
+    animation: ui-row-in 460ms var(--ease-out-expo) backwards;
+  }
+
+  .ui-data-table tbody tr:nth-child(2) {
+    animation-delay: 30ms;
+  }
+
+  .ui-data-table tbody tr:nth-child(3) {
+    animation-delay: 60ms;
+  }
+
+  .ui-data-table tbody tr:nth-child(4) {
+    animation-delay: 90ms;
+  }
+
+  .ui-data-table tbody tr:nth-child(5) {
+    animation-delay: 120ms;
+  }
+
+  .ui-data-table tbody tr:nth-child(6) {
+    animation-delay: 150ms;
+  }
+
+  .ui-data-table tbody tr:nth-child(7) {
+    animation-delay: 180ms;
+  }
+
+  .ui-data-table tbody tr:nth-child(8) {
+    animation-delay: 210ms;
+  }
+
+  .ui-data-table tbody tr:nth-child(n + 9):nth-child(-n + 12) {
+    animation-delay: 240ms;
+  }
+
+  /* ---- Ambient light ---------------------------------------------------- */
+
+  .ui-ambient {
+    position: fixed;
+    inset: 0;
+    z-index: -1;
+    overflow: hidden;
+    pointer-events: none;
+  }
+
+  .ui-ambient span {
+    position: absolute;
+    width: 62vmax;
+    height: 62vmax;
+    border-radius: 9999px;
+    will-change: transform;
+  }
+
+  .ui-ambient span:first-child {
+    top: -30vmax;
+    left: -18vmax;
+    background: radial-gradient(circle, var(--page-highlight), transparent 65%);
+    animation: ui-drift-a 28s ease-in-out infinite alternate;
+  }
+
+  .ui-ambient span:last-child {
+    right: -22vmax;
+    bottom: -34vmax;
+    background: radial-gradient(circle, var(--page-highlight-secondary), transparent 65%);
+    animation: ui-drift-b 34s ease-in-out infinite alternate;
+  }
+
+  /* Slowly drifting light blobs behind hero cards. */
+  .ui-aurora {
+    --aurora-a: color-mix(in srgb, var(--primary) 16%, transparent);
+    --aurora-b: color-mix(in srgb, var(--chart-2) 12%, transparent);
+    position: relative;
+    isolation: isolate;
+    overflow: hidden;
+  }
+
+  .ui-page-hero {
+    --aurora-a: rgba(255, 255, 255, 0.75);
+    --aurora-b: rgba(255, 255, 255, 0.5);
+  }
+
+  .dark .ui-page-hero {
+    --aurora-a: rgba(255, 255, 255, 0.13);
+    --aurora-b: rgba(255, 255, 255, 0.07);
+  }
+
+  .ui-aurora::before,
+  .ui-page-hero::before {
+    content: "";
+    position: absolute;
+    inset: -60% -25%;
+    z-index: 0;
+    pointer-events: none;
+    background:
+      radial-gradient(38% 46% at 22% 38%, var(--aurora-a), transparent 70%),
+      radial-gradient(34% 42% at 76% 62%, var(--aurora-b), transparent 70%);
+    animation: ui-aurora 22s ease-in-out infinite alternate;
+  }
+
+  .ui-aurora::before {
+    z-index: -1;
+  }
+
+  .ui-float {
+    animation: ui-float 6s ease-in-out infinite;
+  }
+
+  /* ---- Interactive feedback --------------------------------------------- */
+
+  .ui-primary-button {
+    position: relative;
+    isolation: isolate;
+    overflow: hidden;
+  }
+
+  .ui-primary-button::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    pointer-events: none;
+    background: linear-gradient(110deg, transparent 25%, rgba(255, 255, 255, 0.38) 50%, transparent 75%);
+    transform: translateX(-100%);
+  }
+
+  .ui-primary-button:not(:disabled):hover {
+    transform: translateY(-1px);
+    box-shadow: 0 12px 24px -14px color-mix(in srgb, var(--primary) 85%, transparent);
+  }
+
+  .ui-primary-button:not(:disabled):hover::after {
+    animation: ui-sheen 900ms ease-out;
+  }
+
+  .ui-primary-button:not(:disabled):active,
+  .ui-secondary-button:not(:disabled):active {
+    transform: translateY(0) scale(0.97);
+  }
+
+  .ui-secondary-button:not(:disabled):hover {
+    transform: translateY(-1px);
+  }
+
+  /* Header navigation: underline that grows under the active section. */
+  .ui-nav-link {
+    position: relative;
+  }
+
+  .ui-nav-link svg {
+    transition: transform 320ms var(--ease-spring);
+  }
+
+  .ui-nav-link:hover svg {
+    transform: translateY(-1px) scale(1.14);
+  }
+
+  .ui-nav-link::after {
+    content: "";
+    position: absolute;
+    bottom: 3px;
+    left: 50%;
+    width: 16px;
+    height: 2px;
+    border-radius: 9999px;
+    background: var(--primary);
+    transform: translateX(-50%) scaleX(0);
+    transition: transform 360ms var(--ease-out-expo);
+  }
+
+  .ui-nav-link[aria-current="page"]::after {
+    transform: translateX(-50%) scaleX(1);
+  }
+
+  /* Navigation cards: lift, cursor spotlight (see trackSpotlight) and a lively icon. */
+  .ui-link-card {
+    --spot-x: 50%;
+    --spot-y: 0%;
+    --spot-color: color-mix(in srgb, var(--primary) 8%, transparent);
+    position: relative;
+    isolation: isolate;
+    overflow: hidden;
+    animation: ui-rise-in 620ms var(--ease-out-expo) backwards;
+    animation-delay: 120ms;
+    transition:
+      transform 360ms var(--ease-out-expo),
+      box-shadow 360ms ease,
+      border-color 360ms ease;
+  }
+
+  .dark .ui-link-card {
+    --spot-color: color-mix(in srgb, var(--primary) 16%, transparent);
+  }
+
+  .ui-link-card:nth-child(2) {
+    animation-delay: 170ms;
+  }
+
+  .ui-link-card:nth-child(3) {
+    animation-delay: 220ms;
+  }
+
+  .ui-link-card:nth-child(4) {
+    animation-delay: 270ms;
+  }
+
+  .ui-link-card:nth-child(5) {
+    animation-delay: 320ms;
+  }
+
+  .ui-link-card:nth-child(6) {
+    animation-delay: 370ms;
+  }
+
+  .ui-link-card:nth-child(n + 7) {
+    animation-delay: 420ms;
+  }
+
+  .ui-link-card::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    pointer-events: none;
+    background: radial-gradient(
+      260px circle at var(--spot-x) var(--spot-y),
+      var(--spot-color),
+      transparent 70%
+    );
+    opacity: 0;
+    transition: opacity 320ms ease;
+  }
+
+  .ui-link-card:hover,
+  .ui-link-card:focus-visible {
+    transform: translateY(-4px);
+    border-color: color-mix(in srgb, var(--primary) 42%, var(--border));
+    box-shadow: 0 24px 44px -30px color-mix(in srgb, var(--primary) 60%, rgba(15, 23, 42, 0.7));
+  }
+
+  .ui-link-card:hover::before,
+  .ui-link-card:focus-visible::before {
+    opacity: 1;
+  }
+
+  .ui-link-card-icon {
+    transition: transform 460ms var(--ease-spring);
+  }
+
+  .ui-link-card:hover .ui-link-card-icon,
+  .ui-link-card:focus-visible .ui-link-card-icon {
+    transform: translateY(-2px) rotate(-7deg) scale(1.1);
+  }
+
+  /* ---- Loading ---------------------------------------------------------- */
+
+  .ui-shimmer {
+    position: relative;
+    overflow: hidden;
+  }
+
+  .ui-shimmer::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.6), transparent);
+    transform: translateX(-100%);
+    animation: ui-shimmer 1.6s ease-in-out infinite;
+  }
+
+  .dark .ui-shimmer::after {
+    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.07), transparent);
+  }
+
+  .ui-indeterminate {
+    animation: ui-indeterminate 1.4s ease-in-out infinite;
+  }
+
+  /* ---- Dashboard sparkline ---------------------------------------------- */
+
+  .ui-sparkline-line {
+    stroke-dasharray: 1;
+    stroke-dashoffset: 0;
+    animation: ui-draw 1600ms var(--ease-out-expo) 250ms backwards;
+  }
+
+  .ui-sparkline-area {
+    animation: ui-fade-in 900ms ease-out 900ms backwards;
+  }
+
+  .ui-sparkline-dot,
+  .ui-sparkline-pulse {
+    transform-box: fill-box;
+    transform-origin: center;
+  }
+
+  .ui-sparkline-dot {
+    animation: ui-scale-in 420ms var(--ease-spring) 1500ms backwards;
+  }
+
+  .ui-sparkline-pulse {
+    opacity: 0;
+    animation: ui-pulse-ring 2.2s ease-out 1800ms infinite;
+  }
+
+  /* ---- Theme switch ----------------------------------------------------- */
+
+  ::view-transition-old(root),
+  ::view-transition-new(root) {
+    animation-duration: 380ms;
+    animation-timing-function: ease;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  @layer components {
+    .ui-route-enter,
+    .ui-page-hero,
+    .ui-rise-in,
+    .ui-surface,
+    .ui-stat-card,
+    .ui-metric-card,
+    .ui-link-card,
+    .ui-data-table tbody tr,
+    .ui-ambient span,
+    .ui-aurora::before,
+    .ui-page-hero::before,
+    .ui-float,
+    .ui-shimmer::after,
+    .ui-indeterminate,
+    .ui-primary-button::after,
+    .ui-sparkline-line,
+    .ui-sparkline-area,
+    .ui-sparkline-dot,
+    .ui-sparkline-pulse {
+      animation: none !important;
+    }
+
+    .ui-stat-card:hover,
+    .ui-metric-card:hover,
+    .ui-link-card:hover,
+    .ui-link-card:focus-visible,
+    .ui-link-card:hover .ui-link-card-icon,
+    .ui-nav-link:hover svg,
+    .ui-primary-button:not(:disabled):hover,
+    .ui-secondary-button:not(:disabled):hover {
+      transform: none;
+    }
+
+    ::view-transition-old(root),
+    ::view-transition-new(root) {
+      animation: none;
+    }
+  }
+}

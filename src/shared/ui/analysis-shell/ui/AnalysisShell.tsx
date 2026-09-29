@@ -29,7 +29,7 @@ export function PageHero({
           <div className="flex items-start gap-3">
             <span
               className={cn(
-                "inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-lg ring-1 backdrop-blur-sm",
+                "ui-float inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-lg ring-1 backdrop-blur-sm",
                 ANALYSIS_SHELL_ICON_ACCENT_CLASSES[accent],
               )}
             >

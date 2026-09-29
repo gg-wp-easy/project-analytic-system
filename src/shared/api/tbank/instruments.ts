@@ -264,6 +264,8 @@ function normalizeFundamentalItem(item: AnyRecord, nowIso: string): TBankFundame
     fiveYearDividendGrowthRate: normalizeRate(pickNumber(item, ["five_year_annual_dividend_growth_rate", "fiveYearAnnualDividendGrowthRate"])),
     dividendPayoutRatio: normalizeRate(pickNumber(item, ["dividend_payout_ratio_fy", "dividendPayoutRatioFy"])),
     marketCapBn: normalizeScaledBillions(marketCapRaw),
+    revenueBn: normalizeScaledBillions(pickNumber(item, ["revenue_ttm", "revenueTtm"])),
+    debtToEquity: normalizeRatio(pickNumber(item, ["total_debt_to_equity_mrq", "totalDebtToEquityMrq"])),
     beta: normalizeRatio(pickNumber(item, ["beta", "five_years_beta"])),
     updatedAt:
       pickTimestampIso(item, ["fiscal_period_end_date", "ex_dividend_date"]) ||

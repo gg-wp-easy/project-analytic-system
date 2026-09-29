@@ -73,12 +73,17 @@ export function OptimizerSettingsFields({ settings, onChange, autoFitWeights = f
                   ? "max_sharpe"
                   : e.target.value === "max_return_target_risk"
                   ? "max_return_target_risk"
+                  : e.target.value === "min_risk"
+                  ? "min_risk"
                   : "min_risk_target_return",
             })
           }
         >
           <option value="max_sharpe">
             {t("Максимальный коэффициент Шарпа", "Maximum Sharpe ratio")}
+          </option>
+          <option value="min_risk">
+            {t("Минимальный риск", "Minimum risk")}
           </option>
           <option value="min_risk_target_return">
             {t("Минимальный риск при заданной доходности", "Minimum risk at a target return")}

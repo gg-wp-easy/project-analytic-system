@@ -137,6 +137,8 @@ export type TBankFundamental = {
   fiveYearDividendGrowthRate: number;
   dividendPayoutRatio: number;
   marketCapBn: number;
+  revenueBn: number;
+  debtToEquity: number;
   beta: number;
   updatedAt: string;
 };

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { FileSpreadsheet, FileText, ImageDown, Layers, Play, Settings } from "lucide-react";
-import { useFundamentals } from "../../../entities/fundamentals";
+import { buildStockAnalysisRecords, useFundamentals } from "../../../entities/fundamentals";
+import { ValuationReportPanel, parseValuationReport, usePersistentValuationReport } from "../../../features/valuation-report";
 import { useAppSettings } from "../../../app/context/AppSettingsContext";
 import {
   getOptimizationSummary,
@@ -67,6 +68,7 @@ function formatPortfolioMetricValue(label: string, value: number): string {
 }
 export function HybridAnalysis() {
   const { hasData, cache } = useFundamentals();
+  const [valuationReport, setValuationReport] = usePersistentValuationReport(HYBRID_STATE_KEY);
   const { locale, t } = useAppSettings();
   const isEn = locale === "en";
   const { settings: optimizerSettings, setSettings: setOptimizerSettings } = useOptimizerSettings();
@@ -138,47 +140,7 @@ export function HybridAnalysis() {
         tooltip: getMetricTooltip(item.label, isEn),
       }));
   }, [isEn, portfolio.length, portfolioAssetsCount, selectedPortfolioStrategy, t, visibleMetrics]);
-  const requestData = useMemo(
-    () =>
-      cache.shares
-        .map((share) => {
-          const f = cache.fundamentalsByFigi[share.figi];
-          if (!f) {
-            return null;
-          }
-
-          return {
-            figi: share.figi,
-            ticker: share.ticker,
-            name: share.name,
-            exchange: share.exchange,
-            currency: share.currency,
-            lot: share.lot,
-            liquidity_flag: share.liquidityFlag,
-            api_trade_available_flag: share.apiTradeAvailableFlag,
-            buy_available_flag: share.buyAvailableFlag,
-            sell_available_flag: share.sellAvailableFlag,
-            otc_flag: share.otcFlag,
-            market_cap_bn: f.marketCapBn,
-            pe_ratio: f.peRatio,
-            pb_ratio: f.pbRatio,
-            ps_ratio: f.psRatio,
-            ev_to_ebitda: f.evToEbitda,
-            roa: f.roa,
-            net_margin: f.netMargin,
-            net_debt_to_ebitda: f.netDebtToEbitda,
-            total_debt: f.totalDebt,
-            roe: f.roe,
-            dividend_yield: f.dividendYield,
-            beta: f.beta,
-            g: f.roe,
-            growth_rate: f.roe,
-            growthRate: f.roe,
-          };
-        })
-        .filter((row): row is NonNullable<typeof row> => Boolean(row)),
-    [cache.fundamentalsByFigi, cache.shares],
-  );
+  const requestData = useMemo(() => buildStockAnalysisRecords(cache), [cache]);
 
   useEffect(() => {
     try {
@@ -264,6 +226,7 @@ export function HybridAnalysis() {
     setError(null);
     setErrorDialogMessage(null);
     setIsRunning(true);
+    setValuationReport(null);
 
     const numericWeights = {
       cluster: numberOr(weights.clusterWeight, 0),
@@ -294,6 +257,7 @@ export function HybridAnalysis() {
         }),
       });
       const parsed = await parseHybridResponse(response);
+      setValuationReport(parseValuationReport(parsed));
 
       const parsedScores = extractModelScores(parsed, numericWeights);
       const parsedMetrics = extractMetrics(parsed);
@@ -503,6 +467,8 @@ export function HybridAnalysis() {
 
           {!isRunning && (
             <>
+          {valuationReport && <ValuationReportPanel report={valuationReport} />}
+
           {(!!portfolio.length || portfolioAssetsCount > 0) && (
             <SectionCard
               title={t("Оптимальный портфель гибрида", "Hybrid Optimal Portfolio")}

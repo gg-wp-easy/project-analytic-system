@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { Link, Outlet, useLocation } from "react-router-dom";
+import { Link, Outlet, useLocation, useMatches } from "react-router-dom";
 import type { LucideIcon } from "lucide-react";
 import {
   Activity,
@@ -51,12 +51,15 @@ function getFullscreenDesktopApi(): FullscreenDesktopApi | undefined {
 
 export function Root() {
   const location = useLocation();
+  const matches = useMatches();
+  // Keyed by route id, not pathname, so switching params inside one page keeps its state.
+  const routeKey = matches[matches.length - 1]?.id ?? location.pathname;
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const { t } = useAppSettings();
 
   const desktopLinkClass = (isActive: boolean) =>
-    `inline-flex h-10 w-10 items-center justify-center rounded-lg transition-colors ${
+    `ui-nav-link inline-flex h-10 w-10 items-center justify-center rounded-lg ${
       isActive
         ? "bg-primary/10 text-primary dark:bg-primary/15 dark:text-primary"
         : "text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800"
@@ -121,12 +124,21 @@ export function Root() {
   const FullscreenIcon = isFullscreen ? Minimize2 : Maximize2;
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="relative isolate min-h-screen bg-background">
+      <div className="ui-ambient" aria-hidden="true">
+        <span />
+        <span />
+      </div>
+
       <header className="sticky top-0 z-50 border-b border-border bg-card/95 backdrop-blur dark:bg-card/92">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
           <div className="flex min-h-16 items-center justify-between gap-3 py-2">
             <div className="flex min-w-0 items-center gap-3 sm:gap-4">
-              <img src={appIcon} alt="" className="h-10 w-10 shrink-0 rounded-lg" />
+              <img
+                src={appIcon}
+                alt=""
+                className="h-10 w-10 shrink-0 rounded-lg transition-transform duration-500 ease-out hover:-rotate-6 hover:scale-105"
+              />
               <div className="min-w-0">
                 <h1 className="truncate text-base font-semibold leading-5 text-slate-900 dark:text-slate-100">{t("header.title")}</h1>
               </div>
@@ -142,6 +154,7 @@ export function Root() {
                     key={item.path}
                     to={item.path}
                     className={desktopLinkClass(isActive)}
+                    aria-current={isActive ? "page" : undefined}
                     aria-label={t(item.title)}
                     title={t(item.title)}
                   >
@@ -175,7 +188,7 @@ export function Root() {
         </div>
 
         {mobileMenuOpen ? (
-          <div className="border-t border-border bg-card xl:hidden">
+          <div className="border-t border-border bg-card animate-in fade-in slide-in-from-top-2 duration-300 xl:hidden">
             <nav className="space-y-1 px-4 py-4">
               {APP_NAVIGATION_ITEMS.map((item) => {
                 const Icon = appNavigationIcons[item.icon];
@@ -201,7 +214,9 @@ export function Root() {
       {location.pathname !== APP_ABSOLUTE_ROUTE_PATHS.settings && location.pathname !== APP_ABSOLUTE_ROUTE_PATHS.about ? <MarketIndicativesTicker /> : null}
 
       <main className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
-        <Outlet />
+        <div key={routeKey} className="ui-route-enter">
+          <Outlet />
+        </div>
       </main>
     </div>
   );

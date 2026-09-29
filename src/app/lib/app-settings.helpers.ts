@@ -17,10 +17,27 @@ export function getInitialLocale(): Locale {
   return saved === "en" ? "en" : "ru";
 }
 
+let hasAppliedTheme = false;
+
 export function applyAppTheme(theme: Theme): void {
-  if (typeof document !== "undefined") {
-    document.documentElement.classList.toggle("dark", theme === "dark");
+  if (typeof document === "undefined") {
+    return;
   }
+
+  const root = document.documentElement;
+  const toggle = () => root.classList.toggle("dark", theme === "dark");
+  const startViewTransition = (document as Document & {
+    startViewTransition?: (update: () => void) => unknown;
+  }).startViewTransition?.bind(document);
+  const isChange = root.classList.contains("dark") !== (theme === "dark");
+
+  // Crossfade only real switches: the first call restores the saved theme on startup.
+  if (hasAppliedTheme && isChange && startViewTransition) {
+    startViewTransition(toggle);
+  } else {
+    toggle();
+  }
+  hasAppliedTheme = true;
 }
 
 export function persistAppTheme(theme: Theme): void {

@@ -1,6 +1,7 @@
 import { Link } from "react-router-dom";
 import { ArrowRight, Brain, GitBranch, Layers, Network } from "lucide-react";
 import { useAppSettings } from "../../../app/context/AppSettingsContext";
+import { trackSpotlight } from "../../../shared/lib/motion/spotlight";
 import { PageHero, SectionCard } from "../../../shared/ui/analysis-shell";
 
 const tools = [
@@ -71,10 +72,11 @@ export function StockAnalysisPage() {
               <Link
                 key={tool.path}
                 to={tool.path}
-                className="group rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition-all duration-300 hover:-translate-y-0.5 hover:border-slate-300 hover:shadow-xl dark:border-slate-800 dark:bg-slate-900 dark:hover:border-slate-700"
+                onPointerMove={trackSpotlight}
+                className="ui-link-card group rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900"
               >
                 <div className="space-y-4">
-                  <span className={`inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br ${tool.color}`}>
+                  <span className={`ui-link-card-icon inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br ${tool.color}`}>
                     <Icon className="h-6 w-6 text-white" />
                   </span>
                   <div className="space-y-2">

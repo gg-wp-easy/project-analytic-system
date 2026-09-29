@@ -50,10 +50,10 @@ export function PageLoadingState({
       </div>
       <div className="mt-4 space-y-2">
         <div className="h-1.5 w-full overflow-hidden rounded-full bg-slate-200 dark:bg-slate-800">
-          <div className={cn("h-full w-1/2 animate-pulse rounded-full", barClassName)} />
+          <div className={cn("ui-indeterminate h-full w-1/2 rounded-full", barClassName)} />
         </div>
         <div className="h-1.5 w-4/5 overflow-hidden rounded-full bg-slate-200 dark:bg-slate-800">
-          <div className={cn("h-full w-1/3 animate-pulse rounded-full", barClassName)} />
+          <div className={cn("ui-indeterminate h-full w-1/3 rounded-full [animation-delay:350ms]", barClassName)} />
         </div>
       </div>
     </div>
@@ -264,7 +264,7 @@ export function ChartSkeleton({
           ))}
         </div>
         <div className="h-1.5 w-full overflow-hidden rounded-full bg-slate-200 dark:bg-slate-800">
-          <div className={cn("h-full w-2/5 animate-pulse rounded-full", barClassName)} />
+          <div className={cn("ui-indeterminate h-full w-2/5 rounded-full", barClassName)} />
         </div>
       </div>
     </div>

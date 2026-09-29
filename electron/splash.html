@@ -118,6 +118,42 @@
           transform: translateX(320%);
         }
       }
+      @keyframes pop-in {
+        from {
+          opacity: 0;
+          transform: scale(0.88);
+        }
+      }
+      @keyframes rise-in {
+        from {
+          opacity: 0;
+          transform: translateY(10px);
+        }
+      }
+      .logo {
+        animation: pop-in 700ms cubic-bezier(0.16, 1, 0.3, 1) backwards;
+      }
+      .content > * {
+        animation: rise-in 600ms cubic-bezier(0.16, 1, 0.3, 1) backwards;
+      }
+      .content > :nth-child(2) {
+        animation-delay: 90ms;
+      }
+      .content > :nth-child(3) {
+        animation-delay: 180ms;
+      }
+      .content > :nth-child(4) {
+        animation-delay: 240ms;
+      }
+      .content > :nth-child(5) {
+        animation-delay: 300ms;
+      }
+      @media (prefers-reduced-motion: reduce) {
+        .logo,
+        .content > * {
+          animation: none;
+        }
+      }
     </style>
     <script>
       // Set before first paint so the splash never flashes the wrong theme.

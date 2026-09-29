@@ -42,8 +42,8 @@
   --sidebar-accent-foreground: oklch(0.205 0 0);
   --sidebar-border: oklch(0.922 0 0);
   --sidebar-ring: oklch(0.708 0 0);
-  --page-highlight: transparent;
-  --page-highlight-secondary: transparent;
+  --page-highlight: rgba(15, 118, 110, 0.09);
+  --page-highlight-secondary: rgba(37, 99, 235, 0.07);
   --surface-shadow: 0 12px 32px -26px rgba(15, 23, 42, 0.28);
   --surface-shadow-strong: 0 18px 44px -30px rgba(15, 23, 42, 0.34);
   --scrollbar-size: 12px;
@@ -366,10 +366,6 @@
   .ui-page-hero {
     @apply relative overflow-hidden rounded-lg border p-5 text-slate-950 dark:text-white sm:p-6;
     box-shadow: var(--surface-shadow-strong);
-  }
-
-  .ui-page-hero::before {
-    content: none;
   }
 
   .ui-page-hero::after {

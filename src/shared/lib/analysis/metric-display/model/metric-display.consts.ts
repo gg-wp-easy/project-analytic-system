@@ -38,6 +38,11 @@ export const ANALYSIS_METRIC_LABELS: Record<string, MetricLocalizedText> = {
   silhouette: { ru: "Silhouette", en: "Silhouette" },
   inertia: { ru: "Inertia", en: "Inertia" },
   portfolios: { ru: "Портфелей", en: "Portfolios" },
+  "out-of-sample r²": { ru: "R² вне выборки", en: "Out-of-sample R²" },
+  "typical valuation error": { ru: "Типичная ошибка оценки", en: "Typical valuation error" },
+  "sector median r²": { ru: "R² медианы отрасли", en: "Sector median R²" },
+  "tree depth": { ru: "Глубина дерева", en: "Tree depth" },
+  "tree leaves": { ru: "Листьев дерева", en: "Tree leaves" },
 };
 
 export const ANALYSIS_METRIC_TOOLTIPS: Record<string, MetricLocalizedText> = {
@@ -84,6 +89,9 @@ export const ANALYSIS_METRIC_TOOLTIPS: Record<string, MetricLocalizedText> = {
 };
 
 export const ANALYSIS_PERCENT_METRIC_LABELS = new Set([
+  "out-of-sample r²",
+  "typical valuation error",
+  "sector median r²",
   "accuracy",
   "precision",
   "recall",
@@ -102,6 +110,8 @@ export const ANALYSIS_PERCENT_METRIC_LABELS = new Set([
 ]);
 
 export const ANALYSIS_COUNT_METRIC_LABELS = new Set([
+  "tree depth",
+  "tree leaves",
   "models",
   "undervalued",
   "cluster selected",

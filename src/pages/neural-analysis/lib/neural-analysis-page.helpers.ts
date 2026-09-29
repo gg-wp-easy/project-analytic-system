@@ -85,9 +85,7 @@ export function extractAnalysisRows(parsed: Record<string, unknown>): AnalysisRe
         pe: numberOr(row.pe, numberOr(row.pe_ratio, numberOr(row.PE, numberOr(row["P/E"], NaN)))),
         predictedPE: numberOr(row.predicted_pe, numberOr(row.predictedPE, numberOr(row.forecast_pe, NaN))),
         residual: numberOr(row.residual, numberOr(row.pe_residual, NaN)),
-        undervaluationGap: normalizePercentLike(
-          row.undervaluation_gap ?? row.undervalued_score ?? row.undervaluationGap ?? row.gap,
-        ),
+        undervaluationGap: numberOr(row.undervaluation_gap ?? row.undervalued_score ?? row.undervaluationGap ?? row.gap, NaN) * 100,
         expectedReturn: normalizePercentLike(row.expected_return ?? row.expectedReturn),
         portfolioSignal: normalizeScoreLike(row.portfolio_signal ?? row.portfolioSignal ?? row.signal),
         valueScore: normalizeScoreLike(row.value_score ?? row.valueScore),
@@ -179,6 +177,8 @@ export function extractPortfolioStrategies(parsed: Record<string, unknown>): Por
   const labelByKey: Record<string, string> = {
     max_sharpe: "Max Sharpe",
     min_volatility: "Min Volatility",
+    max_return: "Max Return (target risk)",
+    target_return: "Min Risk (target return)",
     selected_portfolio: "Selected",
   };
 
@@ -288,6 +288,12 @@ export function extractMetrics(parsed: Record<string, unknown>): MetricItem[] {
   }
   if ("models_count" in stats) {
     rows.push({ label: "Models", value: formatMetricValue(stats.models_count) });
+  }
+  if ("oof_r2" in stats) {
+    rows.push({ label: "Out-of-sample R²", value: formatMetricValue(stats.oof_r2) });
+  }
+  if ("typical_error" in stats) {
+    rows.push({ label: "Typical valuation error", value: formatMetricValue(stats.typical_error) });
   }
   if ("train_loss" in finalLosses) {
     rows.push({ label: "Train Loss", value: formatMetricValue(finalLosses.train_loss) });

@@ -1,4 +1,4 @@
-export type OptimizationObjective = "min_risk_target_return" | "max_return_target_risk" | "max_sharpe";
+export type OptimizationObjective = "min_risk" | "min_risk_target_return" | "max_return_target_risk" | "max_sharpe";
 
 export type OptimizerSettings = {
   minWeight: string;

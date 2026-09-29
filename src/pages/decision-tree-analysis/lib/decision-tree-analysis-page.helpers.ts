@@ -43,6 +43,11 @@ export function extractMetrics(parsed: Record<string, unknown>): MetricItem[] {
     {};
 
   const mapping: Array<{ key: string; label: string }> = [
+    { key: "r2", label: "Out-of-sample R²" },
+    { key: "typical_error", label: "Typical valuation error" },
+    { key: "baseline_sector_median_r2", label: "Sector median R²" },
+    { key: "tree_depth", label: "Tree depth" },
+    { key: "tree_leaves", label: "Tree leaves" },
     { key: "accuracy", label: "Accuracy" },
     { key: "precision", label: "Precision" },
     { key: "recall", label: "Recall" },

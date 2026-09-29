@@ -25,7 +25,13 @@ import {
   ResponsiveContainer,
   Cell,
 } from "recharts";
-import { useFundamentals } from "../../../entities/fundamentals";
+import { buildStockAnalysisRecords, useFundamentals } from "../../../entities/fundamentals";
+import {
+  ValuationReportPanel,
+  parseValuationReport,
+  selectedFactorLabels,
+  usePersistentValuationReport,
+} from "../../../features/valuation-report";
 import { useAppSettings } from "../../../app/context/AppSettingsContext";
 import { Checkbox } from "../../../app/components/ui/checkbox";
 import { Input } from "../../../app/components/ui/input";
@@ -125,6 +131,7 @@ function isPortfolioMetric(label: string): boolean {
 
 export function ClusterAnalysis() {
   const { cache, hasData } = useFundamentals();
+  const [valuationReport, setValuationReport] = usePersistentValuationReport(CLUSTER_STATE_KEY);
   const { locale, t } = useAppSettings();
   const isEn = locale === "en";
   const { settings: optimizerSettings, setSettings: setOptimizerSettings } = useOptimizerSettings();
@@ -311,60 +318,7 @@ export function ClusterAnalysis() {
     return fallback?.rows ?? [];
   }, [optimalPortfolio, portfolioStrategies]);
 
-  const requestData = useMemo(
-    () =>
-      cache.shares
-        .map((share) => {
-          const f = cache.fundamentalsByFigi[share.figi];
-          if (!f) {
-            return null;
-          }
-
-          return {
-            figi: share.figi,
-            ticker: share.ticker,
-            name: share.name,
-            exchange: share.exchange,
-            currency: share.currency,
-            lot: share.lot,
-            liquidity_flag: share.liquidityFlag,
-            api_trade_available_flag: share.apiTradeAvailableFlag,
-            buy_available_flag: share.buyAvailableFlag,
-            sell_available_flag: share.sellAvailableFlag,
-            otc_flag: share.otcFlag,
-            market_cap_bn: f.marketCapBn,
-            pe_ratio: f.peRatio,
-            pb_ratio: f.pbRatio,
-            ps_ratio: f.psRatio,
-            pfcf: f.pfcfRatio,
-            pfcfRatio: f.pfcfRatio,
-            ev_to_ebitda: f.evToEbitda,
-            roa: f.roa,
-            net_margin: f.netMargin,
-            net_debt_to_ebitda: f.netDebtToEbitda,
-            total_debt: f.totalDebt,
-            roe: f.roe,
-            g: f.roe,
-            growth_rate: f.roe,
-            growthRate: f.roe,
-            dividend_yield: f.dividendYield,
-            five_year_avg_dividend_yield: f.fiveYearAverageDividendYield,
-            five_year_dividend_growth_rate: f.fiveYearDividendGrowthRate,
-            payout_ratio: f.dividendPayoutRatio,
-            dividend_years_count: f.dividendYearsCount,
-            consecutive_dividend_years: f.consecutiveDividendYears,
-            dividend_consistency: f.dividendConsistency,
-            last_dividend_year: f.lastDividendYear,
-            beta: f.beta,
-            peRatio: f.peRatio,
-            pbRatio: f.pbRatio,
-            marketCapBn: f.marketCapBn,
-            dividendYield: f.dividendYield,
-          };
-        })
-        .filter((row): row is NonNullable<typeof row> => Boolean(row)),
-    [cache.fundamentalsByFigi, cache.shares],
-  );
+  const requestData = useMemo(() => buildStockAnalysisRecords(cache), [cache]);
 
   const sortedRequestData = useMemo(
     () => [...requestData].sort((left, right) => left.ticker.localeCompare(right.ticker)),
@@ -388,13 +342,6 @@ export function ClusterAnalysis() {
     });
   }, [sortedRequestData, stockSearch]);
 
-  const selectedFeatureLabels = useMemo(
-    () =>
-      CLUSTER_FEATURE_OPTIONS
-        .filter((option) => clusterSettings.features.includes(option.key))
-        .map((option) => (isEn ? option.labelEn : option.labelRu)),
-    [clusterSettings.features, isEn],
-  );
 
   const algorithmHelp = useMemo(() => {
     if (clusterSettings.algorithm === "agglomerative") {
@@ -623,6 +570,7 @@ export function ClusterAnalysis() {
     }
 
     setIsRunning(true);
+    setValuationReport(null);
 
     try {
       const optimizerPayload = buildOptimizerSettingsPayload(optimizerSettings);
@@ -660,6 +608,7 @@ export function ClusterAnalysis() {
         throw new Error(t("Не удалось выполнить кластерный анализ. Проверьте данные и повторите попытку.", "Cluster analysis could not be completed. Check the data and try again."));
       }
       const parsed = text ? (JSON.parse(text) as Record<string, unknown>) : {};
+      setValuationReport(parseValuationReport(parsed));
 
       const points = extractPoints(parsed);
       const groups = extractGroups(parsed, points);
@@ -1044,8 +993,10 @@ export function ClusterAnalysis() {
                   <div className="text-xl font-semibold text-slate-900 dark:text-slate-100">{selectedRequestData.length}</div>
                 </div>
                 <div className="ui-stat-card">
-                  <div className="text-slate-500 dark:text-slate-400">{t("Признаков", "Features")}</div>
-                  <div className="text-xl font-semibold text-slate-900 dark:text-slate-100">{clusterSettings.features.length}</div>
+                  <div className="text-slate-500 dark:text-slate-400">{t("Факторов", "Factors")}</div>
+                  <div className="text-xl font-semibold text-slate-900 dark:text-slate-100">
+                    {valuationReport ? selectedFactorLabels(valuationReport, isEn).length : t("авто", "auto")}
+                  </div>
                 </div>
               </div>
 
@@ -1058,7 +1009,10 @@ export function ClusterAnalysis() {
                         : t("Используется ручной список акций", "Manual stock list is used")}
                     </div>
                     <div className="mt-1 text-xs text-slate-500 dark:text-slate-400">
-                      {t("Параметры:", "Parameters:")} {selectedFeatureLabels.join(", ")}
+                      {t("Факторы:", "Factors:")}{" "}
+                      {valuationReport
+                        ? selectedFactorLabels(valuationReport, isEn).join(", ")
+                        : t("подбирает факторный анализ при запуске", "chosen by the factor analysis on run")}
                     </div>
                   </div>
                   <div className="flex flex-wrap items-center gap-2">
@@ -1455,6 +1409,8 @@ export function ClusterAnalysis() {
           </SectionCard>
             </>
           )}
+
+          {valuationReport && <ValuationReportPanel report={valuationReport} />}
 
           {(!!displayPortfolio.length || bestPortfolioAssetsCount > 0) && (
             <SectionCard

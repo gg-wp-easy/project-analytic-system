@@ -31,6 +31,9 @@ export type AssetFundamentalRecord = {
   fiveYearAverageDividendYield: number;
   fiveYearDividendGrowthRate: number;
   dividendPayoutRatio: number;
+  // Absent in caches saved before these fields were loaded.
+  revenueBn?: number;
+  debtToEquity?: number;
   dividendYearsCount?: number;
   consecutiveDividendYears?: number;
   dividendConsistency?: number;
