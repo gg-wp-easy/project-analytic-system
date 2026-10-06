@@ -3,6 +3,7 @@
   "icon": "icon-source.png",
   "private": true,
   "version": "1.0.0",
+  "description": "NK-Tech Finance · Инвестиционная аналитика: оценка акций, облигационные портфели и оптимизация.",
   "type": "module",
   "main": "electron/main.cjs",
   "author": {
@@ -117,8 +118,8 @@
   },
   "build": {
     "appId": "com.invest.analytics.desktop",
-    "productName": "NK-Tech Инвестиционная аналитика",
-    "copyright": "Copyright © 2026 NK-Tech",
+    "productName": "NK-Tech Finance · Инвестиционная аналитика",
+    "copyright": "Copyright © 2026 NK-Tech Finance",
     "directories": {
       "output": "release"
     },
@@ -169,7 +170,7 @@
       "deleteAppDataOnUninstall": false,
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
-      "shortcutName": "NK-Tech Инвестиционная аналитика",
+      "shortcutName": "NK-Tech Finance · Инвестиционная аналитика",
       "installerIcon": "build/icons/icon.ico",
       "uninstallerIcon": "build/icons/icon.ico",
       "installerHeaderIcon": "build/icons/icon.ico",
@@ -186,7 +187,7 @@
       "applicationId": "InvestAnalytics.Desktop",
       "identityName": "42694InvestAnalytics.InvestAnalytics",
       "publisher": "CN=AAAAAAAA-AAAA-AAAA-AAAA-AAAAAAAAAAAA",
-      "publisherDisplayName": "Invest Analytics",
+      "publisherDisplayName": "NK-Tech Finance",
       "languages": [
         "ru-RU",
         "en-US"
@@ -212,9 +213,9 @@
       ],
       "icon": "build/icons",
       "category": "Finance",
-      "maintainer": "NK-Tech <nikitakaev25@gmail.com>",
-      "vendor": "NK-Tech",
-      "description": "Профессиональная аналитическая система для инвестиций",
+      "maintainer": "NK-Tech Finance <nikitakaev25@gmail.com>",
+      "vendor": "NK-Tech Finance",
+      "description": "NK-Tech Finance · Инвестиционная аналитика: оценка акций, облигационные портфели и оптимизация",
       "desktop": {
         "entry": {
           "Categories": "Finance;Office;",
@@ -223,7 +224,7 @@
         }
       },
       "artifactName": "NK-Tech-Investment-Analytics-Linux-${version}-${arch}.${ext}",
-      "synopsis": "NK-Tech Investment Analytics Desktop Application",
+      "synopsis": "NK-Tech Finance · Investment Analytics",
       "executableArgs": []
     },
     "deb": {
@@ -256,8 +257,8 @@
     "snap": {
       "confinement": "strict",
       "grade": "stable",
-      "summary": "NK-Tech Investment Analytics",
-      "description": "Professional investment analytics system",
+      "summary": "NK-Tech Finance Investment Analytics",
+      "description": "NK-Tech Finance Investment Analytics: stock valuation, bond portfolios and optimization",
       "plugs": [
         "desktop",
         "desktop-legacy",

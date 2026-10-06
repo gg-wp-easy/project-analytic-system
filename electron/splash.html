@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>NK-Tech Инвестиционная аналитика</title>
+    <title>NK-Tech Finance · Инвестиционная аналитика</title>
     <style>
       :root {
         color-scheme: light;
@@ -62,9 +62,13 @@
         flex-shrink: 0;
         object-fit: contain;
       }
-      /* The logo has an opaque white background, so present it as a tile on dark. */
-      :root[data-theme="dark"] .logo {
-        border-radius: 24px;
+      /* The logo is transparent: each theme shows its own variant. */
+      .logo-dark,
+      :root[data-theme="dark"] .logo-light {
+        display: none;
+      }
+      :root[data-theme="dark"] .logo-dark {
+        display: block;
       }
       .content {
         flex: 1;
@@ -163,9 +167,10 @@
   </head>
   <body>
     <main class="card">
-      <img class="logo" src="logo_company.png" alt="NK-Tech" />
+      <img class="logo logo-light" src="nk-tech-finance-logo.png" alt="NK-Tech Finance" />
+      <img class="logo logo-dark" src="nk-tech-finance-logo-dark.png" alt="NK-Tech Finance" />
       <div class="content">
-        <div class="brand">NK-Tech</div>
+        <div class="brand">NK-Tech Finance</div>
         <h1>Инвестиционная аналитика</h1>
         <p>Запуск аналитического ядра и подключение сервисов...</p>
         <div class="meta">Версия <span id="app-version">1.0.0</span></div>

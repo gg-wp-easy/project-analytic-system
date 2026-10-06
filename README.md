@@ -1,4 +1,6 @@
-# Project Site Analytic System
+# NK-Tech Finance · Investment Analytics
+
+Part of the NK-Tech Finance product family (repository `project-site-analytic-system`). App icons and logos come from the shared brand kit `../nk-tech-brand`: run `node nk-tech-brand/build.mjs --sync`, then `npm run icons:create -- --force`.
 
 Electron desktop application with one Python backend:
 

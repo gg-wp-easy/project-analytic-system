@@ -13,7 +13,7 @@ for candidate in /opt/NK-Tech* /opt/NK-Invest-Analytics; do
 done
 BIN_DIR="/usr/local/bin"
 
-echo "Configuring NK-Tech Investment Analytics..."
+echo "Configuring NK-Tech Finance · Investment Analytics..."
 
 if [ -n "$INSTALL_DIR" ]; then
     ln -sf "$INSTALL_DIR/$APP_NAME" "$BIN_DIR/$APP_NAME"
