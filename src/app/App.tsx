@@ -1,6 +1,8 @@
 import { RouterProvider } from "react-router-dom";
 import { router } from './routes';
 import { AppSettingsProvider, useAppSettings } from "./context/AppSettingsContext";
+import { SessionGate } from "./components/SessionGate";
+import { SessionProvider } from "../entities/session";
 import { FundamentalsProvider } from "../entities/fundamentals";
 import { OptionsProvider } from "../entities/options";
 import { PageLoadingState } from "../shared/ui/loading-state";
@@ -22,11 +24,15 @@ function RouteLoadingFallback() {
 export default function App() {
   return (
     <AppSettingsProvider>
-      <FundamentalsProvider>
-        <OptionsProvider>
-          <RouterProvider router={router} fallbackElement={<RouteLoadingFallback />} />
-        </OptionsProvider>
-      </FundamentalsProvider>
+      <SessionProvider>
+        <SessionGate>
+          <FundamentalsProvider>
+            <OptionsProvider>
+              <RouterProvider router={router} fallbackElement={<RouteLoadingFallback />} />
+            </OptionsProvider>
+          </FundamentalsProvider>
+        </SessionGate>
+      </SessionProvider>
     </AppSettingsProvider>
   );
 }

@@ -19,13 +19,7 @@
     "build": "vite build",
     "dev": "vite",
     "icons:create": "node scripts/create-icons.cjs",
-    "servers:install": "node scripts/servers.cjs install all",
-    "servers:build": "node scripts/servers.cjs build all",
-    "analytics-server:install": "node scripts/servers.cjs install analytics",
-    "analytics-server:build": "node scripts/servers.cjs build analytics",
-    "analytics-server:dev": "node scripts/servers.cjs dev analytics",
-    "servers:prepare": "node scripts/prepare.cjs",
-    "analytics-server:prepare": "node scripts/prepare.cjs analytics",
+    "test:scripts": "node --test scripts/tests",
     "electron:dev": "node scripts/electron.cjs dev",
     "electron:build": "node scripts/electron.cjs build",
     "electron:build:win": "node scripts/electron.cjs build --platform=win",
@@ -128,19 +122,9 @@
       "electron/**/*",
       "package.json"
     ],
-    "extraResources": [
-      {
-        "from": "server-analytic-system/dist/server-analytic-system/",
-        "to": "server",
-        "filter": [
-          "**/*"
-        ]
-      }
-    ],
     "asar": true,
     "asarUnpack": [
-      "node_modules/@*/**/*.node",
-      "server/**/*"
+      "node_modules/@*/**/*.node"
     ],
     "executableName": "nk-invest-analytics",
     "win": {
@@ -246,10 +230,6 @@
         "libuuid1",
         "libsecret-1-0",
         "libayatana-appindicator3-1 | libappindicator3-1"
-      ],
-      "recommends": [
-        "python3",
-        "python3-pip"
       ],
       "afterInstall": "build/linux/after-install.sh",
       "afterRemove": "build/linux/after-remove.sh"

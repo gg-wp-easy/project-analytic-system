@@ -58,6 +58,7 @@ import {
 
 import { SavePortfolioButton } from "../../../features/saved-portfolios";
 import { API_BASE_URL } from "../../../config";
+import { platformErrorText, platformFetch } from "../../../shared/api/platform";
 import type {
   NeuralFeatureImportanceItem as FeatureImportanceItem,
   NeuralMetricItem as MetricItem,
@@ -653,7 +654,7 @@ export function NeuralNetworkAnalysis() {
       const requestedAssetsCount = optimizerSettings.autoPortfolioOptimization
         ? 20
         : Number(optimizerPayload.portfolio_assets_count ?? 20);
-      const response = await fetch(`${API_BASE_URL}/ai-analysis`, {
+      const response = await platformFetch(`${API_BASE_URL}/ai-analysis`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -675,7 +676,7 @@ export function NeuralNetworkAnalysis() {
 
       const text = await response.text();
       if (!response.ok) {
-        throw new Error(t("Не удалось обучить нейросеть. Проверьте данные и повторите попытку.", "The neural model could not be trained. Check the data and try again."));
+        throw new Error(platformErrorText(response.status, text, t("Не удалось обучить нейросеть. Проверьте данные и повторите попытку.", "The neural model could not be trained. Check the data and try again.")));
       }
       const parsed = text ? (JSON.parse(text) as Record<string, unknown>) : {};
       setValuationReport(parseValuationReport(parsed));

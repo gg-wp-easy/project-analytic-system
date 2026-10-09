@@ -15,7 +15,7 @@ function loadScript(name) {
         return {
           ...localRequire(id),
           logStep() {},
-          async runCommand(command, args) { calls.push({ command, args }); },
+          async runCommand(command, args, options) { calls.push({ command, args, options }); },
         };
       }
       return localRequire(id);
@@ -31,13 +31,12 @@ function loadScript(name) {
 
 test("local build packages one host architecture without ASAR backup", async () => {
   const { context, calls } = loadScript("electron.cjs");
+  delete process.env.VITE_PLATFORM_URL;
   await vm.runInContext(`runBuild(parseArgs([
-    'build', '--profile=local', '--version-mode=package',
-    '--skip-server-install', '--clean'
+    'build', '--profile=local', '--version-mode=package', '--clean'
   ]).options)`, context);
-  const server = calls.find(({ args }) => args[0].endsWith("servers.cjs"));
-  assert.ok(server.args.includes("--skip-install"));
-  assert.ok(server.args.includes("--clean"));
+  const vite = calls.find(({ args }) => args[0].endsWith("vite.js"));
+  assert.equal(vite.options.env.VITE_PLATFORM_URL, "http://127.0.0.1:8000");
   const builder = calls.find(({ args }) => args[0].endsWith("electron-builder/cli.js"));
   assert.ok(builder.args.includes("--dir"));
   assert.ok(builder.args.includes(`--${process.arch}`));
@@ -45,18 +44,26 @@ test("local build packages one host architecture without ASAR backup", async () 
   assert.equal(calls.some(({ args }) => args[0].endsWith("protect-asar.cjs")), false);
 });
 
+test("release build needs an https platform address", async () => {
+  const { context } = loadScript("electron.cjs");
+  delete process.env.VITE_PLATFORM_URL;
+  await assert.rejects(
+    vm.runInContext("runBuild(parseArgs(['build', '--skip-builder']).options)", context),
+    /VITE_PLATFORM_URL/,
+  );
+  process.env.VITE_PLATFORM_URL = "http://api.example.com";
+  await assert.rejects(
+    vm.runInContext("runBuild(parseArgs(['build', '--skip-builder']).options)", context),
+    /https/,
+  );
+  process.env.VITE_PLATFORM_URL = "https://api.example.com/";
+  assert.equal(vm.runInContext("resolvePlatformUrl(false)", context), "https://api.example.com");
+  delete process.env.VITE_PLATFORM_URL;
+});
+
 test("release targets remain unchanged", () => {
   const { context } = loadScript("electron.cjs");
   assert.equal(vm.runInContext("resolveBuilderArgs('win', 'standard').join(' ')", context), "--win nsis portable");
   assert.equal(vm.runInContext("resolveBuilderArgs('linux', 'standard').join(' ')", context), "--linux");
   assert.equal(vm.runInContext("parseArgs(['build']).options.clean", context), false);
-});
-
-test("server clean flag works with and without an explicit target", () => {
-  const { context } = loadScript("servers.cjs");
-  for (const args of [["build", "--clean"], ["build", "all", "--clean"]]) {
-    context.args = args;
-    assert.equal(vm.runInContext("parseArgs(args).flags.clean", context), true);
-  }
-  assert.equal(vm.runInContext("parseArgs(['build']).flags.clean", context), false);
 });

@@ -1,38 +1,32 @@
 import { useEffect, useState } from "react";
 import {
-  CheckCircle2,
   DownloadCloud,
-  Eye,
-  EyeOff,
   Globe2,
   KeyRound,
+  LogOut,
   Moon,
   Palette,
   RefreshCw,
   Sun,
-  Trash2,
+  UserRound,
 } from "lucide-react";
 import { useAppSettings } from "../../../app/context/AppSettingsContext";
-import { createTBankInstrumentsApi, normalizeTBankToken } from "../../../shared/api/tbank";
+import { PLAN_TITLES, useSession } from "../../../entities/session";
 import { PageHero, SectionCard } from "../../../shared/ui/analysis-shell";
 import type { StatusState, UpdateStatusPayload } from "../model";
-import { getDesktopApi, getStatusClassName, readStoredToken, writeStoredToken } from "../lib";
+import { getDesktopApi, getStatusClassName } from "../lib";
 
 export function SettingsPage() {
   const { locale, setLocale, theme, setTheme, t } = useAppSettings();
-  const [token, setToken] = useState(() => readStoredToken());
-  const [isVisible, setIsVisible] = useState(false);
-  const [isCheckingToken, setIsCheckingToken] = useState(false);
+  const { user, logout } = useSession();
   const [isCheckingUpdates, setIsCheckingUpdates] = useState(false);
   const [isInstallingUpdate, setIsInstallingUpdate] = useState(false);
-  const [tokenStatus, setTokenStatus] = useState<StatusState>(null);
   const [updateStatus, setUpdateStatus] = useState<StatusState>(null);
   const [updateState, setUpdateState] = useState<UpdateStatusPayload | null>(null);
 
   const desktopApi = getDesktopApi();
   const isDesktop = Boolean(desktopApi?.isDesktop);
-  const trimmedToken = normalizeTBankToken(token);
-  const hasToken = trimmedToken.length > 0;
+  const planTitle = user ? PLAN_TITLES[user.plan] : undefined;
 
   useEffect(() => {
     const api = getDesktopApi();
@@ -74,65 +68,6 @@ export function SettingsPage() {
             en: `Downloading${typeof updateState.progress === "number" ? ` ${updateState.progress}%` : ""}`,
           })
         : t({ ru: "Проверить обновления", en: "Check updates" });
-
-  const handleSaveToken = () => {
-    writeStoredToken(token);
-    setToken(trimmedToken);
-    setTokenStatus({
-      tone: "success",
-      message: t({
-        ru: "Токен сохранён. Доступ к рыночным данным настроен.",
-        en: "Token saved. Market data access is ready.",
-      }),
-    });
-  };
-
-  const handleClearToken = () => {
-    writeStoredToken("");
-    setToken("");
-    setTokenStatus({
-      tone: "info",
-      message: t({
-        ru: "Токен удалён.",
-        en: "Token removed.",
-      }),
-    });
-  };
-
-  const handleCheckToken = async () => {
-    if (!hasToken) {
-      setTokenStatus({
-        tone: "error",
-        message: t({ ru: "Сначала вставьте токен.", en: "Paste a token first." }),
-      });
-      return;
-    }
-
-    setIsCheckingToken(true);
-    setTokenStatus(null);
-
-    try {
-      const api = createTBankInstrumentsApi(trimmedToken);
-      const shares = await api.fetchShares();
-      setTokenStatus({
-        tone: "success",
-        message: t({
-          ru: `Доступ подтверждён. Найдено акций: ${shares.length}.`,
-          en: `Access confirmed. Shares found: ${shares.length}.`,
-        }),
-      });
-    } catch (error) {
-      setTokenStatus({
-        tone: "error",
-        message:
-          error instanceof Error
-            ? error.message
-            : t({ ru: "Не удалось проверить токен.", en: "Failed to check the token." }),
-      });
-    } finally {
-      setIsCheckingToken(false);
-    }
-  };
 
   const handleCheckUpdates = async () => {
     const api = getDesktopApi();
@@ -221,21 +156,17 @@ export function SettingsPage() {
         icon={KeyRound}
         title={t({ ru: "Настройки", en: "Settings" })}
         description={t({
-          ru: "Язык, тема, доступ к рыночным данным и обновления приложения.",
-          en: "Language, theme, market data access, and app updates.",
+          ru: "Аккаунт, язык, тема и обновления приложения.",
+          en: "Account, language, theme, and app updates.",
         })}
         accent="slate"
         aside={
           <div className="space-y-2">
             <div className="text-xs uppercase tracking-[0.18em] text-slate-500 dark:text-white/60">
-              {t({ ru: "Состояние", en: "Status" })}
+              {t({ ru: "Тариф", en: "Plan" })}
             </div>
-            <div className="text-lg font-semibold">
-              {hasToken ? t({ ru: "Токен задан", en: "Token set" }) : t({ ru: "Токен не задан", en: "No token" })}
-            </div>
-            <div className="text-sm text-slate-600 dark:text-white/80">
-              {hasToken ? t({ ru: "Рыночные данные доступны", en: "Market data available" }) : t({ ru: "Нужна настройка доступа", en: "Access setup required" })}
-            </div>
+            <div className="text-lg font-semibold">{planTitle ? t(planTitle) : user?.plan}</div>
+            <div className="truncate text-sm text-slate-600 dark:text-white/80">{user?.email}</div>
           </div>
         }
       />
@@ -307,67 +238,31 @@ export function SettingsPage() {
       </SectionCard>
 
       <SectionCard
-        title={t({ ru: "Доступ к рыночным данным", en: "Market Data Access" })}
+        title={t({ ru: "Аккаунт", en: "Account" })}
         description={t({
-          ru: "Токен хранится только на этом устройстве и используется для загрузки данных T-Bank Invest.",
-          en: "The token stays on this device and is used to load T-Bank Invest data.",
+          ru: "Аккаунт NK-Tech Finance. Расчёты и рыночные данные T-Invest приходят с сервера — личный токен T-Bank не нужен.",
+          en: "Your NK-Tech Finance account. Calculations and T-Invest market data come from the server, so no personal T-Bank token is needed.",
         })}
       >
-        <div className="space-y-5">
-          <label className="block">
-            <span className="mb-2 block text-xs font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">
-              {t({ ru: "Токен", en: "Token" })}
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex min-w-0 items-center gap-3">
+            <span className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-200">
+              <UserRound className="h-5 w-5" />
             </span>
-            <div className="flex flex-col gap-2 sm:flex-row">
-              <input
-                type={isVisible ? "text" : "password"}
-                value={token}
-                onChange={(event) => setToken(event.target.value)}
-                placeholder={t({
-                  ru: "Вставьте токен T-Bank Invest API",
-                  en: "Paste your T-Bank Invest API token",
-                })}
-                spellCheck={false}
-                autoComplete="off"
-                className="ui-input min-h-11 flex-1 font-mono text-sm"
-              />
-              <button
-                type="button"
-                onClick={() => setIsVisible((current) => !current)}
-                className="ui-secondary-button justify-center sm:w-36"
-              >
-                {isVisible ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                {isVisible ? t({ ru: "Скрыть", en: "Hide" }) : t({ ru: "Показать", en: "Show" })}
-              </button>
+            <div className="min-w-0">
+              <div className="truncate text-sm font-semibold text-slate-900 dark:text-slate-100">
+                {user?.name || user?.email}
+              </div>
+              <div className="truncate text-sm text-slate-500 dark:text-slate-400">
+                {user?.name ? `${user.email} · ` : ""}
+                {t({ ru: "тариф", en: "plan" })} {planTitle ? t(planTitle) : user?.plan}
+              </div>
             </div>
-          </label>
-
-          <div className="flex flex-wrap gap-2">
-            <button type="button" onClick={handleSaveToken} disabled={!hasToken} className="ui-primary-button">
-              <CheckCircle2 className="h-4 w-4" />
-              {t({ ru: "Сохранить токен", en: "Save token" })}
-            </button>
-            <button type="button" onClick={handleCheckToken} disabled={!hasToken || isCheckingToken} className="ui-secondary-button">
-              {isCheckingToken ? <RefreshCw className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
-              {t({ ru: "Проверить доступ", en: "Check access" })}
-            </button>
-            <button type="button" onClick={handleClearToken} disabled={!token && !readStoredToken()} className="ui-secondary-button">
-              <Trash2 className="h-4 w-4" />
-              {t({ ru: "Удалить", en: "Remove" })}
-            </button>
           </div>
-
-          {tokenStatus ? (
-            <div className={`rounded-2xl border px-4 py-3 text-sm leading-6 ${getStatusClassName(tokenStatus)}`}>
-              {tokenStatus.message}
-            </div>
-          ) : null}
-
-          <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm leading-6 text-amber-900 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-100">
-            {locale === "ru"
-              ? "Никому не передавайте токен. Удалить его с устройства можно кнопкой выше."
-              : "Do not share the token. You can remove it from this device using the button above."}
-          </div>
+          <button type="button" onClick={() => void logout()} className="ui-secondary-button justify-center">
+            <LogOut className="h-4 w-4" />
+            {t({ ru: "Выйти", en: "Sign out" })}
+          </button>
         </div>
       </SectionCard>
 

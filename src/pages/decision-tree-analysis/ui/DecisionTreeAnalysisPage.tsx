@@ -53,6 +53,7 @@ import {
 
 import { SavePortfolioButton } from "../../../features/saved-portfolios";
 import { API_BASE_URL } from "../../../config";
+import { platformErrorText, platformFetch } from "../../../shared/api/platform";
 import type {
   DecisionTreeConfusionMatrixData as ConfusionMatrixData,
   DecisionTreeFeatureImportanceItem as FeatureImportanceItem,
@@ -514,7 +515,7 @@ export function DecisionTreeAnalysis() {
       const requestedAssetsCount = optimizerSettings.autoPortfolioOptimization
         ? 20
         : Number(optimizerPayload.portfolio_assets_count ?? 20);
-      const response = await fetch(`${API_BASE_URL}/tree-solver-analysis`, {
+      const response = await platformFetch(`${API_BASE_URL}/tree-solver-analysis`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -536,7 +537,7 @@ export function DecisionTreeAnalysis() {
 
       const text = await response.text();
       if (!response.ok) {
-        throw new Error(t("Не удалось построить дерево решений. Проверьте данные и повторите попытку.", "The decision tree could not be built. Check the data and try again."));
+        throw new Error(platformErrorText(response.status, text, t("Не удалось построить дерево решений. Проверьте данные и повторите попытку.", "The decision tree could not be built. Check the data and try again.")));
       }
       const parsed = text ? (JSON.parse(text) as Record<string, unknown>) : {};
       setValuationReport(parseValuationReport(parsed));

@@ -1,1 +1,1 @@
-export { getDesktopApi, getStatusClassName, readStoredToken, writeStoredToken } from "./settings.helpers";
+export { getDesktopApi, getStatusClassName } from "./settings.helpers";

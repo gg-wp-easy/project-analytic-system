@@ -52,6 +52,7 @@ import {
 
 import { SavePortfolioButton } from "../../../features/saved-portfolios";
 import { API_BASE_URL } from "../../../config";
+import { platformErrorText, platformFetch } from "../../../shared/api/platform";
 import type {
   ClusterAnalysisSummary as AnalysisSummary,
   ClusterFeatureImportanceItem as FeatureImportanceItem,
@@ -597,7 +598,7 @@ export function ClusterAnalysis() {
           selected_records: selectedRequestData.length,
         },
       });
-      const response = await fetch(`${API_BASE_URL}/cluster-analysis`, {
+      const response = await platformFetch(`${API_BASE_URL}/cluster-analysis`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body,
@@ -605,7 +606,7 @@ export function ClusterAnalysis() {
 
       const text = await response.text();
       if (!response.ok) {
-        throw new Error(t("Не удалось выполнить кластерный анализ. Проверьте данные и повторите попытку.", "Cluster analysis could not be completed. Check the data and try again."));
+        throw new Error(platformErrorText(response.status, text, t("Не удалось выполнить кластерный анализ. Проверьте данные и повторите попытку.", "Cluster analysis could not be completed. Check the data and try again.")));
       }
       const parsed = text ? (JSON.parse(text) as Record<string, unknown>) : {};
       setValuationReport(parseValuationReport(parsed));

@@ -24,15 +24,14 @@ permissions:
 
 jobs:
   fork-pr-note:
-    name: Fork PR backend access note
+    name: Fork PR build note
     runs-on: ubuntu-latest
     if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository
     steps:
-      - name: Explain skipped private backend build
+      - name: Explain skipped release build
         run: |
           echo "This pull_request comes from a fork."
-          echo "GitHub Actions does not expose repository secrets to fork PR workflows."
-          echo "The private backend repository cannot be checked out in this run, so release builds are skipped."
+          echo "Release builds need the PLATFORM_URL repository variable, which fork PR workflows do not receive."
 
   build-windows:
     name: Build Windows updater artifacts
@@ -41,8 +40,8 @@ jobs:
     env:
       CSC_IDENTITY_AUTO_DISCOVERY: "false"
       GH_TOKEN: ${{ github.token }}
-      SERVER_ANALYTIC_REPOSITORY_TOKEN: ${{ secrets.SERVER_ANALYTIC_REPOSITORY_TOKEN }}
-      SERVER_ANALYTIC_PYTHON: python
+      # адрес API платформы NK-Tech Finance (https://api.<домен>): Settings → Variables
+      VITE_PLATFORM_URL: ${{ vars.PLATFORM_URL }}
 
     steps:
       - name: Checkout repository
@@ -54,32 +53,17 @@ jobs:
           node-version: 24
           cache: npm
 
-      - name: Setup Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
-
       - name: Install Node dependencies
         run: npm ci
 
-      - name: Validate backend repository token
+      - name: Validate platform address
         shell: bash
         run: |
-          if [ -z "${SERVER_ANALYTIC_REPOSITORY_TOKEN}" ]; then
-            echo "SERVER_ANALYTIC_REPOSITORY_TOKEN is NOT available in this workflow run."
-            echo "Check that SERVER_ANALYTIC_REPOSITORY_TOKEN is configured in this repository under Settings -> Secrets and variables -> Actions."
-            echo "For private gg-wp-easy/server-analytic-system access, the token must have Contents: Read-only on that repository."
+          if [ -z "${VITE_PLATFORM_URL}" ]; then
+            echo "Repository variable PLATFORM_URL is not set (Settings -> Secrets and variables -> Actions -> Variables)."
+            echo "Set it to the NK-Tech Finance platform API address, for example https://api.<domain>."
             exit 1
           fi
-
-      - name: Checkout backend repository
-        uses: actions/checkout@v4
-        with:
-          repository: gg-wp-easy/server-analytic-system
-          path: server-analytic-system
-          token: ${{ env.SERVER_ANALYTIC_REPOSITORY_TOKEN }}
-          persist-credentials: false
-          fetch-depth: 1
 
       - name: Build Electron app
         run: npm run electron:build:win -- --version-mode=package --output-dir=release\windows
@@ -133,8 +117,8 @@ jobs:
     env:
       CSC_IDENTITY_AUTO_DISCOVERY: "false"
       GH_TOKEN: ${{ github.token }}
-      SERVER_ANALYTIC_REPOSITORY_TOKEN: ${{ secrets.SERVER_ANALYTIC_REPOSITORY_TOKEN }}
-      SERVER_ANALYTIC_PYTHON: python
+      # адрес API платформы NK-Tech Finance (https://api.<домен>): Settings → Variables
+      VITE_PLATFORM_URL: ${{ vars.PLATFORM_URL }}
 
     steps:
       - name: Checkout repository
@@ -146,31 +130,17 @@ jobs:
           node-version: 24
           cache: npm
 
-      - name: Setup Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
-
       - name: Install Node dependencies
         run: npm ci
 
-      - name: Validate backend repository token
+      - name: Validate platform address
+        shell: bash
         run: |
-          if [ -z "${SERVER_ANALYTIC_REPOSITORY_TOKEN}" ]; then
-            echo "SERVER_ANALYTIC_REPOSITORY_TOKEN is NOT available in this workflow run."
-            echo "Check that SERVER_ANALYTIC_REPOSITORY_TOKEN is configured in this repository under Settings -> Secrets and variables -> Actions."
-            echo "For private gg-wp-easy/server-analytic-system access, the token must have Contents: Read-only on that repository."
+          if [ -z "${VITE_PLATFORM_URL}" ]; then
+            echo "Repository variable PLATFORM_URL is not set (Settings -> Secrets and variables -> Actions -> Variables)."
+            echo "Set it to the NK-Tech Finance platform API address, for example https://api.<domain>."
             exit 1
           fi
-
-      - name: Checkout backend repository
-        uses: actions/checkout@v4
-        with:
-          repository: gg-wp-easy/server-analytic-system
-          path: server-analytic-system
-          token: ${{ env.SERVER_ANALYTIC_REPOSITORY_TOKEN }}
-          persist-credentials: false
-          fetch-depth: 1
 
       - name: Build Electron app
         run: npm run electron:build:linux -- --version-mode=package --output-dir=release/linux --arch=x64

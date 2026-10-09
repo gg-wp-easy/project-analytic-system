@@ -12,6 +12,7 @@ import {
 
 import { SavePortfolioButton } from "../../../features/saved-portfolios";
 import { API_BASE_URL } from "../../../config";
+import { platformFetch } from "../../../shared/api/platform";
 import type {
   HybridMetricItem as MetricItem,
   HybridModelScore as ModelScore,
@@ -242,7 +243,7 @@ export function HybridAnalysis() {
       const requestedAssetsCount = optimizerSettings.autoPortfolioOptimization
         ? 20
         : Number(portfolioSettings.portfolio_assets_count ?? 20);
-      const response = await fetch(`${API_BASE_URL}/hybrid-analysis`, {
+      const response = await platformFetch(`${API_BASE_URL}/hybrid-analysis`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

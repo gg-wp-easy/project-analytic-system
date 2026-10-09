@@ -1,4 +1,3 @@
-import { normalizeTBankToken, TBANK_TOKEN_STORAGE_KEY } from "../../../shared/api/tbank";
 import type { DesktopApi, StatusState } from "../model";
 
 export function getDesktopApi(): DesktopApi | undefined {
@@ -7,27 +6,6 @@ export function getDesktopApi(): DesktopApi | undefined {
   }
 
   return (window as Window & { electron?: DesktopApi }).electron;
-}
-
-export function readStoredToken(): string {
-  if (typeof window === "undefined") {
-    return "";
-  }
-
-  return window.localStorage.getItem(TBANK_TOKEN_STORAGE_KEY) ?? "";
-}
-
-export function writeStoredToken(token: string): void {
-  if (typeof window === "undefined") {
-    return;
-  }
-
-  const normalized = normalizeTBankToken(token);
-  if (normalized) {
-    window.localStorage.setItem(TBANK_TOKEN_STORAGE_KEY, normalized);
-  } else {
-    window.localStorage.removeItem(TBANK_TOKEN_STORAGE_KEY);
-  }
 }
 
 export function getStatusClassName(status: StatusState): string {

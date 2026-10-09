@@ -5,7 +5,6 @@ const { execSync } = require("child_process");
 exports.default = async function beforeBuild() {
   console.log("Checking project state before packaging...");
 
-  await checkBundledServer("server-analytic-system", ["dist", "server-analytic-system"]);
   await checkDependencies();
   await checkIcons();
 
@@ -17,22 +16,6 @@ if (require.main === module) {
     console.error("Pre-build checks failed:", error.message);
     process.exit(1);
   });
-}
-
-async function checkBundledServer(serverDirName, relativeDistPath) {
-  const outputDir = path.join(process.cwd(), serverDirName, ...relativeDistPath);
-
-  if (!fs.existsSync(outputDir)) {
-    console.warn(`Bundled server directory was not found for ${serverDirName}.`);
-    return;
-  }
-
-  const files = fs.readdirSync(outputDir);
-  if (files.length === 0) {
-    console.warn(`No packaged server binaries were found for ${serverDirName}.`);
-  } else {
-    console.log(`  Found ${files.length} bundled files for ${serverDirName}.`);
-  }
 }
 
 async function checkDependencies() {

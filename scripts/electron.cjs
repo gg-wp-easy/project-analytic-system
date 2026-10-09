@@ -2,6 +2,7 @@
 
 const fs = require("fs");
 const path = require("path");
+const { URL } = require("url");
 const { execFileSync, spawn } = require("child_process");
 
 const electronBinary = require("electron");
@@ -17,13 +18,15 @@ const {
 
 const nodeBinary = process.execPath;
 const scriptsDir = __dirname;
-const serversScript = path.join(scriptsDir, "servers.cjs");
 const createIconsScript = path.join(scriptsDir, "create-icons.cjs");
 const beforeBuildScript = path.join(scriptsDir, "before-build.cjs");
 const protectAsarScript = path.join(scriptsDir, "protect-asar.cjs");
 const viteCli = path.join(repoRoot, "node_modules", "vite", "bin", "vite.js");
 const electronBuilderCli = path.join(repoRoot, "node_modules", "electron-builder", "cli.js");
 const packageJsonPath = path.join(repoRoot, "package.json");
+// Расчёты и рыночные данные — на сервере платформы NK-Tech Finance; его адрес вшивается в
+// сборку (VITE_PLATFORM_URL). Локальная сборка без адреса ходит на шлюз `make dev` платформы.
+const LOCAL_PLATFORM_URL = "http://127.0.0.1:8000";
 
 
 async function main() {
@@ -56,8 +59,6 @@ function parseArgs(argv) {
     profile: "standard",
     skipIcons: false,
     clean: false,
-    skipServerInstall: false,
-    skipServerBuild: false,
     skipBuilder: false,
     skipProtectAsar: false,
     vitePort: 5173,
@@ -77,10 +78,6 @@ function parseArgs(argv) {
       options.clean = true;
     } else if (arg === "--skip-icons") {
       options.skipIcons = true;
-    } else if (arg === "--skip-server-install") {
-      options.skipServerInstall = true;
-    } else if (arg === "--skip-server-build") {
-      options.skipServerBuild = true;
     } else if (arg === "--skip-builder") {
       options.skipBuilder = true;
     } else if (arg === "--skip-protect-asar") {
@@ -129,15 +126,18 @@ function parseArgs(argv) {
 function printHelp() {
   console.log(`
 Usage:
-  node scripts/electron.cjs dev [--skip-server-install] [--vite-port=5173]
+  node scripts/electron.cjs dev [--vite-port=5173]
   node scripts/electron.cjs build [--platform=current|win|linux|mac] [--profile=standard|msi|store|local] [--clean]
-                                [--skip-icons] [--skip-server-install] [--skip-server-build] [--skip-builder] [--skip-protect-asar]
+                                [--skip-icons] [--skip-builder] [--skip-protect-asar]
                                 [--version-mode=timestamp|package|branch] [--app-version=x.y.z]
                                 [--build-branch=name] [--build-number=n] [--arch=x64|ia32|arm64|armv7l]
 
+The build embeds the platform API address from VITE_PLATFORM_URL (for example
+https://api.<domain>); a local build defaults to ${LOCAL_PLATFORM_URL} (make dev in ../nk-platform).
+
 Examples:
   node scripts/electron.cjs dev
-  node scripts/electron.cjs build
+  VITE_PLATFORM_URL=https://api.example.com node scripts/electron.cjs build
   node scripts/electron.cjs build --platform=win --profile=msi
   node scripts/electron.cjs build --app-version=2026.111.44113
 `);
@@ -147,14 +147,7 @@ Examples:
 async function runDev(options) {
   assertFileExists(viteCli, "Vite CLI");
 
-  if (!options.skipServerInstall) {
-    logStep("Preparing Python backends for Electron dev");
-    await runCommand(nodeBinary, [serversScript, "install", "all"], {
-      cwd: repoRoot,
-      env: process.env,
-    });
-  }
-
+  console.log("API — платформа NK-Tech Finance через прокси Vite: запустите make dev в ../nk-platform.");
   logStep("Starting Vite dev server");
   const viteProcess = spawn(nodeBinary, [viteCli, "--host", options.viteHost], {
     cwd: repoRoot,
@@ -199,6 +192,7 @@ async function runBuild(options) {
 
   const targetPlatform = resolveElectronPlatform(options.platform);
   const localBuild = options.profile === "local";
+  const platformUrl = resolvePlatformUrl(localBuild);
   const buildVersion = resolveBuildVersion(options);
   const outputDir = options.outputDir || path.join(
     repoRoot,
@@ -213,6 +207,7 @@ async function runBuild(options) {
 
   console.log(`Electron build output directory: ${outputDir}`);
   console.log(`Electron app version: ${buildVersion.value} (${buildVersion.source})`);
+  console.log(`Platform API: ${platformUrl}`);
 
   if (!options.skipIcons) {
     logStep("Generating icon assets");
@@ -222,21 +217,10 @@ async function runBuild(options) {
     });
   }
 
-  if (!options.skipServerBuild) {
-    logStep("Building bundled Python backends");
-    await runCommand(nodeBinary, [serversScript, "build", "all",
-      ...(options.skipServerInstall ? ["--skip-install"] : []),
-      ...(options.clean ? ["--clean"] : []),
-    ], {
-      cwd: repoRoot,
-      env: process.env,
-    });
-  }
-
   logStep("Building frontend with Vite");
   await runCommand(nodeBinary, [viteCli, "build"], {
     cwd: repoRoot,
-    env: process.env,
+    env: { ...process.env, VITE_PLATFORM_URL: platformUrl },
   });
 
   logStep("Running Electron pre-pack checks");
@@ -276,6 +260,26 @@ async function runBuild(options) {
   } else {
     console.log("Skipping ASAR protection.");
   }
+}
+
+
+function resolvePlatformUrl(localBuild) {
+  const value = (process.env.VITE_PLATFORM_URL || "").trim() || (localBuild ? LOCAL_PLATFORM_URL : "");
+  if (!value) {
+    throw new Error(
+      "Set VITE_PLATFORM_URL to the NK-Tech Finance platform API address, for example https://api.<domain>.",
+    );
+  }
+  let url;
+  try {
+    url = new URL(value);
+  } catch {
+    throw new Error(`VITE_PLATFORM_URL is not a valid URL: ${value}`);
+  }
+  if (url.protocol !== "https:" && !localBuild) {
+    throw new Error("VITE_PLATFORM_URL must use https for release builds.");
+  }
+  return value.replace(/\/+$/, "");
 }
 
 

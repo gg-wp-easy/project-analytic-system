@@ -1,46 +1,56 @@
+import { platformUrl } from "../../platform";
+
+/**
+ * Данные T-Invest приходят через шлюз платформы (сервис market) по серверному токену:
+ * тело запроса и ответ — как у REST API Т-Инвестиций, меняется только адрес.
+ */
+function tinvestMethodUrl(method: string): string {
+  return platformUrl(`/market/tinvest/${method}`);
+}
+
 export const SHARES_ENDPOINT =
-  "https://invest-public-api.tbank.ru/rest/tinkoff.public.invest.api.contract.v1.InstrumentsService/Shares";
+  tinvestMethodUrl("InstrumentsService/Shares");
 export const INDICATIVES_ENDPOINT =
-  "https://invest-public-api.tbank.ru/rest/tinkoff.public.invest.api.contract.v1.InstrumentsService/Indicatives";
+  tinvestMethodUrl("InstrumentsService/Indicatives");
 export const CURRENCIES_ENDPOINT =
-  "https://invest-public-api.tbank.ru/rest/tinkoff.public.invest.api.contract.v1.InstrumentsService/Currencies";
+  tinvestMethodUrl("InstrumentsService/Currencies");
 export const BONDS_ENDPOINT =
-  "https://invest-public-api.tbank.ru/rest/tinkoff.public.invest.api.contract.v1.InstrumentsService/Bonds";
+  tinvestMethodUrl("InstrumentsService/Bonds");
 export const FUTURES_ENDPOINT =
-  "https://invest-public-api.tbank.ru/rest/tinkoff.public.invest.api.contract.v1.InstrumentsService/Futures";
+  tinvestMethodUrl("InstrumentsService/Futures");
 export const OPTIONS_ENDPOINT =
-  "https://invest-public-api.tbank.ru/rest/tinkoff.public.invest.api.contract.v1.InstrumentsService/Options";
+  tinvestMethodUrl("InstrumentsService/Options");
 export const OPTIONS_BY_ENDPOINT =
-  "https://invest-public-api.tbank.ru/rest/tinkoff.public.invest.api.contract.v1.InstrumentsService/OptionsBy";
+  tinvestMethodUrl("InstrumentsService/OptionsBy");
 export const OPTION_BY_ENDPOINT =
-  "https://invest-public-api.tbank.ru/rest/tinkoff.public.invest.api.contract.v1.InstrumentsService/OptionBy";
+  tinvestMethodUrl("InstrumentsService/OptionBy");
 export const FIND_INSTRUMENT_ENDPOINT =
-  "https://invest-public-api.tbank.ru/rest/tinkoff.public.invest.api.contract.v1.InstrumentsService/FindInstrument";
+  tinvestMethodUrl("InstrumentsService/FindInstrument");
 export const ASSETS_ENDPOINT =
-  "https://invest-public-api.tbank.ru/rest/tinkoff.public.invest.api.contract.v1.InstrumentsService/GetAssets";
+  tinvestMethodUrl("InstrumentsService/GetAssets");
 export const BOND_COUPONS_ENDPOINT =
-  "https://invest-public-api.tbank.ru/rest/tinkoff.public.invest.api.contract.v1.InstrumentsService/GetBondCoupons";
+  tinvestMethodUrl("InstrumentsService/GetBondCoupons");
 export const DIVIDENDS_ENDPOINT =
-  "https://invest-public-api.tbank.ru/rest/tinkoff.public.invest.api.contract.v1.InstrumentsService/GetDividends";
+  tinvestMethodUrl("InstrumentsService/GetDividends");
 export const ASSET_FUNDAMENTALS_ENDPOINT =
-  "https://invest-public-api.tbank.ru/rest/tinkoff.public.invest.api.contract.v1.InstrumentsService/GetAssetFundamentals";
+  tinvestMethodUrl("InstrumentsService/GetAssetFundamentals");
 export const CLOSE_PRICES_ENDPOINT =
-  "https://invest-public-api.tbank.ru/rest/tinkoff.public.invest.api.contract.v1.MarketDataService/GetClosePrices";
+  tinvestMethodUrl("MarketDataService/GetClosePrices");
 export const LAST_PRICES_ENDPOINT =
-  "https://invest-public-api.tbank.ru/rest/tinkoff.public.invest.api.contract.v1.MarketDataService/GetLastPrices";
+  tinvestMethodUrl("MarketDataService/GetLastPrices");
 export const CANDLES_ENDPOINT =
-  "https://invest-public-api.tbank.ru/rest/tinkoff.public.invest.api.contract.v1.MarketDataService/GetCandles";
+  tinvestMethodUrl("MarketDataService/GetCandles");
 
 export const MAX_ASSETS_PER_REQUEST = 30;
-export const TBANK_TOKEN_STORAGE_KEY = "tbank_api_token";
 export const LEGACY_OPTIONS_CACHE_STORAGE_KEY = "tbank_options_cache_v1";
 export const OPTIONS_CACHE_STORAGE_KEY = "tbank_options_cache_v2";
 export const OPTIONS_CACHE_TTL_MS = 5 * 60 * 1000;
 export const OPTIONS_CACHE_STORAGE_LIMIT_CHARS = 4_000_000;
 export const OPTIONS_DISCOVERY_PARALLEL_LIMIT = 6;
 export const DIVIDEND_HISTORY_PARALLEL_LIMIT = 4;
-export const DEFAULT_REQUEST_TIMEOUT_MS = 20_000;
-export const OPTIONS_REQUEST_TIMEOUT_MS = 35_000;
+// запрос может ждать очереди к T-Invest на сервере (лимит запросов в минуту общий)
+export const DEFAULT_REQUEST_TIMEOUT_MS = 60_000;
+export const OPTIONS_REQUEST_TIMEOUT_MS = 60_000;
 export const OPTIONS_DISCOVERY_ASSET_TYPES = [
   "INSTRUMENT_TYPE_BOND",
   "INSTRUMENT_TYPE_SHARE",

@@ -1,7 +1,5 @@
-const { app, BrowserWindow, dialog, ipcMain, shell } = require("electron");
-const { spawn } = require("child_process");
+const { app, BrowserWindow, ipcMain, shell } = require("electron");
 const fs = require("fs");
-const http = require("http");
 const os = require("os");
 const path = require("path");
 const { autoUpdater } = require("electron-updater");
@@ -62,31 +60,18 @@ if (typeof log.catchErrors === "function") {
   log.catchErrors({ showDialog: false });
 }
 
-app.commandLine.appendSwitch("ignore-certificate-errors");
-
 const isDev = !app.isPackaged;
 const APP_ID = "com.invest.analytics.desktop";
-const DEFAULT_HOST = "127.0.0.1";
 
 let splashWindow = null;
 let mainWindow = null;
-const managedServices = new Map();
 let autoUpdateHandlersAttached = false;
 let autoUpdateCheckScheduled = false;
 let autoUpdateCheckInFlight = null;
 let autoUpdateIntervalId = null;
 
-const BACKEND_SERVICES = [
-  {
-    key: "analytics",
-    displayName: "server-analytic-system",
-    host: DEFAULT_HOST,
-    port: 8000,
-    healthPath: "/health",
-    required: true,
-    resolveRunConfig: resolveAnalyticsRunConfig,
-  },
-];
+// Расчёты и рыночные данные — на сервере платформы NK-Tech Finance (адрес задаётся при
+// сборке в VITE_PLATFORM_URL); встроенного Python-сервера больше нет.
 
 registerAppIpcHandlers();
 
@@ -247,261 +232,6 @@ function resolveWindowIconPath() {
 
   const iconPath = path.join(__dirname, iconName);
   return fs.existsSync(iconPath) ? iconPath : undefined;
-}
-
-function getServiceHealthUrl(service) {
-  return `http://${service.host}:${service.port}${service.healthPath}`;
-}
-
-function pingServiceHealth(service, options = {}) {
-  const { logErrors = false, logResponses = false } = options;
-  return new Promise((resolve) => {
-    const req = http.get(getServiceHealthUrl(service), (res) => {
-      let data = "";
-      res.on("data", (chunk) => {
-        data += chunk;
-      });
-      res.on("end", () => {
-        if (logResponses) {
-          log.info(`[${service.displayName}] health response: ${res.statusCode} - ${data}`);
-        }
-        resolve(res.statusCode === 200);
-      });
-    });
-
-    req.on("error", (err) => {
-      if (logErrors) {
-        log.warn(`[${service.displayName}] health check error: ${err.message}`);
-      }
-      resolve(false);
-    });
-
-    req.setTimeout(1200, () => {
-      req.destroy();
-      resolve(false);
-    });
-  });
-}
-
-async function waitForServiceHealth(service, timeoutMs = 60000, intervalMs = 600) {
-  let lastErrorLogged = false;
-  const startedAt = Date.now();
-  while (Date.now() - startedAt < timeoutMs) {
-    // eslint-disable-next-line no-await-in-loop
-    if (await pingServiceHealth(service)) {
-      return true;
-    }
-    if (!lastErrorLogged && Date.now() - startedAt > 5000) {
-      log.info(`[${service.displayName}] waiting for backend at ${getServiceHealthUrl(service)}...`);
-      lastErrorLogged = true;
-    }
-    // eslint-disable-next-line no-await-in-loop
-    await new Promise((resolve) => setTimeout(resolve, intervalMs));
-  }
-  return false;
-}
-
-function resolveProjectPython(serverDir) {
-  const candidates = process.platform === "win32"
-    ? [path.join(serverDir, ".venv", "Scripts", "python.exe"), "python"]
-    : [path.join(serverDir, ".venv", "bin", "python"), "python3", "python"];
-
-  for (const candidate of candidates) {
-    if (!candidate.includes(path.sep) || fs.existsSync(candidate)) {
-      return candidate;
-    }
-  }
-
-  return process.platform === "win32" ? "python" : "python3";
-}
-
-function ensureDirectory(targetPath) {
-  try {
-    fs.mkdirSync(targetPath, { recursive: true });
-  } catch (error) {
-    log.warn(`Failed to ensure directory ${targetPath}:`, error);
-  }
-}
-
-function createServiceUserDirs(relativeDirName) {
-  const rootDir = path.join(app.getPath("userData"), relativeDirName);
-  const logDir = path.join(rootDir, "logs");
-  const dataDir = path.join(rootDir, "data");
-  const cacheDir = path.join(rootDir, "cache");
-  const matplotlibCacheDir = path.join(cacheDir, "matplotlib");
-
-  ensureDirectory(rootDir);
-  ensureDirectory(logDir);
-  ensureDirectory(dataDir);
-  ensureDirectory(cacheDir);
-  ensureDirectory(matplotlibCacheDir);
-
-  return { rootDir, logDir, dataDir, cacheDir, matplotlibCacheDir };
-}
-
-function resolveAnalyticsExecutablePath() {
-  const exeName = process.platform === "win32"
-    ? "server-analytic-system.exe"
-    : "server-analytic-system";
-
-  if (app.isPackaged) {
-    const packagedExePath = path.join(process.resourcesPath, "server", exeName);
-    return fs.existsSync(packagedExePath) ? packagedExePath : null;
-  }
-
-  const projectRoot = getProjectRoot();
-  const candidates = [
-    path.join(projectRoot, "server-analytic-system", "dist", "server-analytic-system", exeName),
-    path.join(projectRoot, "server-analytic-system", "dist", exeName),
-  ];
-
-  for (const candidate of candidates) {
-    if (fs.existsSync(candidate)) {
-      return candidate;
-    }
-  }
-
-  return null;
-}
-
-function resolveAnalyticsRunConfig() {
-  if (!app.isPackaged) {
-    const serverDir = path.join(getProjectRoot(), "server-analytic-system");
-    const mainPy = path.join(serverDir, "main.py");
-    if (!fs.existsSync(mainPy)) {
-      return null;
-    }
-
-    return {
-      command: resolveProjectPython(serverDir),
-      args: ["main.py"],
-      cwd: serverDir,
-    };
-  }
-
-  const exePath = resolveAnalyticsExecutablePath();
-  if (!exePath) {
-    return null;
-  }
-
-  const dirs = createServiceUserDirs("analytics-server");
-  return {
-    command: exePath,
-    args: [],
-    cwd: path.dirname(exePath),
-    env: {
-      ...process.env,
-      ANALYTIC_LOG_DIR: dirs.logDir,
-      ANALYTIC_DATA_DIR: dirs.dataDir,
-    },
-  };
-}
-
-function killProcessTree(pid) {
-  if (!pid) {
-    return Promise.resolve();
-  }
-
-  if (process.platform === "win32") {
-    return new Promise((resolve) => {
-      const killer = spawn("taskkill", ["/pid", String(pid), "/t", "/f"], {
-        windowsHide: true,
-        stdio: "ignore",
-      });
-      killer.on("exit", () => resolve());
-      killer.on("error", () => resolve());
-    });
-  }
-
-  return new Promise((resolve) => {
-    try {
-      process.kill(pid, "SIGTERM");
-    } catch {
-      resolve();
-      return;
-    }
-    setTimeout(resolve, 400);
-  });
-}
-
-async function stopManagedService(serviceKey) {
-  const state = managedServices.get(serviceKey);
-  if (!state || !state.process) {
-    return;
-  }
-
-  managedServices.delete(serviceKey);
-  await killProcessTree(state.process.pid);
-}
-
-async function stopAllManagedServices() {
-  const serviceKeys = Array.from(managedServices.keys());
-  await Promise.all(serviceKeys.map((key) => stopManagedService(key)));
-}
-
-async function ensureService(service) {
-  if (await pingServiceHealth(service)) {
-    managedServices.delete(service.key);
-    return true;
-  }
-
-  const runConfig = service.resolveRunConfig();
-  if (!runConfig) {
-    const error = new Error(`${service.displayName} executable was not found.`);
-    if (service.required) {
-      throw error;
-    }
-    log.warn(error.message);
-    return false;
-  }
-
-  const child = spawn(runConfig.command, runConfig.args, {
-    cwd: runConfig.cwd,
-    env: runConfig.env,
-    stdio: "ignore",
-    windowsHide: true,
-  });
-
-  managedServices.set(service.key, { process: child, service });
-
-  child.on("error", (error) => {
-    log.error(`[${service.displayName}] process error:`, error);
-  });
-
-  child.on("exit", (code, signal) => {
-    managedServices.delete(service.key);
-    log.info(`[${service.displayName}] stopped with code=${code ?? "null"} signal=${signal ?? "null"}`);
-  });
-
-  const healthy = await waitForServiceHealth(service);
-  if (!healthy) {
-    await stopManagedService(service.key);
-    const error = new Error(`${service.displayName} did not start in time.`);
-    if (service.required) {
-      throw error;
-    }
-    log.warn(error.message);
-    return false;
-  }
-
-  log.info(`[${service.displayName}] is ready at ${getServiceHealthUrl(service)}`);
-  return true;
-}
-
-async function ensureBackendServices() {
-  for (const service of BACKEND_SERVICES.filter((item) => item.required)) {
-    // eslint-disable-next-line no-await-in-loop
-    await ensureService(service);
-  }
-
-  for (const service of BACKEND_SERVICES.filter((item) => !item.required)) {
-    try {
-      // eslint-disable-next-line no-await-in-loop
-      await ensureService(service);
-    } catch (error) {
-      log.warn(`Optional service ${service.displayName} is unavailable:`, error);
-    }
-  }
 }
 
 function createSplashWindow() {
@@ -799,16 +529,6 @@ app.whenReady().then(async () => {
   }
 
   createSplashWindow();
-
-  try {
-    await ensureBackendServices();
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "Unknown startup error";
-    dialog.showErrorBox("Server Startup Error", message);
-    app.quit();
-    return;
-  }
-
   createMainWindow();
 
   app.on("activate", () => {
@@ -818,12 +538,11 @@ app.whenReady().then(async () => {
   });
 });
 
-app.on("before-quit", async () => {
+app.on("before-quit", () => {
   if (autoUpdateIntervalId) {
     clearInterval(autoUpdateIntervalId);
     autoUpdateIntervalId = null;
   }
-  await stopAllManagedServices();
 });
 
 app.on("window-all-closed", () => {

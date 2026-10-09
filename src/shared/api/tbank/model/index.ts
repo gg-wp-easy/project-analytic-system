@@ -26,7 +26,6 @@ export {
   OPTIONS_REQUEST_TIMEOUT_MS,
   OPTION_BY_ENDPOINT,
   SHARES_ENDPOINT,
-  TBANK_TOKEN_STORAGE_KEY,
 } from "./tbank.consts";
 export type {
   AnyRecord,

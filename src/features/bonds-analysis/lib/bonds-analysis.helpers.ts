@@ -1,4 +1,5 @@
 import { API_BASE_URL } from "../../../config";
+import { platformFetch } from "../../../shared/api/platform";
 import type { BondAnalysisBond, BondAnalysisPreferences, BondPortfolioConstructionResponse, BondRiskClassification } from "../model";
 
 export class BondPortfolioConstructionError extends Error {
@@ -30,7 +31,7 @@ export async function runBondPortfolioConstruction(
   preferences: BondAnalysisPreferences,
   options: { refreshSource?: boolean } = {},
 ): Promise<BondPortfolioConstructionResponse> {
-  const response = await fetch(`${API_BASE_URL}/analysis-bonds-portfolio`, {
+  const response = await platformFetch(`${API_BASE_URL}/analysis-bonds-portfolio`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({

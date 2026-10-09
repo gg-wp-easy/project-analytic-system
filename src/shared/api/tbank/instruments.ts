@@ -1,4 +1,4 @@
-import { normalizeTBankToken } from "./lib";
+import { platformFetch, readPlatformError } from "../platform";
 import {
   ASSET_FUNDAMENTALS_ENDPOINT,
   ASSETS_ENDPOINT,
@@ -27,7 +27,6 @@ import {
   OPTIONS_REQUEST_TIMEOUT_MS,
   OPTION_BY_ENDPOINT,
   SHARES_ENDPOINT,
-  TBANK_TOKEN_STORAGE_KEY,
 } from "./model";
 import type {
   AnyRecord,
@@ -64,29 +63,29 @@ class TBankApiError extends Error {
 
 function createTBankApiRequestError(): TBankApiError {
   return new TBankApiError(
-    "Ошибка обращения к API T-Банка. Проверьте токен, доступность сервиса и повторите запрос.",
+    "Нет связи с сервером NK-Tech Finance. Проверьте подключение к интернету и повторите запрос.",
   );
 }
 
 function createTBankApiTimeoutError(): TBankApiError {
   return new TBankApiError(
-    "Превышено время ожидания ответа API T-Банка. Попробуйте повторить запрос позже.",
+    "Превышено время ожидания рыночных данных. Попробуйте повторить запрос позже.",
   );
 }
 
-function createTBankApiResponseError(status: number): TBankApiError {
+function createTBankApiResponseError(status: number, detail?: string | null): TBankApiError {
   return new TBankApiError(
-    "Ошибка обращения к API T-Банка. Сервис не смог обработать запрос. Проверьте токен и повторите попытку позже.",
+    detail || "Сервер не смог получить рыночные данные T-Invest. Повторите попытку позже.",
     { status },
   );
 }
 
 function createTBankApiEmptyResponseError(): TBankApiError {
-  return new TBankApiError("API T-Банка вернул пустой ответ. Повторите запрос позже.");
+  return new TBankApiError("Сервер вернул пустой ответ с рыночными данными. Повторите запрос позже.");
 }
 
 function createTBankApiMalformedResponseError(): TBankApiError {
-  return new TBankApiError("API T-Банка вернул некорректный ответ. Повторите запрос позже.");
+  return new TBankApiError("Сервер вернул некорректные рыночные данные. Повторите запрос позже.");
 }
 
 function pickString(source: AnyRecord, keys: string[]): string {
@@ -715,26 +714,25 @@ function normalizeCandleItem(item: AnyRecord, figi: string, nowIso: string): TBa
   };
 }
 
-async function requestJson<T>(
-  endpoint: string,
-  token: string,
-  body: Record<string, unknown>,
-  options?: {
-    timeoutMs?: number;
-  },
-): Promise<T> {
-  const timeoutMs = options?.timeoutMs ?? DEFAULT_REQUEST_TIMEOUT_MS;
-  const controller = typeof AbortController === "undefined" ? null : new AbortController();
-  const timeoutId = controller
-    ? setTimeout(() => controller.abort(), timeoutMs)
-    : null;
+/** Платформа просит подождать (очередь к T-Invest, лимит запросов): повторяем один раз. */
+const RETRY_STATUSES = new Set([429, 503]);
+const DEFAULT_RETRY_DELAY_MS = 5_000;
+const MAX_RETRY_DELAY_MS = 30_000;
 
-  let response: Response;
+function retryDelayMs(response: Response): number {
+  const seconds = Number(response.headers.get("Retry-After"));
+  return Number.isFinite(seconds) && seconds > 0
+    ? Math.min(seconds * 1000, MAX_RETRY_DELAY_MS)
+    : DEFAULT_RETRY_DELAY_MS;
+}
+
+async function sendJson(endpoint: string, body: Record<string, unknown>, timeoutMs: number): Promise<Response> {
+  const controller = typeof AbortController === "undefined" ? null : new AbortController();
+  const timeoutId = controller ? setTimeout(() => controller.abort(), timeoutMs) : null;
   try {
-    response = await fetch(endpoint, {
+    return await platformFetch(endpoint, {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${token}`,
         "Content-Type": "application/json",
         Accept: "application/json",
       },
@@ -742,23 +740,33 @@ async function requestJson<T>(
       signal: controller?.signal,
     });
   } catch (error) {
-    if (timeoutId) {
-      clearTimeout(timeoutId);
-    }
-
     if (error instanceof Error && error.name === "AbortError") {
       throw createTBankApiTimeoutError();
     }
-
     throw createTBankApiRequestError();
+  } finally {
+    if (timeoutId) {
+      clearTimeout(timeoutId);
+    }
   }
+}
 
-  if (timeoutId) {
-    clearTimeout(timeoutId);
+async function requestJson<T>(
+  endpoint: string,
+  body: Record<string, unknown>,
+  options?: {
+    timeoutMs?: number;
+  },
+): Promise<T> {
+  const timeoutMs = options?.timeoutMs ?? DEFAULT_REQUEST_TIMEOUT_MS;
+  let response = await sendJson(endpoint, body, timeoutMs);
+  if (RETRY_STATUSES.has(response.status)) {
+    await new Promise((resolve) => setTimeout(resolve, retryDelayMs(response)));
+    response = await sendJson(endpoint, body, timeoutMs);
   }
 
   if (!response.ok) {
-    throw createTBankApiResponseError(response.status);
+    throw createTBankApiResponseError(response.status, await readPlatformError(response));
   }
 
   const text = await response.text();
@@ -771,19 +779,6 @@ async function requestJson<T>(
   } catch {
     throw createTBankApiMalformedResponseError();
   }
-}
-
-function resolveRuntimeToken(): string | undefined {
-  if (typeof window === "undefined") {
-    return undefined;
-  }
-
-  const fromStorage = normalizeTBankToken(window.localStorage.getItem(TBANK_TOKEN_STORAGE_KEY));
-  if (fromStorage) {
-    return fromStorage;
-  }
-
-  return undefined;
 }
 
 function isOptionsCacheFresh(savedAtMs: number): boolean {
@@ -934,20 +929,9 @@ function saveOptionsCacheToStorage(items: TBankOption[]): void {
   }
 }
 
-export function createTBankInstrumentsApi(token?: string) {
-  function ensureToken(): string {
-    const resolved = normalizeTBankToken(token) || resolveRuntimeToken();
-    if (!resolved) {
-      throw new Error(
-        "Market data access token is not configured.",
-      );
-    }
-    return resolved;
-  }
-
+export function createTBankInstrumentsApi() {
   async function fetchShares(): Promise<TBankShare[]> {
-    const authToken = ensureToken();
-    const payload = await requestJson<AnyRecord>(SHARES_ENDPOINT, authToken, {
+    const payload = await requestJson<AnyRecord>(SHARES_ENDPOINT, {
       instrumentStatus: "INSTRUMENT_STATUS_BASE",
     });
 
@@ -988,8 +972,7 @@ export function createTBankInstrumentsApi(token?: string) {
   }
 
   async function fetchIndicatives(): Promise<TBankIndicative[]> {
-    const authToken = ensureToken();
-    const payload = await requestJson<AnyRecord>(INDICATIVES_ENDPOINT, authToken, {});
+    const payload = await requestJson<AnyRecord>(INDICATIVES_ENDPOINT, {});
     const instruments =
       (Array.isArray(payload.instruments) && payload.instruments) ||
       (Array.isArray(payload.items) && payload.items) ||
@@ -1002,14 +985,13 @@ export function createTBankInstrumentsApi(token?: string) {
   }
 
   async function fetchCurrencies(): Promise<TBankCurrency[]> {
-    const authToken = ensureToken();
     const requestBodies: Record<string, unknown>[] = [
       { instrumentStatus: "INSTRUMENT_STATUS_ALL" },
       { instrumentStatus: "INSTRUMENT_STATUS_ALL", instrumentExchange: "INSTRUMENT_EXCHANGE_DEALER" },
     ];
 
     const settled = await Promise.allSettled(
-      requestBodies.map((body) => requestJson<AnyRecord>(CURRENCIES_ENDPOINT, authToken, body)),
+      requestBodies.map((body) => requestJson<AnyRecord>(CURRENCIES_ENDPOINT, body)),
     );
     const failures = settled
       .filter((result): result is PromiseRejectedResult => result.status === "rejected")
@@ -1040,8 +1022,7 @@ export function createTBankInstrumentsApi(token?: string) {
   }
 
   async function fetchBonds(): Promise<TBankBond[]> {
-    const authToken = ensureToken();
-    const payload = await requestJson<AnyRecord>(BONDS_ENDPOINT, authToken, {
+    const payload = await requestJson<AnyRecord>(BONDS_ENDPOINT, {
       instrumentStatus: "INSTRUMENT_STATUS_BASE",
     });
 
@@ -1077,15 +1058,12 @@ export function createTBankInstrumentsApi(token?: string) {
     if (!force && optionsCacheInFlight) {
       return optionsCacheInFlight;
     }
-
-    const authToken = ensureToken();
     const loadOptionsFromApi = async (): Promise<TBankOption[]> => {
       let directLoadError: Error | null = null;
       try {
         // Prefer the single bulk endpoint first: it is much faster than scanning every asset via OptionsBy.
         const directPayload = await requestJson<AnyRecord>(
           OPTIONS_ENDPOINT,
-          authToken,
           {
             instrumentStatus: "INSTRUMENT_STATUS_BASE",
           },
@@ -1123,7 +1101,7 @@ export function createTBankInstrumentsApi(token?: string) {
       const discoveredTargets = await (async () => {
         const assetResults = await Promise.allSettled(
           OPTIONS_DISCOVERY_ASSET_TYPES.map(async (instrumentType) => {
-            const payload = await requestJson<AnyRecord>(ASSETS_ENDPOINT, authToken, {
+            const payload = await requestJson<AnyRecord>(ASSETS_ENDPOINT, {
               instrumentType,
               instrumentStatus: "INSTRUMENT_STATUS_BASE",
             });
@@ -1143,7 +1121,7 @@ export function createTBankInstrumentsApi(token?: string) {
 
         const futureResult = await Promise.allSettled([
           (async () => {
-            const payload = await requestJson<AnyRecord>(FUTURES_ENDPOINT, authToken, {
+            const payload = await requestJson<AnyRecord>(FUTURES_ENDPOINT, {
               instrumentStatus: "INSTRUMENT_STATUS_BASE",
             });
             const instruments =
@@ -1199,7 +1177,7 @@ export function createTBankInstrumentsApi(token?: string) {
         OPTIONS_DISCOVERY_PARALLEL_LIMIT,
         async (target) => {
           try {
-            const payload = await requestJson<AnyRecord>(OPTIONS_BY_ENDPOINT, authToken, target.payload);
+            const payload = await requestJson<AnyRecord>(OPTIONS_BY_ENDPOINT, target.payload);
             const instruments =
               (Array.isArray(payload.instruments) && payload.instruments) ||
               (Array.isArray(payload.options) && payload.options) ||
@@ -1286,12 +1264,11 @@ export function createTBankInstrumentsApi(token?: string) {
     query: string,
     options?: { apiTradeAvailableFlag?: boolean },
   ): Promise<TBankInstrumentReference[]> {
-    const authToken = ensureToken();
     const requestBody: Record<string, unknown> = { query };
     if (typeof options?.apiTradeAvailableFlag === "boolean") {
       requestBody.apiTradeAvailableFlag = options.apiTradeAvailableFlag;
     }
-    const payload = await requestJson<AnyRecord>(FIND_INSTRUMENT_ENDPOINT, authToken, requestBody);
+    const payload = await requestJson<AnyRecord>(FIND_INSTRUMENT_ENDPOINT, requestBody);
 
     const instruments =
       (Array.isArray(payload.instruments) && payload.instruments) ||
@@ -1305,7 +1282,6 @@ export function createTBankInstrumentsApi(token?: string) {
   }
 
   async function fetchAssetInstrumentReferences(assetUids: string[]): Promise<TBankAssetInstrumentReference[]> {
-    const authToken = ensureToken();
     const requestedAssetUids = new Set(assetUids.map((value) => value.trim()).filter(Boolean));
     if (requestedAssetUids.size === 0) {
       return [];
@@ -1315,7 +1291,7 @@ export function createTBankInstrumentsApi(token?: string) {
     const assetTypes = OPTIONS_DISCOVERY_ASSET_TYPES;
 
     for (const instrumentType of assetTypes) {
-      const payload = await requestJson<AnyRecord>(ASSETS_ENDPOINT, authToken, {
+      const payload = await requestJson<AnyRecord>(ASSETS_ENDPOINT, {
         instrumentType,
         instrumentStatus: "INSTRUMENT_STATUS_ALL",
       });
@@ -1348,7 +1324,6 @@ export function createTBankInstrumentsApi(token?: string) {
   async function fetchOptionsBy(params: {
     query: string;
   }): Promise<TBankOptionsByResult> {
-    const authToken = ensureToken();
     const normalizedQuery = params.query.trim();
     if (!normalizedQuery) {
       throw new Error("Base instrument query is required for market data service options.");
@@ -1383,7 +1358,7 @@ export function createTBankInstrumentsApi(token?: string) {
     let lastError: Error | null = null;
     for (const basicInstrumentId of candidateIds) {
       try {
-        const payload = await requestJson<AnyRecord>(OPTIONS_BY_ENDPOINT, authToken, {
+        const payload = await requestJson<AnyRecord>(OPTIONS_BY_ENDPOINT, {
           basicInstrumentId,
         });
 
@@ -1424,8 +1399,7 @@ export function createTBankInstrumentsApi(token?: string) {
     idType?: "INSTRUMENT_ID_TYPE_FIGI" | "INSTRUMENT_ID_TYPE_TICKER" | "INSTRUMENT_ID_TYPE_UID" | "INSTRUMENT_ID_TYPE_POSITION_UID";
     classCode?: string;
   }): Promise<TBankOption> {
-    const authToken = ensureToken();
-    const payload = await requestJson<AnyRecord>(OPTION_BY_ENDPOINT, authToken, {
+    const payload = await requestJson<AnyRecord>(OPTION_BY_ENDPOINT, {
       idType: params.idType ?? "INSTRUMENT_ID_TYPE_UID",
       id: params.id,
       classCode: params.classCode,
@@ -1445,7 +1419,6 @@ export function createTBankInstrumentsApi(token?: string) {
   }
 
   async function fetchAssetFundamentals(shares: TBankShare[]): Promise<Record<string, TBankFundamental>> {
-    const authToken = ensureToken();
     const assetUidToFigi = shares.reduce<Record<string, string>>((acc, share) => {
       if (share.assetUid) {
         acc[share.assetUid] = share.figi;
@@ -1462,7 +1435,7 @@ export function createTBankInstrumentsApi(token?: string) {
     const chunks = chunkArray(uniqueAssetUids, MAX_ASSETS_PER_REQUEST);
 
     for (const chunk of chunks) {
-      const payload = await requestJson<AnyRecord>(ASSET_FUNDAMENTALS_ENDPOINT, authToken, {
+      const payload = await requestJson<AnyRecord>(ASSET_FUNDAMENTALS_ENDPOINT, {
         assets: chunk,
       });
 
@@ -1491,7 +1464,6 @@ export function createTBankInstrumentsApi(token?: string) {
   async function fetchClosePricesByInstrumentIds(
     instrumentIds: string[],
   ): Promise<Record<string, TBankClosePrice[]>> {
-    const authToken = ensureToken();
     const instruments = instrumentIds
       .filter((instrumentId) => Boolean(instrumentId))
       .map((instrumentId) => ({ instrumentId }));
@@ -1504,7 +1476,7 @@ export function createTBankInstrumentsApi(token?: string) {
     const chunks = chunkArray(instruments, MAX_ASSETS_PER_REQUEST);
 
     for (const chunk of chunks) {
-      const payload = await requestJson<AnyRecord>(CLOSE_PRICES_ENDPOINT, authToken, {
+      const payload = await requestJson<AnyRecord>(CLOSE_PRICES_ENDPOINT, {
         instruments: chunk,
       });
 
@@ -1538,7 +1510,6 @@ export function createTBankInstrumentsApi(token?: string) {
   }
 
   async function fetchLastPricesByInstrumentIds(instrumentIds: string[]): Promise<TBankLastPrice[]> {
-    const authToken = ensureToken();
     const uniqueInstrumentIds = [...new Set(instrumentIds.map((value) => value.trim()).filter(Boolean))];
     if (uniqueInstrumentIds.length === 0) {
       return [];
@@ -1548,7 +1519,7 @@ export function createTBankInstrumentsApi(token?: string) {
     const chunks = chunkArray(uniqueInstrumentIds, MAX_ASSETS_PER_REQUEST);
 
     for (const chunk of chunks) {
-      const payload = await requestJson<AnyRecord>(LAST_PRICES_ENDPOINT, authToken, {
+      const payload = await requestJson<AnyRecord>(LAST_PRICES_ENDPOINT, {
         instrumentId: chunk,
         lastPriceType: "LAST_PRICE_EXCHANGE",
         instrumentStatus: "INSTRUMENT_STATUS_ALL",
@@ -1578,8 +1549,7 @@ export function createTBankInstrumentsApi(token?: string) {
     from: string;
     to: string;
   }): Promise<TBankBondCoupon[]> {
-    const authToken = ensureToken();
-    const payload = await requestJson<AnyRecord>(BOND_COUPONS_ENDPOINT, authToken, {
+    const payload = await requestJson<AnyRecord>(BOND_COUPONS_ENDPOINT, {
       instrumentId: params.instrumentId,
       from: params.from,
       to: params.to,
@@ -1602,14 +1572,13 @@ export function createTBankInstrumentsApi(token?: string) {
     from: string;
     to: string;
   }): Promise<Record<string, TBankDividend[]>> {
-    const authToken = ensureToken();
     const uniqueShares = [...new Map(params.shares.map((share) => [share.figi, share])).values()];
     const buckets = await mapWithConcurrency(
       uniqueShares,
       DIVIDEND_HISTORY_PARALLEL_LIMIT,
       async (share) => {
         try {
-          const payload = await requestJson<AnyRecord>(DIVIDENDS_ENDPOINT, authToken, {
+          const payload = await requestJson<AnyRecord>(DIVIDENDS_ENDPOINT, {
             instrumentId: share.figi,
             from: params.from,
             to: params.to,
@@ -1645,8 +1614,7 @@ export function createTBankInstrumentsApi(token?: string) {
     interval?: string;
     limit?: number;
   }): Promise<TBankCandle[]> {
-    const authToken = ensureToken();
-    const payload = await requestJson<AnyRecord>(CANDLES_ENDPOINT, authToken, {
+    const payload = await requestJson<AnyRecord>(CANDLES_ENDPOINT, {
       instrumentId: params.figi,
       from: params.from,
       to: params.to,

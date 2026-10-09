@@ -30,10 +30,5 @@ export const BOND_SECTOR_MAX_WEIGHTS: Record<string, number> = {
   other: 0.1,
 };
 
-export const TBANK_BONDS_ENDPOINT =
-  "https://invest-public-api.tbank.ru/rest/tinkoff.public.invest.api.contract.v1.InstrumentsService/Bonds";
-export const TBANK_BOND_COUPONS_ENDPOINT =
-  "https://invest-public-api.tbank.ru/rest/tinkoff.public.invest.api.contract.v1.InstrumentsService/GetBondCoupons";
-export const TBANK_BONDS_TOKEN_STORAGE_KEY = "tbank_api_token";
 export const DEFAULT_BONDS_LIMIT: number | null = null;
 export const SUPPORTED_BOND_CURRENCIES = new Set(["rub", "cny", "usd", "eur"]);

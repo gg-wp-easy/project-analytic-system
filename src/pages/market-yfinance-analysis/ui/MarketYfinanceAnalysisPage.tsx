@@ -23,6 +23,7 @@ import {
   YAxis,
 } from "recharts";
 import { API_BASE_URL } from "../../../config";
+import { platformFetch } from "../../../shared/api/platform";
 import { useAppSettings } from "../../../app/context/AppSettingsContext";
 import { SavePortfolioButton } from "../../../features/saved-portfolios";
 import {
@@ -282,7 +283,7 @@ function MarketYfinanceAnalysisPage({ mode }: { mode: MarketMode }) {
     setIsRunning(true);
     setError(null);
     try {
-      const response = await fetch(`${API_BASE_URL}${config.endpoint}?period=${encodeURIComponent(period)}`);
+      const response = await platformFetch(`${API_BASE_URL}${config.endpoint}?period=${encodeURIComponent(period)}`);
       const text = await response.text();
       const parsed = text ? (JSON.parse(text) as MarketAnalysisResponse | { detail?: unknown }) : {};
       if (!response.ok) {

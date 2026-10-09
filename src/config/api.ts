@@ -1,8 +1,4 @@
-import { resolveApiBaseUrl } from "./lib/api.helpers";
-import type { ApiConfig } from "./model/api.types";
+import { platformUrl } from "../shared/api/platform";
 
-export const API_BASE_URL = resolveApiBaseUrl(import.meta.env.VITE_API_BASE_URL);
-
-export const API_CONFIG: ApiConfig = {
-  baseUrl: API_BASE_URL,
-};
+/** Расчёты — сервис analytics платформы NK-Tech Finance (доступ по тарифу «Про»). */
+export const API_BASE_URL = platformUrl("/analytics");
