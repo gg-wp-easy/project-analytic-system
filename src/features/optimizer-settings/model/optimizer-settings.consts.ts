@@ -12,7 +12,6 @@ export const DEFAULT_OPTIMIZER_SETTINGS: OptimizerSettings = {
   targetReturn: "20",
   targetRisk: "20",
   portfolioAssetsCount: "20",
-  hideAnalysisDetails: true,
   autoModelTuning: true,
   autoPortfolioOptimization: true,
 };

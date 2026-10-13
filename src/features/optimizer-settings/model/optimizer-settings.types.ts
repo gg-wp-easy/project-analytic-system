@@ -10,7 +10,6 @@ export type OptimizerSettings = {
   targetReturn: string;
   targetRisk: string;
   portfolioAssetsCount: string;
-  hideAnalysisDetails: boolean;
   autoModelTuning: boolean;
   autoPortfolioOptimization: boolean;
 };

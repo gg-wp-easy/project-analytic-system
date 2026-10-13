@@ -36,7 +36,6 @@ export function normalizeOptimizerSettings(value: Partial<OptimizerSettings>): O
     targetReturn: String(value.targetReturn ?? DEFAULT_OPTIMIZER_SETTINGS.targetReturn),
     targetRisk: String(value.targetRisk ?? DEFAULT_OPTIMIZER_SETTINGS.targetRisk),
     portfolioAssetsCount: String(value.portfolioAssetsCount ?? DEFAULT_OPTIMIZER_SETTINGS.portfolioAssetsCount),
-    hideAnalysisDetails: value.hideAnalysisDetails !== false,
     autoModelTuning: true,
     autoPortfolioOptimization: value.autoPortfolioOptimization !== false,
   };

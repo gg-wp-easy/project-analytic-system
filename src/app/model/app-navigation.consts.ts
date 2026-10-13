@@ -13,6 +13,7 @@ export const APP_NAVIGATION_ITEMS: AppNavigationItem[] = [
     path: APP_ABSOLUTE_ROUTE_PATHS.stockAnalysis,
     icon: "layers",
     activePaths: [
+      APP_ABSOLUTE_ROUTE_PATHS.regression,
       APP_ABSOLUTE_ROUTE_PATHS.cluster,
       APP_ABSOLUTE_ROUTE_PATHS.decisionTree,
       APP_ABSOLUTE_ROUTE_PATHS.neuralNetwork,

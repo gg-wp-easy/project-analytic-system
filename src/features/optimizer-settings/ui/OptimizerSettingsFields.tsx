@@ -134,13 +134,6 @@ export function OptimizerSettingsFields({ settings, onChange, autoFitWeights = f
         </>
       )}
 
-      <label className="flex items-center gap-2 text-xs font-medium text-slate-700 dark:text-slate-300">
-        <Checkbox
-          checked={settings.hideAnalysisDetails}
-          onCheckedChange={(checked) => onChange({ ...settings, hideAnalysisDetails: checked === true })}
-        />
-        <span>{t("Скрыть подробности анализа и показать только портфель", "Hide analysis details and show only the portfolio")}</span>
-      </label>
     </div>
   );
 }

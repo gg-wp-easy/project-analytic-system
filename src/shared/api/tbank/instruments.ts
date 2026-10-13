@@ -964,6 +964,7 @@ export function createTBankInstrumentsApi() {
           buyAvailableFlag: pickOptionalBoolean(item, ["buyAvailableFlag", "buy_available_flag"]),
           sellAvailableFlag: pickOptionalBoolean(item, ["sellAvailableFlag", "sell_available_flag"]),
           otcFlag: pickOptionalBoolean(item, ["otcFlag", "otc_flag"]),
+          forQualInvestorFlag: pickOptionalBoolean(item, ["forQualInvestorFlag", "for_qual_investor_flag"]),
         } satisfies TBankShare;
       })
       .filter((share): share is NonNullable<typeof share> => share !== null)

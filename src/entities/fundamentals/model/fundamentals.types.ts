@@ -12,6 +12,7 @@ export type ShareRecord = {
   buyAvailableFlag?: boolean;
   sellAvailableFlag?: boolean;
   otcFlag?: boolean;
+  forQualInvestorFlag?: boolean;
 };
 
 export type AssetFundamentalRecord = {

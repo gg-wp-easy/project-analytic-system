@@ -5,6 +5,7 @@ export const SAVED_PORTFOLIOS_STORAGE_KEY = "analytic-system.saved-portfolios.v1
 export type SavedPortfolioAssetClass = "stock" | "bond" | "index" | "commodity";
 
 export type SavedPortfolioSourceKey =
+  | "regression"
   | "cluster"
   | "decision-tree"
   | "neural-network"

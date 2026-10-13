@@ -1,47 +1,33 @@
 import { Link } from "react-router-dom";
-import { ArrowRight, Brain, GitBranch, Layers, Network } from "lucide-react";
+import { ArrowRight, Layers } from "lucide-react";
 import { useAppSettings } from "../../../app/context/AppSettingsContext";
+import { APP_ABSOLUTE_ROUTE_PATHS } from "../../../app/model";
+import { STOCK_ANALYSES, STOCK_ANALYSIS_ORDER, type StockAnalysisKey } from "../../../features/stock-valuation";
 import { trackSpotlight } from "../../../shared/lib/motion/spotlight";
 import { PageHero, SectionCard } from "../../../shared/ui/analysis-shell";
 
-const tools = [
-  {
-    titleRu: "Кластерный анализ",
-    titleEn: "Cluster Analysis",
-    descriptionRu: "Группировка акций по похожим мультипликаторам, доходности, риску и секторной структуре.",
-    descriptionEn: "Groups stocks by similar valuation, profitability, risk, and sector structure.",
-    path: "/cluster",
-    icon: Network,
-    color: "from-violet-600 to-fuchsia-600",
-  },
-  {
-    titleRu: "Дерево решений",
-    titleEn: "Decision Tree",
-    descriptionRu: "Интерпретируемые правила отбора и важность факторов для инвестиционного решения.",
-    descriptionEn: "Interpretable selection rules and factor importance for investment decisions.",
-    path: "/decision-tree",
-    icon: GitBranch,
-    color: "from-emerald-600 to-green-600",
-  },
-  {
-    titleRu: "Нейросетевой анализ",
-    titleEn: "Neural Network",
-    descriptionRu: "Поиск нелинейных зависимостей между фундаментальными показателями и итоговым сигналом.",
-    descriptionEn: "Finds nonlinear relationships between fundamentals and the final signal.",
-    path: "/neural-network",
-    icon: Brain,
-    color: "from-orange-600 to-red-600",
-  },
-  {
-    titleRu: "Гибридный анализ",
-    titleEn: "Hybrid Analysis",
-    descriptionRu: "Сводит несколько моделей в единый взвешенный результат и портфельный отбор.",
-    descriptionEn: "Combines several models into one weighted result and portfolio selection.",
-    path: "/hybrid",
-    icon: Layers,
-    color: "from-cyan-600 to-blue-700",
-  },
-];
+const COLORS: Record<StockAnalysisKey, string> = {
+  regression: "from-blue-600 to-sky-600",
+  cluster: "from-violet-600 to-fuchsia-600",
+  tree: "from-emerald-600 to-green-600",
+  neural: "from-orange-600 to-red-600",
+  hybrid: "from-cyan-600 to-blue-700",
+};
+const PATHS: Record<StockAnalysisKey, string> = {
+  regression: APP_ABSOLUTE_ROUTE_PATHS.regression,
+  cluster: APP_ABSOLUTE_ROUTE_PATHS.cluster,
+  tree: APP_ABSOLUTE_ROUTE_PATHS.decisionTree,
+  neural: APP_ABSOLUTE_ROUTE_PATHS.neuralNetwork,
+  hybrid: APP_ABSOLUTE_ROUTE_PATHS.hybrid,
+};
+const tools = STOCK_ANALYSIS_ORDER.map((key) => ({
+  key,
+  title: STOCK_ANALYSES[key].title,
+  description: STOCK_ANALYSES[key].description,
+  icon: STOCK_ANALYSES[key].icon,
+  path: PATHS[key],
+  color: COLORS[key],
+}));
 
 export function StockAnalysisPage() {
   const { t } = useAppSettings();
@@ -52,8 +38,8 @@ export function StockAnalysisPage() {
         icon={Layers}
         title={t({ ru: "Анализ акций", en: "Stock Analysis" })}
         description={t({
-          ru: "Выберите модель анализа акций: кластеризацию, дерево решений, нейросеть или гибридный подход.",
-          en: "Choose a stock analysis model: clustering, decision tree, neural network, or hybrid approach.",
+          ru: "Справедливый P/E акций пятью способами: регрессия, кластеры, дерево решений, нейросеть и их гибрид.",
+          en: "Fair P/E of stocks in five ways: regression, clusters, decision tree, neural network and their hybrid.",
         })}
         accent="cyan"
       />
@@ -61,11 +47,11 @@ export function StockAnalysisPage() {
       <SectionCard
         title={t({ ru: "Выбор анализа", en: "Analysis Selection" })}
         description={t({
-          ru: "Все модели используют единый набор фундаментальных данных и результаты первичной обработки.",
-          en: "All models use the same fundamentals dataset and preprocessing results.",
+          ru: "Все анализы считаются одним расчётом по загруженным фундаментальным данным: после первого остальные открываются сразу.",
+          en: "All analyses come from one run on the loaded fundamentals: after the first, the others open at once.",
         })}
       >
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-5">
           {tools.map((tool) => {
             const Icon = tool.icon;
             return (
@@ -81,10 +67,10 @@ export function StockAnalysisPage() {
                   </span>
                   <div className="space-y-2">
                     <div className="font-semibold text-slate-900 transition-colors group-hover:text-blue-600 dark:text-slate-100">
-                      {t({ ru: tool.titleRu, en: tool.titleEn })}
+                      {t(tool.title)}
                     </div>
                     <p className="text-sm leading-6 text-slate-600 dark:text-slate-300">
-                      {t({ ru: tool.descriptionRu, en: tool.descriptionEn })}
+                      {t(tool.description)}
                     </p>
                   </div>
                   <div className="flex items-center gap-2 text-sm font-medium text-blue-600 dark:text-blue-400">

@@ -19,6 +19,7 @@ export function buildStockAnalysisRecord(share: ShareRecord, fundamentals: Asset
     buy_available_flag: share.buyAvailableFlag,
     sell_available_flag: share.sellAvailableFlag,
     otc_flag: share.otcFlag,
+    for_qual_investor_flag: share.forQualInvestorFlag,
     market_cap_bn: fundamentals.marketCapBn,
     revenue_bn: fundamentals.revenueBn,
     pe_ratio: fundamentals.peRatio,

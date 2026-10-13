@@ -41,20 +41,24 @@ const routes = [
         element: createElement(Navigate, { to: APP_ABSOLUTE_ROUTE_PATHS.fundamentalsPreprocessing, replace: true }),
       },
       {
+        path: APP_ROUTE_PATHS.regression,
+        lazy: () => import("../pages/stock-valuation").then(({ RegressionAnalysis }) => ({ Component: RegressionAnalysis })),
+      },
+      {
         path: APP_ROUTE_PATHS.cluster,
-        lazy: () => import("../pages/cluster-analysis").then(({ ClusterAnalysis }) => ({ Component: ClusterAnalysis })),
+        lazy: () => import("../pages/stock-valuation").then(({ ClusterAnalysis }) => ({ Component: ClusterAnalysis })),
       },
       {
         path: APP_ROUTE_PATHS.decisionTree,
-        lazy: () => import("../pages/decision-tree-analysis").then(({ DecisionTreeAnalysis }) => ({ Component: DecisionTreeAnalysis })),
+        lazy: () => import("../pages/stock-valuation").then(({ DecisionTreeAnalysis }) => ({ Component: DecisionTreeAnalysis })),
       },
       {
         path: APP_ROUTE_PATHS.neuralNetwork,
-        lazy: () => import("../pages/neural-analysis").then(({ NeuralNetworkAnalysis }) => ({ Component: NeuralNetworkAnalysis })),
+        lazy: () => import("../pages/stock-valuation").then(({ NeuralNetworkAnalysis }) => ({ Component: NeuralNetworkAnalysis })),
       },
       {
         path: APP_ROUTE_PATHS.hybrid,
-        lazy: () => import("../pages/hybrid-analysis").then(({ HybridAnalysis }) => ({ Component: HybridAnalysis })),
+        lazy: () => import("../pages/stock-valuation").then(({ HybridAnalysis }) => ({ Component: HybridAnalysis })),
       },
       {
         path: APP_ROUTE_PATHS.indexes,

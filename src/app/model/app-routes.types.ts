@@ -6,6 +6,7 @@ export type AppRoutePathMap = {
   stockAnalysis: string;
   portfolioAnalysis: string;
   legacyPreprocessing: string;
+  regression: string;
   cluster: string;
   decisionTree: string;
   neuralNetwork: string;
@@ -26,6 +27,7 @@ export type AppAbsoluteRoutePathMap = {
   fundamentalsPreprocessing: string;
   stockAnalysis: string;
   portfolioAnalysis: string;
+  regression: string;
   cluster: string;
   decisionTree: string;
   neuralNetwork: string;
