@@ -24,6 +24,7 @@ import {
 } from "recharts";
 import { API_BASE_URL } from "../../../config";
 import { platformFetch } from "../../../shared/api/platform";
+import { nkPalette, VIZ_HEX } from "../../../shared/brand";
 import { useAppSettings } from "../../../app/context/AppSettingsContext";
 import { SavePortfolioButton } from "../../../features/saved-portfolios";
 import {
@@ -54,17 +55,8 @@ import {
   type SourceAsset,
 } from "../model";
 
-const MARKET_PALETTE = [
-  "#2563eb",
-  "#16a34a",
-  "#f59e0b",
-  "#dc2626",
-  "#7c3aed",
-  "#0891b2",
-  "#0d9488",
-  "#ea580c",
-  "#be123c",
-];
+// круговая диаграмма портфеля уходит в PDF — цвета в hex
+const MARKET_PALETTE = [...VIZ_HEX, nkPalette.light.vizMuted];
 
 const MODE_CONFIG = {
   indexes: {
@@ -538,9 +530,9 @@ function MarketYfinanceAnalysisPage({ mode }: { mode: MarketMode }) {
                         formatter={(value: number, name: string) => [`${Number(value).toFixed(2)}%`, name]}
                         labelFormatter={() => t("Портфель", "Portfolio")}
                       />
-                      <Scatter data={frontier} fill="#94a3b8" line={{ stroke: "#64748b", strokeWidth: 2 }} />
-                      <Scatter data={maxSharpePoint} fill="#16a34a">
-                        {maxSharpePoint.map((_, index) => <Cell key={index} fill="#16a34a" />)}
+                      <Scatter data={frontier} fill="var(--nk-neutral-400)" line={{ stroke: "var(--nk-muted)", strokeWidth: 2 }} />
+                      <Scatter data={maxSharpePoint} fill="var(--nk-up)">
+                        {maxSharpePoint.map((_, index) => <Cell key={index} fill="var(--nk-up)" />)}
                       </Scatter>
                     </ScatterChart>
                   </ResponsiveContainer>
@@ -558,7 +550,7 @@ function MarketYfinanceAnalysisPage({ mode }: { mode: MarketMode }) {
                         <XAxis dataKey="asset" interval={0} angle={-35} textAnchor="end" tick={{ fontSize: 11 }} />
                         <YAxis tickFormatter={(value) => `${value}%`} tick={{ fontSize: 12 }} />
                         <Tooltip formatter={(value: number) => `${Number(value).toFixed(2)}%`} />
-                        <Bar dataKey="return" name={t("Доходность", "Return")} fill="#2563eb" radius={[5, 5, 0, 0]} />
+                        <Bar dataKey="return" name={t("Доходность", "Return")} fill="var(--nk-viz-1)" radius={[5, 5, 0, 0]} />
                       </BarChart>
                     </ResponsiveContainer>
                   </div>
@@ -569,7 +561,7 @@ function MarketYfinanceAnalysisPage({ mode }: { mode: MarketMode }) {
                         <XAxis dataKey="asset" interval={0} angle={-35} textAnchor="end" tick={{ fontSize: 11 }} />
                         <YAxis tick={{ fontSize: 12 }} />
                         <Tooltip />
-                        <Line type="monotone" dataKey="sharpe" name="Sharpe" stroke="#16a34a" strokeWidth={2} dot={{ r: 3 }} />
+                        <Line type="monotone" dataKey="sharpe" name="Sharpe" stroke="var(--nk-viz-3)" strokeWidth={2} dot={{ r: 3 }} />
                       </LineChart>
                     </ResponsiveContainer>
                   </div>

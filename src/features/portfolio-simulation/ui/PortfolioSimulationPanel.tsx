@@ -410,25 +410,25 @@ export function PortfolioSimulationPanel({
 
           <ResponsiveContainer width="100%" height={340}>
             <LineChart data={chartRows} margin={{ top: 8, right: 24, left: 8, bottom: 28 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+              <CartesianGrid strokeDasharray="3 3" stroke="var(--nk-grid)" />
               <XAxis
                 dataKey="month"
-                stroke="#64748b"
+                stroke="var(--nk-muted)"
                 tickMargin={8}
-                label={{ value: t("Месяц", "Month"), position: "insideBottom", offset: -20, fill: "#64748b" }}
+                label={{ value: t("Месяц", "Month"), position: "insideBottom", offset: -20, fill: "var(--nk-muted)" }}
               />
               <YAxis
-                stroke="#64748b"
+                stroke="var(--nk-muted)"
                 tickMargin={8}
                 tickFormatter={(value: number) => `${Number(value).toFixed(0)}%`}
-                label={{ value: t("Накопленная доходность", "Cumulative return"), angle: -90, position: "insideLeft", fill: "#64748b" }}
+                label={{ value: t("Накопленная доходность", "Cumulative return"), angle: -90, position: "insideLeft", fill: "var(--nk-muted)" }}
               />
               <Tooltip formatter={(value: number) => `${Number(value).toFixed(2)}%`} />
               <Legend verticalAlign="top" height={32} />
               <Line
                 type="monotone"
                 dataKey={t("Портфель", "Portfolio")}
-                stroke="#111827"
+                stroke="var(--nk-text)"
                 strokeWidth={3}
                 dot={false}
               />

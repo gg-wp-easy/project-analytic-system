@@ -3,7 +3,7 @@ import { SectionCard } from "../../analysis-shell";
 import type { AnalysisLoadingPreviewProps } from "../model";
 
 export function AnalysisLoadingPreview({
-  accentClassName = "text-blue-600",
+  accentClassName = "text-primary",
   metricCount = 4,
   metricsTitle,
   metricsDescription,

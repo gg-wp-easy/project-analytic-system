@@ -269,7 +269,7 @@ export function PortfolioAnalysisPage() {
                       }}
                       className={`w-full rounded-md border px-3 py-3 text-left transition-colors ${
                         isActive
-                          ? "border-teal-300 bg-teal-50 text-teal-900 dark:border-teal-800 dark:bg-teal-950/30 dark:text-teal-100"
+                          ? "border-primary/40 bg-accent text-accent-foreground"
                           : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-950/40 dark:text-slate-200 dark:hover:bg-slate-900"
                       }`}
                     >
@@ -389,12 +389,12 @@ export function PortfolioAnalysisPage() {
                   ) : trackingResult ? (
                     <ResponsiveContainer width="100%" height={340}>
                       <LineChart data={trackingResult.rows} margin={{ top: 8, right: 24, left: 8, bottom: 28 }}>
-                        <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                        <XAxis dataKey="month" stroke="#64748b" tickMargin={8} />
-                        <YAxis stroke="#64748b" tickFormatter={(value: number) => `${Number(value).toFixed(0)}%`} />
+                        <CartesianGrid strokeDasharray="3 3" stroke="var(--nk-grid)" />
+                        <XAxis dataKey="month" stroke="var(--nk-muted)" tickMargin={8} />
+                        <YAxis stroke="var(--nk-muted)" tickFormatter={(value: number) => `${Number(value).toFixed(0)}%`} />
                         <Tooltip formatter={(value: number) => `${Number(value).toFixed(2)}%`} />
                         <Legend verticalAlign="top" height={32} />
-                        <Line type="monotone" dataKey="portfolio" name={t("Портфель", "Portfolio")} stroke="#0f766e" strokeWidth={3} dot={false} />
+                        <Line type="monotone" dataKey="portfolio" name={t("Портфель", "Portfolio")} stroke="var(--nk-accent-2)" strokeWidth={3} dot={false} />
                       </LineChart>
                     </ResponsiveContainer>
                   ) : (

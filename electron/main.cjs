@@ -16,9 +16,10 @@ const GET_FULLSCREEN_STATE_CHANNEL = "app:get-fullscreen-state";
 const FULLSCREEN_STATE_CHANGED_CHANNEL = "app:fullscreen-state-changed";
 const SET_THEME_CHANNEL = "app:set-theme";
 const THEME_FILE_NAME = "theme.json";
+// фон окон до загрузки интерфейса — --nk-bg палитры бренда
 const SPLASH_THEMES = {
-  light: "#ffffff",
-  dark: "#0f172a",
+  light: "#fff6f8",
+  dark: "#0a0c1a",
 };
 const LOG_LEVELS = new Set(["debug", "info", "warn", "error"]);
 const AUTO_UPDATE_INITIAL_DELAY_MS = 12_000;

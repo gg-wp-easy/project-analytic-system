@@ -105,24 +105,24 @@ function ScatterSection({ title, description, rows, sectors, xKey, yKey, xLabel,
       </div>
       <ResponsiveContainer width="100%" height={380}>
         <ScatterChart margin={{ top: 10, right: 28, bottom: 42, left: 24 }}>
-          <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+          <CartesianGrid strokeDasharray="3 3" stroke="var(--nk-grid)" />
           <XAxis
             type="number"
             dataKey={xKey}
             name={xLabel}
             unit={xUnit}
-            stroke="#64748b"
+            stroke="var(--nk-muted)"
             tickMargin={8}
-            label={{ value: axisTitle(xLabel, xUnit), position: "insideBottom", offset: -26, fill: "#64748b" }}
+            label={{ value: axisTitle(xLabel, xUnit), position: "insideBottom", offset: -26, fill: "var(--nk-muted)" }}
           />
           <YAxis
             type="number"
             dataKey={yKey}
             name={yLabel}
             unit={yUnit}
-            stroke="#64748b"
+            stroke="var(--nk-muted)"
             tickMargin={8}
-            label={{ value: axisTitle(yLabel, yUnit), angle: -90, position: "insideLeft", fill: "#64748b" }}
+            label={{ value: axisTitle(yLabel, yUnit), angle: -90, position: "insideLeft", fill: "var(--nk-muted)" }}
           />
           <Tooltip cursor={{ strokeDasharray: "3 3" }} content={<ScatterTooltip />} />
           {grouped.map((sector) => (
@@ -130,8 +130,8 @@ function ScatterSection({ title, description, rows, sectors, xKey, yKey, xLabel,
               key={sector.sector}
               name={sector.sector}
               data={sector.rows}
-              fill={sectorColor.get(sector.sector) ?? "#2563eb"}
-              stroke={sectorColor.get(sector.sector) ?? "#2563eb"}
+              fill={sectorColor.get(sector.sector) ?? "var(--nk-viz-1)"}
+              stroke={sectorColor.get(sector.sector) ?? "var(--nk-viz-1)"}
               fillOpacity={0.82}
             />
           ))}
@@ -417,20 +417,20 @@ export function DataPreprocessingPage() {
       >
         <ResponsiveContainer width="100%" height={360}>
           <BarChart data={sectorRows.slice(0, 14)} layout="vertical" margin={{ top: 4, right: 72, left: 168, bottom: 34 }}>
-            <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+            <CartesianGrid strokeDasharray="3 3" stroke="var(--nk-grid)" />
             <XAxis
               type="number"
-              stroke="#64748b"
+              stroke="var(--nk-muted)"
               tickMargin={8}
-              label={{ value: t("Количество акций", "Stock count"), position: "insideBottom", offset: -24, fill: "#64748b" }}
+              label={{ value: t("Количество акций", "Stock count"), position: "insideBottom", offset: -24, fill: "var(--nk-muted)" }}
             />
             <YAxis
               type="category"
               dataKey="sector"
               width={160}
-              stroke="#64748b"
+              stroke="var(--nk-muted)"
               tickMargin={8}
-              label={{ value: t("Сектор", "Sector"), angle: -90, position: "insideLeft", fill: "#64748b" }}
+              label={{ value: t("Сектор", "Sector"), angle: -90, position: "insideLeft", fill: "var(--nk-muted)" }}
             />
             <Tooltip formatter={(value: number, name: string) => [Number(value).toFixed(name === "averageScore" ? 1 : 0), name === "averageScore" ? (isEn ? "Avg score" : "Средний score") : (isEn ? "Count" : "Количество")]} />
             <Bar dataKey="count" radius={[0, 5, 5, 0]}>
@@ -438,7 +438,7 @@ export function DataPreprocessingPage() {
                 dataKey="count"
                 position="right"
                 formatter={(value: number) => Number(value).toFixed(0)}
-                fill="#334155"
+                fill="var(--nk-neutral-700)"
                 fontSize={12}
               />
               {sectorRows.slice(0, 14).map((row) => (

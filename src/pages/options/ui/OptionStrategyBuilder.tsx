@@ -882,7 +882,7 @@ export function OptionStrategyBuilder({
                         className="absolute top-[6.2rem] h-9 w-px bg-blue-400 dark:bg-blue-300"
                         style={{ left: `${getStrikePosition(strategyResult.referenceStrike, strategyStrikeRange)}%` }}
                       >
-                        <div className="-translate-x-1/2 -translate-y-8 whitespace-nowrap rounded-full bg-blue-600 px-2.5 py-1 text-xs font-semibold text-white shadow-sm">
+                        <div className="-translate-x-1/2 -translate-y-8 whitespace-nowrap rounded-full bg-primary px-2.5 py-1 text-xs font-semibold text-primary-foreground shadow-sm">
                           {t({ ru: "Опора", en: "Anchor" })} {formatNumber(strategyResult.referenceStrike, locale)}
                         </div>
                       </div>

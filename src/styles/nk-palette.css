@@ -1,0 +1,154 @@
+/* NK-Tech Finance — палитра и фоновая текстура бренда.
+   Сгенерировано nk-tech-brand/palette.mjs из palette/palette.json — не править вручную. */
+
+:root,
+[data-theme='light'],
+[data-mantine-color-scheme='light'] {
+  --nk-grad: linear-gradient(120deg, #ff4d6d, #8b5cf6 55%, #38b6ff);
+  --nk-emblem-grad: linear-gradient(135deg, #ff5a40, #e3142f 38%, #a30c24 78%, #6a0715);
+  --nk-violet-50: #f3f0ff;
+  --nk-violet-100: #e7e0ff;
+  --nk-violet-200: #cfc1ff;
+  --nk-violet-300: #b39eff;
+  --nk-violet-400: #9a7dff;
+  --nk-violet-500: #8b6bff;
+  --nk-violet-600: #7c5cff;
+  --nk-violet-700: #6a4ae6;
+  --nk-violet-800: #5a3bc9;
+  --nk-violet-900: #462e9e;
+  --nk-violet-950: #2e1d6b;
+  --nk-bg: #fff6f8;
+  --nk-surface: #ffffff;
+  --nk-surface-2: #fff0f3;
+  --nk-border: #f0d3da;
+  --nk-text: #241a33;
+  --nk-muted: #776a90;
+  --nk-accent: #e0284f;
+  --nk-accent-2: #7455e6;
+  --nk-cyan: #0ea5d6;
+  --nk-accent-text: #c81d45;
+  --nk-accent-soft: #ffe1e7;
+  --nk-hover: #fff0f3;
+  --nk-grid: #f6e2e6;
+  --nk-star: #f0a020;
+  --nk-up: #0f9d76;
+  --nk-down: #e5365e;
+  --nk-overlay: rgba(36, 26, 51, 0.5);
+  --nk-orb: 0.14;
+  --nk-neutral-50: #fff6f8;
+  --nk-neutral-100: #fff0f3;
+  --nk-neutral-200: #f0d3da;
+  --nk-neutral-300: #e0bcc8;
+  --nk-neutral-400: #a896b8;
+  --nk-neutral-500: #776a90;
+  --nk-neutral-600: #5f5379;
+  --nk-neutral-700: #483d61;
+  --nk-neutral-800: #352a4b;
+  --nk-neutral-900: #241a33;
+  --nk-neutral-950: #160f22;
+  --nk-viz-1: #2a78d6;
+  --nk-viz-2: #eb6834;
+  --nk-viz-3: #1baf7a;
+  --nk-viz-4: #eda100;
+  --nk-viz-5: #e87ba4;
+  --nk-viz-6: #008300;
+  --nk-viz-7: #4a3aa7;
+  --nk-viz-8: #e34948;
+  --nk-viz-muted: #898781;
+}
+
+[data-theme='dark'],
+[data-mantine-color-scheme='dark'] {
+  --nk-bg: #0a0c1a;
+  --nk-surface: #14172c;
+  --nk-surface-2: #101328;
+  --nk-border: #282c52;
+  --nk-text: #eef0ff;
+  --nk-muted: #9ba1cc;
+  --nk-accent: #ff4d6d;
+  --nk-accent-2: #7c5cff;
+  --nk-cyan: #4fd8ff;
+  --nk-accent-text: #ff8aa1;
+  --nk-accent-soft: rgba(255, 77, 109, 0.16);
+  --nk-hover: #1b1f42;
+  --nk-grid: #21254a;
+  --nk-star: #ffd166;
+  --nk-up: #35e0a1;
+  --nk-down: #ff5c7c;
+  --nk-overlay: rgba(4, 5, 16, 0.7);
+  --nk-orb: 0.32;
+  --nk-neutral-50: #f6f7ff;
+  --nk-neutral-100: #eef0ff;
+  --nk-neutral-200: #dde0f8;
+  --nk-neutral-300: #c9cdee;
+  --nk-neutral-400: #9ba1cc;
+  --nk-neutral-500: #6f75a3;
+  --nk-neutral-600: #4a4f80;
+  --nk-neutral-700: #363b6b;
+  --nk-neutral-800: #282c52;
+  --nk-neutral-900: #14172c;
+  --nk-neutral-950: #0a0c1a;
+  --nk-viz-1: #3987e5;
+  --nk-viz-2: #d95926;
+  --nk-viz-3: #199e70;
+  --nk-viz-4: #c98500;
+  --nk-viz-5: #d55181;
+  --nk-viz-6: #008300;
+  --nk-viz-7: #9085e9;
+  --nk-viz-8: #e66767;
+  --nk-viz-muted: #898781;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme]):not([data-mantine-color-scheme]) {
+    --nk-bg: #0a0c1a;
+    --nk-surface: #14172c;
+    --nk-surface-2: #101328;
+    --nk-border: #282c52;
+    --nk-text: #eef0ff;
+    --nk-muted: #9ba1cc;
+    --nk-accent: #ff4d6d;
+    --nk-accent-2: #7c5cff;
+    --nk-cyan: #4fd8ff;
+    --nk-accent-text: #ff8aa1;
+    --nk-accent-soft: rgba(255, 77, 109, 0.16);
+    --nk-hover: #1b1f42;
+    --nk-grid: #21254a;
+    --nk-star: #ffd166;
+    --nk-up: #35e0a1;
+    --nk-down: #ff5c7c;
+    --nk-overlay: rgba(4, 5, 16, 0.7);
+    --nk-orb: 0.32;
+    --nk-neutral-50: #f6f7ff;
+    --nk-neutral-100: #eef0ff;
+    --nk-neutral-200: #dde0f8;
+    --nk-neutral-300: #c9cdee;
+    --nk-neutral-400: #9ba1cc;
+    --nk-neutral-500: #6f75a3;
+    --nk-neutral-600: #4a4f80;
+    --nk-neutral-700: #363b6b;
+    --nk-neutral-800: #282c52;
+    --nk-neutral-900: #14172c;
+    --nk-neutral-950: #0a0c1a;
+    --nk-viz-1: #3987e5;
+    --nk-viz-2: #d95926;
+    --nk-viz-3: #199e70;
+    --nk-viz-4: #c98500;
+    --nk-viz-5: #d55181;
+    --nk-viz-6: #008300;
+    --nk-viz-7: #9085e9;
+    --nk-viz-8: #e66767;
+    --nk-viz-muted: #898781;
+  }
+}
+
+/* текстура считается от цветов темы — объявлена там же, где они, чтобы не взять чужие */
+:root,
+[data-theme='light'],
+[data-mantine-color-scheme='light'],
+[data-theme='dark'],
+[data-mantine-color-scheme='dark'] {
+  --nk-backdrop:
+    radial-gradient(640px circle at 0% 30%, color-mix(in srgb, var(--nk-accent) calc(var(--nk-orb) * 100%), transparent), transparent 65%),
+    radial-gradient(760px circle at 100% 0%, color-mix(in srgb, var(--nk-accent-2) calc(var(--nk-orb) * 100%), transparent), transparent 65%);
+}

@@ -87,7 +87,7 @@ function ModelTimeSeriesChart({
   title,
   actualLabel,
   predictedLabel,
-  predictedColor = "#0ea5e9",
+  predictedColor = "var(--nk-cyan)",
 }: {
   points: ModelTimeSeriesPoint[];
   locale: "ru" | "en";
@@ -110,7 +110,7 @@ function ModelTimeSeriesChart({
   const plotWidth = Math.max(chartWidth - marginLeft - marginRight, 1);
   const plotHeight = Math.max(height - marginTop - marginBottom, 1);
   const { min, max } = useMemo(() => getModelSeriesDomain(points), [points]);
-  const actualColor = "#64748b";
+  const actualColor = "var(--nk-muted)";
 
   const yToCoord = useCallback(
     (value: number) => {
@@ -193,7 +193,7 @@ function ModelTimeSeriesChart({
           <path d={predictedPath} fill="none" stroke={predictedColor} strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" />
           {activePoint ? (
             <g pointerEvents="none">
-              <line x1={activeX} x2={activeX} y1={marginTop} y2={height - marginBottom} stroke="rgba(15, 23, 42, 0.18)" strokeDasharray="4 4" />
+              <line x1={activeX} x2={activeX} y1={marginTop} y2={height - marginBottom} stroke="var(--nk-text)" strokeOpacity="0.18" strokeDasharray="4 4" />
               <circle cx={activeX} cy={activeActualY} r="4" fill={actualColor} />
               <circle cx={activeX} cy={activePredictedY} r="4" fill={predictedColor} />
             </g>
@@ -231,7 +231,7 @@ function RegressionScatterChart({
   xLabel,
   yLabel,
   lineLabel,
-  accent = "#0ea5e9",
+  accent = "var(--nk-cyan)",
 }: {
   points: RegressionScatterPoint[];
   locale: "ru" | "en";
@@ -372,8 +372,8 @@ function RegressionScatterChart({
           })}
           {activePoint ? (
             <g pointerEvents="none">
-              <line x1={activeX} x2={activeX} y1={marginTop} y2={height - marginBottom} stroke="rgba(15, 23, 42, 0.20)" strokeDasharray="4 4" />
-              <line x1={marginLeft} x2={chartWidth - marginRight} y1={activeY} y2={activeY} stroke="rgba(15, 23, 42, 0.16)" strokeDasharray="4 4" />
+              <line x1={activeX} x2={activeX} y1={marginTop} y2={height - marginBottom} stroke="var(--nk-text)" strokeOpacity="0.20" strokeDasharray="4 4" />
+              <line x1={marginLeft} x2={chartWidth - marginRight} y1={activeY} y2={activeY} stroke="var(--nk-text)" strokeOpacity="0.16" strokeDasharray="4 4" />
             </g>
           ) : null}
         </svg>
@@ -498,8 +498,8 @@ function PriceLineChart({
           <path d={path} fill="none" stroke={lineColor} strokeWidth="2.2" strokeLinejoin="round" strokeLinecap="round" />
           {activePoint ? (
             <g>
-              <line x1={activeX} x2={activeX} y1={marginTop} y2={height - marginBottom} stroke="rgba(15, 23, 42, 0.22)" strokeDasharray="4 4" />
-              <line x1={marginLeft} x2={chartWidth - marginRight} y1={activeY} y2={activeY} stroke="rgba(15, 23, 42, 0.18)" strokeDasharray="4 4" />
+              <line x1={activeX} x2={activeX} y1={marginTop} y2={height - marginBottom} stroke="var(--nk-text)" strokeOpacity="0.22" strokeDasharray="4 4" />
+              <line x1={marginLeft} x2={chartWidth - marginRight} y1={activeY} y2={activeY} stroke="var(--nk-text)" strokeOpacity="0.18" strokeDasharray="4 4" />
               <circle cx={activeX} cy={activeY} r="4" fill={lineColor} stroke="white" strokeWidth="2" />
             </g>
           ) : null}
@@ -674,8 +674,8 @@ function CandlestickChart({
           })}
           {activeCandle ? (
             <g pointerEvents="none">
-              <line x1={activeX} x2={activeX} y1={marginTop} y2={height - marginBottom} stroke="rgba(15, 23, 42, 0.22)" strokeDasharray="4 4" />
-              <line x1={marginLeft} x2={chartWidth - marginRight} y1={activeY} y2={activeY} stroke="rgba(15, 23, 42, 0.18)" strokeDasharray="4 4" />
+              <line x1={activeX} x2={activeX} y1={marginTop} y2={height - marginBottom} stroke="var(--nk-text)" strokeOpacity="0.22" strokeDasharray="4 4" />
+              <line x1={marginLeft} x2={chartWidth - marginRight} y1={activeY} y2={activeY} stroke="var(--nk-text)" strokeOpacity="0.18" strokeDasharray="4 4" />
             </g>
           ) : null}
         </svg>
@@ -968,7 +968,7 @@ export function FundamentalsDetailsPage() {
                 onClick={() => setChartMode("line")}
                 className={
                   chartMode === "line"
-                    ? "inline-flex items-center gap-2 rounded-full bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-sm"
+                    ? "inline-flex items-center gap-2 rounded-full bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground shadow-sm"
                     : "inline-flex items-center gap-2 rounded-full border border-slate-300/90 bg-white/85 px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm hover:bg-white dark:border-slate-700 dark:bg-slate-900/70 dark:text-slate-200"
                 }
               >
@@ -980,7 +980,7 @@ export function FundamentalsDetailsPage() {
                 onClick={() => setChartMode("candles")}
                 className={
                   chartMode === "candles"
-                    ? "inline-flex items-center gap-2 rounded-full bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-sm"
+                    ? "inline-flex items-center gap-2 rounded-full bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground shadow-sm"
                     : "inline-flex items-center gap-2 rounded-full border border-slate-300/90 bg-white/85 px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm hover:bg-white dark:border-slate-700 dark:bg-slate-900/70 dark:text-slate-200"
                 }
               >
@@ -1099,7 +1099,7 @@ export function FundamentalsDetailsPage() {
                   title={t("CAPM: временной ряд", "CAPM: time series")}
                   actualLabel={t("Факт", "Actual")}
                   predictedLabel={t("CAPM", "CAPM")}
-                  predictedColor="#0ea5e9"
+                  predictedColor="var(--nk-cyan)"
                 />
                 <RegressionScatterChart
                   points={capmAnalysis.modelPoints.map((point) => ({
@@ -1113,7 +1113,7 @@ export function FundamentalsDetailsPage() {
                   xLabel={t("Избыточная доходность рынка", "Market excess return")}
                   yLabel={t("Избыточная доходность акции", "Stock excess return")}
                   lineLabel={t("Линия CAPM", "CAPM line")}
-                  accent="#0ea5e9"
+                  accent="var(--nk-cyan)"
                 />
               </div>
             ) : null}
@@ -1216,7 +1216,7 @@ export function FundamentalsDetailsPage() {
                 title={t("Модель Фамы-Френча: временной ряд", "Fama-French: time series")}
                 actualLabel={t("Факт", "Actual")}
                 predictedLabel={t("Расчёт модели", "Fama-French")}
-                predictedColor="#14b8a6"
+                predictedColor="var(--nk-accent-2)"
               />
               <RegressionScatterChart
                 points={capmAnalysis.modelPoints
@@ -1232,7 +1232,7 @@ export function FundamentalsDetailsPage() {
                 xLabel={t("Расчётная доходность модели", "FF fitted return")}
                 yLabel={t("Фактическая доходность", "Actual return")}
                 lineLabel={t("Линия тренда", "Trend line")}
-                accent="#14b8a6"
+                accent="var(--nk-accent-2)"
               />
             </div>
 

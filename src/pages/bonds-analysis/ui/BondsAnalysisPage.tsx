@@ -557,7 +557,7 @@ export function BondsAnalysisPage() {
                 type="button"
                 onClick={handleRecalculate}
                 disabled={isBusy || !canRunAnalysis}
-                className="ui-primary-button bg-gradient-to-r from-amber-600 to-orange-600 px-3 py-2 text-xs hover:from-amber-700 hover:to-orange-700"
+                className="ui-primary-button px-3 py-2 text-xs hover:bg-primary/90"
               >
                 <RefreshCw className={`h-4 w-4 ${isRecalculating ? "animate-spin" : ""}`} />
                 {isRecalculating ? t("Считаем...", "Calculating...") : t("Построить по кэшу", "Build from cache")}
@@ -690,9 +690,9 @@ export function BondsAnalysisPage() {
                     <div className="h-64">
                       <ResponsiveContainer width="100%" height="100%">
                         <BarChart data={riskDistributionChartData} margin={{ top: 10, right: 18, left: 0, bottom: 8 }}>
-                          <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                          <XAxis dataKey="label" stroke="#64748b" />
-                          <YAxis allowDecimals={false} stroke="#64748b" />
+                          <CartesianGrid strokeDasharray="3 3" stroke="var(--nk-grid)" />
+                          <XAxis dataKey="label" stroke="var(--nk-muted)" />
+                          <YAxis allowDecimals={false} stroke="var(--nk-muted)" />
                           <Tooltip formatter={(value: number) => [String(value), t("Облигаций", "Bonds")]} />
                           <Bar dataKey="count" radius={[6, 6, 0, 0]}>
                             {riskDistributionChartData.map((row) => (
@@ -711,9 +711,9 @@ export function BondsAnalysisPage() {
                     <div className="h-64">
                       <ResponsiveContainer width="100%" height="100%">
                         <BarChart data={riskConfidenceChartData} margin={{ top: 10, right: 18, left: 0, bottom: 8 }}>
-                          <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                          <XAxis dataKey="label" stroke="#64748b" />
-                          <YAxis unit="%" domain={[0, 100]} stroke="#64748b" />
+                          <CartesianGrid strokeDasharray="3 3" stroke="var(--nk-grid)" />
+                          <XAxis dataKey="label" stroke="var(--nk-muted)" />
+                          <YAxis unit="%" domain={[0, 100]} stroke="var(--nk-muted)" />
                           <Tooltip formatter={(value: number | null) => [value == null ? "—" : `${value}%`, t("Уверенность", "Confidence")]} />
                           <Bar dataKey="avgConfidence" radius={[6, 6, 0, 0]}>
                             {riskConfidenceChartData.map((row) => (
@@ -741,12 +741,12 @@ export function BondsAnalysisPage() {
                   <div className="h-64">
                     <ResponsiveContainer width="100%" height="100%">
                       <BarChart data={vifChartData} layout="vertical" margin={{ top: 5, right: 24, left: 90, bottom: 5 }}>
-                        <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                        <XAxis type="number" stroke="#64748b" />
-                        <YAxis type="category" dataKey="feature" stroke="#64748b" width={90} />
+                        <CartesianGrid strokeDasharray="3 3" stroke="var(--nk-grid)" />
+                        <XAxis type="number" stroke="var(--nk-muted)" />
+                        <YAxis type="category" dataKey="feature" stroke="var(--nk-muted)" width={90} />
                         <Tooltip formatter={(value: number) => value.toFixed(2)} />
                         {riskClassification.factor_analysis.vif_threshold ? (
-                          <ReferenceLine x={riskClassification.factor_analysis.vif_threshold} stroke="#dc2626" strokeDasharray="4 4" />
+                          <ReferenceLine x={riskClassification.factor_analysis.vif_threshold} stroke="var(--nk-down)" strokeDasharray="4 4" />
                         ) : null}
                         <Bar dataKey="vif" radius={[0, 4, 4, 0]}>
                           {vifChartData.map((row, idx) => (
@@ -878,7 +878,7 @@ export function BondsAnalysisPage() {
                           onClick={() => setCurrentPage(page)}
                           className={`inline-flex min-w-10 items-center justify-center rounded-lg border px-3 py-2 text-sm ${
                             currentPage === page
-                              ? "border-amber-500 bg-amber-500 text-white"
+                              ? "border-primary bg-primary text-primary-foreground"
                               : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
                           }`}
                         >

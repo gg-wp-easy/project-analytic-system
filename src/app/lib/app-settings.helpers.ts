@@ -25,7 +25,11 @@ export function applyAppTheme(theme: Theme): void {
   }
 
   const root = document.documentElement;
-  const toggle = () => root.classList.toggle("dark", theme === "dark");
+  // .dark — для вариантов Tailwind, data-theme — для палитры бренда (nk-palette.css)
+  const toggle = () => {
+    root.classList.toggle("dark", theme === "dark");
+    root.dataset.theme = theme;
+  };
   const startViewTransition = (document as Document & {
     startViewTransition?: (update: () => void) => unknown;
   }).startViewTransition?.bind(document);

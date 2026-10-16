@@ -595,8 +595,8 @@ export function UnderlyingOptionsPage() {
                         onClick={() => setSideFilter(side)}
                         className={
                           isActive
-                            ? "inline-flex items-center rounded-full bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-sm"
-                            : "inline-flex items-center rounded-full bg-blue-50 px-4 py-2 text-sm font-semibold text-blue-700 transition hover:bg-blue-100 dark:bg-blue-950/40 dark:text-blue-300 dark:hover:bg-blue-950/70"
+                            ? "inline-flex items-center rounded-full bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground shadow-sm"
+                            : "inline-flex items-center rounded-full bg-accent px-4 py-2 text-sm font-semibold text-accent-foreground transition hover:bg-primary/15"
                         }
                       >
                         {getOptionSideLabel(side, locale)}
@@ -641,8 +641,8 @@ export function UnderlyingOptionsPage() {
                         onClick={() => setSortDirection(item.value)}
                         className={
                           isActive
-                            ? "inline-flex items-center rounded-full bg-emerald-600 px-4 py-2 text-sm font-semibold text-white shadow-sm"
-                            : "inline-flex items-center rounded-full bg-emerald-50 px-4 py-2 text-sm font-semibold text-emerald-700 transition hover:bg-emerald-100 dark:bg-emerald-950/40 dark:text-emerald-300 dark:hover:bg-emerald-950/70"
+                            ? "inline-flex items-center rounded-full bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground shadow-sm"
+                            : "inline-flex items-center rounded-full bg-accent px-4 py-2 text-sm font-semibold text-accent-foreground transition hover:bg-primary/15"
                         }
                       >
                         {item.label}

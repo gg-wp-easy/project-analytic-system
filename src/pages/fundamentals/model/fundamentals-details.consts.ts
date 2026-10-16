@@ -45,11 +45,11 @@ export const FUNDAMENTALS_RANGE_CONFIG: Record<ChartRange, RangeConfig> = {
 
 export const FUNDAMENTALS_RANGE_ORDER: ChartRange[] = ["1D", "1W", "1M", "1Y"];
 
-export const FUNDAMENTALS_CHART_UP_COLOR = "#16a34a";
-export const FUNDAMENTALS_CHART_DOWN_COLOR = "#64748b";
-export const FUNDAMENTALS_CHART_UP_MUTED_COLOR = "rgba(22, 163, 74, 0.16)";
-export const FUNDAMENTALS_CANDLE_DOWN_COLOR = "#e11d48";
-export const FUNDAMENTALS_CANDLE_DOWN_MUTED_COLOR = "rgba(225, 29, 72, 0.16)";
+export const FUNDAMENTALS_CHART_UP_COLOR = "var(--nk-up)";
+export const FUNDAMENTALS_CHART_DOWN_COLOR = "var(--nk-muted)";
+export const FUNDAMENTALS_CHART_UP_MUTED_COLOR = "color-mix(in srgb, var(--nk-up) 16%, transparent)";
+export const FUNDAMENTALS_CANDLE_DOWN_COLOR = "var(--nk-down)";
+export const FUNDAMENTALS_CANDLE_DOWN_MUTED_COLOR = "color-mix(in srgb, var(--nk-down) 16%, transparent)";
 
 export const FUNDAMENTAL_METRIC_ITEMS: FundamentalMetricItem[] = [
   { key: "marketCapBn", metric: "marketCapBn", labelRu: "Капитализация, млрд", labelEn: "Market Cap, bn" },

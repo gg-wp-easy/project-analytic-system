@@ -1,111 +1,113 @@
 @custom-variant dark (&:is(.dark *));
 
+/* Цвета бренда (--nk-*) — из nk-tech-brand/palette (nk-palette.css). Тему выбирает атрибут
+   data-theme на <html>: его ставит applyAppTheme вместе с классом .dark для Tailwind.
+   Основной цвет — фиолетовый бренда: красный в аналитике означает падение и риск. */
 :root {
   --font-size: 16px;
   --font-sans: var(--app-font-sans);
   --font-display: var(--app-font-display);
   --font-mono: var(--app-font-mono);
-  --background: #f6f8fb;
-  --foreground: #172033;
-  --card: #ffffff;
-  --card-foreground: #172033;
-  --popover: #ffffff;
-  --popover-foreground: #172033;
-  --primary: #0f766e;
-  --primary-foreground: oklch(1 0 0);
-  --secondary: #eef2f7;
-  --secondary-foreground: #273447;
-  --muted: #f1f5f9;
-  --muted-foreground: #64748b;
-  --accent: #e8f3ff;
-  --accent-foreground: #1f3a56;
-  --destructive: #dc2626;
+  --background: var(--nk-bg);
+  --foreground: var(--nk-text);
+  --card: var(--nk-surface);
+  --card-foreground: var(--nk-text);
+  --popover: var(--nk-surface);
+  --popover-foreground: var(--nk-text);
+  --primary: var(--nk-accent-2);
+  --primary-foreground: #ffffff;
+  --secondary: var(--nk-surface-2);
+  --secondary-foreground: var(--nk-neutral-800);
+  --muted: var(--nk-surface-2);
+  --muted-foreground: var(--nk-muted);
+  --accent: color-mix(in srgb, var(--nk-accent-2) 9%, var(--nk-surface));
+  --accent-foreground: var(--nk-violet-800);
+  --destructive: var(--nk-down);
   --destructive-foreground: #ffffff;
-  --border: rgba(100, 116, 139, 0.24);
-  --input: #cbd5e1;
-  --input-background: #ffffff;
-  --switch-background: #cbd5e1;
+  --border: var(--nk-border);
+  --input: var(--nk-neutral-300);
+  --input-background: var(--nk-surface);
+  --switch-background: var(--nk-neutral-300);
   --font-weight-medium: 600;
   --font-weight-normal: 400;
-  --ring: rgba(15, 118, 110, 0.24);
-  --chart-1: #0ea5a4;
-  --chart-2: #2563eb;
-  --chart-3: #f59e0b;
-  --chart-4: #e11d48;
-  --chart-5: #8b5cf6;
+  --ring: color-mix(in srgb, var(--nk-accent-2) 28%, transparent);
+  --chart-1: var(--nk-accent-2);
+  --chart-2: var(--nk-cyan);
+  --chart-3: var(--nk-viz-4);
+  --chart-4: var(--nk-accent);
+  --chart-5: var(--nk-viz-1);
   --radius: 0.5rem;
-  --sidebar: oklch(0.985 0 0);
-  --sidebar-foreground: oklch(0.145 0 0);
-  --sidebar-primary: #030213;
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.97 0 0);
-  --sidebar-accent-foreground: oklch(0.205 0 0);
-  --sidebar-border: oklch(0.922 0 0);
-  --sidebar-ring: oklch(0.708 0 0);
-  --page-highlight: rgba(15, 118, 110, 0.09);
-  --page-highlight-secondary: rgba(37, 99, 235, 0.07);
-  --surface-shadow: 0 12px 32px -26px rgba(15, 23, 42, 0.28);
-  --surface-shadow-strong: 0 18px 44px -30px rgba(15, 23, 42, 0.34);
+  --sidebar: var(--nk-surface);
+  --sidebar-foreground: var(--nk-text);
+  --sidebar-primary: var(--nk-accent-2);
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: var(--nk-hover);
+  --sidebar-accent-foreground: var(--nk-text);
+  --sidebar-border: var(--nk-border);
+  --sidebar-ring: var(--ring);
+  /* текстура бренда: малиновое и фиолетовое свечение, яркость — --nk-orb темы */
+  --page-highlight: color-mix(in srgb, var(--nk-accent) calc(var(--nk-orb) * 100%), transparent);
+  --page-highlight-secondary: color-mix(in srgb, var(--nk-accent-2) calc(var(--nk-orb) * 100%), transparent);
+  --surface-shadow: 0 12px 32px -26px rgba(52, 30, 96, 0.28);
+  --surface-shadow-strong: 0 18px 44px -30px rgba(52, 30, 96, 0.34);
   --scrollbar-size: 12px;
-  --scrollbar-track: rgba(226, 232, 240, 0.72);
-  --scrollbar-track-strong: rgba(203, 213, 225, 0.82);
-  --scrollbar-thumb-color: rgba(100, 116, 139, 0.58);
-  --scrollbar-thumb: linear-gradient(180deg, rgba(148, 163, 184, 0.72), rgba(100, 116, 139, 0.64));
-  --scrollbar-thumb-hover-color: rgba(71, 85, 105, 0.74);
-  --scrollbar-thumb-hover: linear-gradient(180deg, rgba(125, 140, 158, 0.8), rgba(71, 85, 105, 0.74));
-  --scrollbar-corner: rgba(248, 250, 252, 0.92);
+  --scrollbar-track: color-mix(in srgb, var(--nk-neutral-100) 72%, transparent);
+  --scrollbar-track-strong: color-mix(in srgb, var(--nk-neutral-200) 82%, transparent);
+  --scrollbar-thumb-color: color-mix(in srgb, var(--nk-neutral-500) 58%, transparent);
+  --scrollbar-thumb: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--nk-neutral-400) 72%, transparent),
+    color-mix(in srgb, var(--nk-neutral-500) 64%, transparent)
+  );
+  --scrollbar-thumb-hover-color: color-mix(in srgb, var(--nk-neutral-600) 74%, transparent);
+  --scrollbar-thumb-hover: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--nk-neutral-500) 80%, transparent),
+    color-mix(in srgb, var(--nk-neutral-600) 74%, transparent)
+  );
+  --scrollbar-corner: var(--nk-surface-2);
 }
 
 .dark {
-  --background: #0f172a;
-  --foreground: #e5edf5;
-  --card: #151c2b;
-  --card-foreground: #e5edf5;
-  --popover: #151c2b;
-  --popover-foreground: #e5edf5;
-  --primary: #5eead4;
-  --primary-foreground: #042f2e;
-  --secondary: #1d2738;
-  --secondary-foreground: #e5edf5;
-  --muted: #202a3a;
-  --muted-foreground: #a8b3c2;
-  --accent: #153047;
-  --accent-foreground: #d7f1ff;
-  --destructive: #f87171;
-  --destructive-foreground: #450a0a;
-  --border: rgba(148, 163, 184, 0.2);
-  --input: #263244;
-  --input-background: rgb(15 23 42 / 0.82);
-  --ring: rgba(94, 234, 212, 0.28);
-  --font-weight-medium: 600;
-  --font-weight-normal: 400;
-  --chart-1: #2dd4bf;
-  --chart-2: #60a5fa;
-  --chart-3: #fbbf24;
-  --chart-4: #fb7185;
-  --chart-5: #a78bfa;
-  --sidebar: oklch(0.205 0 0);
-  --sidebar-foreground: oklch(0.985 0 0);
-  --sidebar-primary: oklch(0.488 0.243 264.376);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.269 0 0);
-  --sidebar-accent-foreground: oklch(0.985 0 0);
-  --sidebar-border: oklch(0.269 0 0);
-  --sidebar-ring: oklch(0.439 0 0);
-  --page-highlight: rgba(45, 212, 191, 0.14);
-  --page-highlight-secondary: rgba(96, 165, 250, 0.09);
+  --secondary-foreground: var(--nk-neutral-200);
+  --accent: color-mix(in srgb, var(--nk-accent-2) 18%, var(--nk-surface));
+  --accent-foreground: var(--nk-violet-200);
+  --input: var(--nk-neutral-700);
+  --input-background: color-mix(in srgb, var(--nk-bg) 82%, transparent);
+  --ring: color-mix(in srgb, var(--nk-accent-2) 32%, transparent);
   --surface-shadow: 0 28px 80px -42px rgba(0, 0, 0, 0.78);
   --surface-shadow-strong: 0 36px 100px -46px rgba(0, 0, 0, 0.86);
-  --scrollbar-track: rgba(30, 41, 59, 0.9);
-  --scrollbar-track-strong: rgba(51, 65, 85, 0.96);
-  --scrollbar-thumb-color: rgba(148, 163, 184, 0.72);
-  --scrollbar-thumb: linear-gradient(180deg, rgba(148, 163, 184, 0.88), rgba(100, 116, 139, 0.82));
-  --scrollbar-thumb-hover-color: rgba(203, 213, 225, 0.82);
-  --scrollbar-thumb-hover: linear-gradient(180deg, rgba(203, 213, 225, 0.9), rgba(148, 163, 184, 0.84));
-  --scrollbar-corner: rgba(15, 23, 42, 0.96);
+  --scrollbar-track: color-mix(in srgb, var(--nk-neutral-800) 90%, transparent);
+  --scrollbar-track-strong: color-mix(in srgb, var(--nk-neutral-700) 96%, transparent);
+  --scrollbar-thumb-color: color-mix(in srgb, var(--nk-neutral-400) 72%, transparent);
+  --scrollbar-thumb: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--nk-neutral-400) 88%, transparent),
+    color-mix(in srgb, var(--nk-neutral-500) 82%, transparent)
+  );
+  --scrollbar-thumb-hover-color: color-mix(in srgb, var(--nk-neutral-300) 82%, transparent);
+  --scrollbar-thumb-hover: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--nk-neutral-300) 90%, transparent),
+    color-mix(in srgb, var(--nk-neutral-400) 84%, transparent)
+  );
+  --scrollbar-corner: var(--nk-bg);
 }
 
 @theme inline {
+  /* классы slate-* во всём приложении — нейтральная шкала бренда: розово-лавандовая в светлой
+     теме, индиговая в тёмной (--nk-neutral-* меняются вместе с темой) */
+  --color-slate-50: var(--nk-neutral-50);
+  --color-slate-100: var(--nk-neutral-100);
+  --color-slate-200: var(--nk-neutral-200);
+  --color-slate-300: var(--nk-neutral-300);
+  --color-slate-400: var(--nk-neutral-400);
+  --color-slate-500: var(--nk-neutral-500);
+  --color-slate-600: var(--nk-neutral-600);
+  --color-slate-700: var(--nk-neutral-700);
+  --color-slate-800: var(--nk-neutral-800);
+  --color-slate-900: var(--nk-neutral-900);
+  --color-slate-950: var(--nk-neutral-950);
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-card: var(--card);
@@ -285,65 +287,66 @@
   }
 
   ::selection {
-    background-color: rgba(59, 130, 246, 0.22);
+    background-color: color-mix(in srgb, var(--nk-accent-2) 26%, transparent);
   }
 
   :root:not(.dark) .bg-white {
-    background-color: rgb(255 255 255 / var(--tw-bg-opacity, 1)) !important;
+    background-color: var(--nk-surface) !important;
   }
 
   :root:not(.dark) .bg-slate-50 {
-    background-color: rgb(248 250 252 / var(--tw-bg-opacity, 1)) !important;
+    background-color: var(--nk-neutral-50) !important;
   }
 
   :root:not(.dark) .border-slate-200 {
-    border-color: rgb(226 232 240 / var(--tw-border-opacity, 1)) !important;
+    border-color: var(--nk-neutral-200) !important;
   }
 
   :root:not(.dark) .border-slate-300 {
-    border-color: rgb(203 213 225 / var(--tw-border-opacity, 1)) !important;
+    border-color: var(--nk-neutral-300) !important;
   }
 
   :root:not(.dark) .text-slate-900 {
-    color: rgb(15 23 42 / var(--tw-text-opacity, 1)) !important;
+    color: var(--nk-neutral-900) !important;
   }
 
   :root:not(.dark) .text-slate-700 {
-    color: rgb(51 65 85 / var(--tw-text-opacity, 1)) !important;
+    color: var(--nk-neutral-700) !important;
   }
 
   :root:not(.dark) .text-slate-600 {
-    color: rgb(71 85 105 / var(--tw-text-opacity, 1)) !important;
+    color: var(--nk-neutral-600) !important;
   }
 
   :root:not(.dark) .text-slate-500 {
-    color: rgb(100 116 139 / var(--tw-text-opacity, 1)) !important;
+    color: var(--nk-neutral-500) !important;
   }
 
   :root:not(.dark) .hover\:bg-slate-50:hover {
-    background-color: rgb(248 250 252 / var(--tw-bg-opacity, 1)) !important;
+    background-color: var(--nk-neutral-50) !important;
   }
 
+  /* светлые классы без пары dark: — в тёмной теме берут цвета палитры */
   .dark .bg-white {
-    background-color: rgb(15 23 42) !important;
+    background-color: var(--nk-surface) !important;
   }
 
   .dark .border-slate-200 {
-    border-color: rgb(51 65 85) !important;
+    border-color: var(--nk-border) !important;
   }
 
   .dark .text-slate-900 {
-    color: rgb(241 245 249) !important;
+    color: var(--nk-text) !important;
   }
 
   .dark .text-slate-700,
   .dark .text-slate-600,
   .dark .text-slate-500 {
-    color: rgb(148 163 184) !important;
+    color: var(--nk-muted) !important;
   }
 
   .dark .hover\:bg-slate-50:hover {
-    background-color: rgb(30 41 59) !important;
+    background-color: var(--nk-hover) !important;
   }
 }
 
@@ -438,15 +441,15 @@
   }
 
   .ui-input {
-    @apply w-full rounded-lg border px-3.5 py-2.5 text-sm shadow-sm outline-none placeholder:text-slate-400 focus:ring-4 dark:border-slate-700 dark:bg-slate-950/80 dark:text-slate-100 dark:focus:border-teal-400 dark:focus:ring-teal-500/20;
+    @apply w-full rounded-lg border px-3.5 py-2.5 text-sm shadow-sm outline-none placeholder:text-slate-400 focus:ring-4 dark:border-slate-700 dark:bg-slate-950/80 dark:text-slate-100;
     border-color: var(--input);
     background-color: var(--input-background);
     color: var(--foreground);
   }
 
   .ui-input:focus {
-    border-color: rgb(20 150 136 / 0.72);
-    --tw-ring-color: rgb(204 251 241 / 0.54);
+    border-color: color-mix(in srgb, var(--nk-accent-2) 72%, transparent);
+    --tw-ring-color: color-mix(in srgb, var(--nk-accent-2) 18%, transparent);
   }
 
   .ui-table-shell {
@@ -469,26 +472,26 @@
 
   .ui-data-table thead tr {
     @apply border-b dark:border-slate-800;
-    border-color: rgb(193 207 201 / 0.94);
+    border-color: var(--nk-border);
   }
 
   .ui-data-table th {
     @apply px-4 py-3 text-left text-[0.72rem] font-semibold leading-5 dark:text-slate-400;
-    color: #707c8b;
+    color: var(--nk-muted);
     white-space: normal;
     text-wrap: balance;
   }
 
   .ui-data-table td {
     @apply px-4 py-3 align-top leading-6 dark:text-slate-300;
-    color: #4c5868;
+    color: var(--nk-neutral-700);
     white-space: normal;
     overflow-wrap: break-word;
   }
 
   .ui-data-table tbody tr {
     @apply border-b dark:border-slate-800/80;
-    border-color: rgb(218 228 223 / 0.96);
+    border-color: var(--nk-grid);
   }
 
   .ui-data-table tbody tr:last-child {

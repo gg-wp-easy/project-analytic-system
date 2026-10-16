@@ -10,7 +10,7 @@ import type {
   TableSkeletonProps,
 } from "../model";
 
-export function InlineLoader({ label, className, accentClassName = "text-blue-600" }: InlineLoaderProps) {
+export function InlineLoader({ label, className, accentClassName = "text-primary" }: InlineLoaderProps) {
   return (
     <div
       className={cn(
@@ -29,7 +29,7 @@ export function InlineLoader({ label, className, accentClassName = "text-blue-60
 export function PageLoadingState({
   title,
   subtitle,
-  accentClassName = "text-blue-600",
+  accentClassName = "text-primary",
 }: PageLoadingStateProps) {
   const barClassName = getLoadingBarClassName(accentClassName);
 
@@ -236,7 +236,7 @@ export function ChartSkeleton({
   title = "Preparing visualization",
   subtitle,
   variant = "bars",
-  accentClassName = "text-blue-600",
+  accentClassName = "text-primary",
 }: ChartSkeletonProps) {
   const barClassName = getLoadingBarClassName(accentClassName);
 

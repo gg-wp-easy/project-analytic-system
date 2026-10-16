@@ -1,14 +1,15 @@
 import type { AnalysisShellAccent } from "./analysis-shell.types";
 
+// В тёмной теме шапка раздела — лёгкий оттенок цвета раздела поверх «ночи» бренда, без заливки
 export const ANALYSIS_SHELL_HERO_ACCENT_CLASSES: Record<AnalysisShellAccent, string> = {
-  violet: "border-violet-200 bg-violet-50 dark:border-white/12 dark:bg-indigo-800",
-  emerald: "border-emerald-200 bg-emerald-50 dark:border-white/12 dark:bg-teal-800",
-  orange: "border-orange-200 bg-orange-50 dark:border-white/12 dark:bg-amber-800",
-  cyan: "border-cyan-200 bg-cyan-50 dark:border-white/12 dark:bg-cyan-800",
-  teal: "border-teal-200 bg-teal-50 dark:border-white/12 dark:bg-teal-800",
+  violet: "border-violet-200 bg-violet-50 dark:border-violet-400/20 dark:bg-violet-500/10",
+  emerald: "border-emerald-200 bg-emerald-50 dark:border-emerald-400/20 dark:bg-emerald-500/10",
+  orange: "border-orange-200 bg-orange-50 dark:border-orange-400/20 dark:bg-orange-500/10",
+  cyan: "border-cyan-200 bg-cyan-50 dark:border-cyan-400/20 dark:bg-cyan-500/10",
+  teal: "border-teal-200 bg-teal-50 dark:border-teal-400/20 dark:bg-teal-500/10",
   slate: "border-slate-200 bg-white dark:border-white/12 dark:bg-slate-800",
-  blue: "border-sky-200 bg-sky-50 dark:border-white/12 dark:bg-blue-800",
-  amber: "border-amber-200 bg-amber-50 dark:border-white/12 dark:bg-amber-700",
+  blue: "border-sky-200 bg-sky-50 dark:border-sky-400/20 dark:bg-blue-500/10",
+  amber: "border-amber-200 bg-amber-50 dark:border-amber-400/20 dark:bg-amber-500/10",
 };
 
 export const ANALYSIS_SHELL_ICON_ACCENT_CLASSES: Record<AnalysisShellAccent, string> = {

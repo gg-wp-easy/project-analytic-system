@@ -66,14 +66,14 @@ export function StockAnalysisPage() {
                     <Icon className="h-6 w-6 text-white" />
                   </span>
                   <div className="space-y-2">
-                    <div className="font-semibold text-slate-900 transition-colors group-hover:text-blue-600 dark:text-slate-100">
+                    <div className="font-semibold text-slate-900 transition-colors group-hover:text-primary dark:text-slate-100">
                       {t(tool.title)}
                     </div>
                     <p className="text-sm leading-6 text-slate-600 dark:text-slate-300">
                       {t(tool.description)}
                     </p>
                   </div>
-                  <div className="flex items-center gap-2 text-sm font-medium text-blue-600 dark:text-blue-400">
+                  <div className="flex items-center gap-2 text-sm font-medium text-primary">
                     {t({ ru: "Открыть", en: "Open" })}
                     <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
                   </div>

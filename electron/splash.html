@@ -5,29 +5,30 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>NK-Tech Finance · Инвестиционная аналитика</title>
     <style>
+      /* Цвета — палитра бренда NK-Tech Finance (nk-tech-brand/palette): фон, текст, градиент. */
       :root {
         color-scheme: light;
-        --brand: #c8102e;
-        --brand-dark: #5a0a14;
-        --bg: #ffffff;
-        --bg-accent: #fdf1f3;
-        --border: #e2e8f0;
-        --text: #1e293b;
-        --text-muted: #64748b;
-        --text-faint: #94a3b8;
-        --bar-track: #f1e4e6;
+        --brand: #c81d45;
+        --brand-dark: #241a33;
+        --bg: #fff6f8;
+        --bg-accent: #ffe1e7;
+        --border: #f0d3da;
+        --text: #241a33;
+        --text-muted: #776a90;
+        --text-faint: #a896b8;
+        --bar-track: #fff0f3;
       }
       :root[data-theme="dark"] {
         color-scheme: dark;
-        --brand: #f0596f;
-        --brand-dark: #e5edf5;
-        --bg: #0f172a;
-        --bg-accent: #1f1830;
-        --border: #202a3a;
-        --text: #e5edf5;
-        --text-muted: #94a3b8;
-        --text-faint: #64748b;
-        --bar-track: #202a3a;
+        --brand: #ff8aa1;
+        --brand-dark: #eef0ff;
+        --bg: #0a0c1a;
+        --bg-accent: #1d1736;
+        --border: #282c52;
+        --text: #eef0ff;
+        --text-muted: #9ba1cc;
+        --text-faint: #6f75a3;
+        --bar-track: #1b1f42;
       }
       * {
         box-sizing: border-box;
@@ -111,7 +112,7 @@
         width: 36%;
         height: 100%;
         border-radius: inherit;
-        background: linear-gradient(90deg, var(--brand-dark) 0%, var(--brand) 100%);
+        background: linear-gradient(90deg, #ff4d6d, #8b5cf6 55%, #38b6ff);
         animation: loading 1.2s ease-in-out infinite;
       }
       @keyframes loading {

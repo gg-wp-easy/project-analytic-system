@@ -18,7 +18,7 @@ export function NotFound() {
         <p className="text-lg text-slate-600 dark:text-slate-300">{t(APP_NOT_FOUND_TEXT.description)}</p>
         <Link
           to={APP_ABSOLUTE_ROUTE_PATHS.root}
-          className="inline-block bg-blue-600 text-white px-6 py-3 rounded-lg font-medium hover:bg-blue-700 transition-colors"
+          className="inline-block bg-primary text-primary-foreground px-6 py-3 rounded-lg font-medium hover:bg-primary/90 transition-colors"
         >
           {t(APP_NOT_FOUND_TEXT.action)}
         </Link>
