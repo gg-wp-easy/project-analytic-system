@@ -18,7 +18,7 @@ All orchestration is done through Node.js scripts from `scripts/`. No `.sh` or `
 
 ### Frontend
 
-- `npm run dev` - start Vite in browser mode; it proxies `/auth`, `/analytics` and `/market` to the platform gateway (`make dev` in `../nk-platform`, `http://127.0.0.1:8000`, override with `PLATFORM_URL`)
+- `npm run dev` - start Vite in browser mode on http://localhost:5175; it proxies `/auth`, `/analytics` and `/market` to the platform gateway (`make dev` in `../nk-platform`, `http://127.0.0.1:8000`, override with `PLATFORM_URL`)
 - `npm run build` - build the frontend (no Electron icon generation); `VITE_PLATFORM_URL` sets the server address, empty means the same origin
 - `npm run test:scripts` - tests of the build scripts
 
@@ -37,7 +37,7 @@ The server caches each currency/limit universe in memory for 15 minutes (coupon 
 References: [CFA Institute overview of cash-flow matching and immunization](https://www.cfainstitute.org/insights/professional-learning/refresher-readings/2026/overview-fixed-income-portfolio-management), [T-Bank `GetBondCoupons` API](https://developer.tbank.ru/invest/api/instruments-service-get-bond-coupons), and [Investor.gov bond basics](https://www.investor.gov/introduction-investing/investing-basics/investment-products/bonds-or-fixed-income-products).
 ### Electron
 
-- `npm run electron:dev` - start Electron in dev mode (needs `make dev` in `../nk-platform`)
+- `npm run electron:dev` - start Electron in dev mode, Vite on :5175 (needs `make dev` in `../nk-platform`)
 - `npm run electron:build:local` - build an unpacked app for the host architecture in `release/<os>-local`, without installers or ASAR backup; reuses the output directory
 - `npm run electron:build` - build Electron for the current OS
 - `npm run electron:build:win` - build Windows artifacts
@@ -61,10 +61,9 @@ References: [CFA Institute overview of cash-flow matching and immunization](http
 
 ### First setup on another machine
 
-1. `make dev-db` and `make dev` in `../nk-platform` (the platform with a T-Invest token for `market`)
-2. `npm install`
-3. `npm run electron:dev` (or `npm run dev` in the browser)
-4. Sign in; a Pro plan is granted until billing exists: `uv run --frozen python -m app.admin plan <email> pro` in `nk-platform/services/auth` (on a server: `docker compose exec auth python -m app.admin plan <email> pro`)
+1. `npm install` here and `make install` in `../nk-platform` (a T-Invest token for `market` goes to `services/market/.env`)
+2. `make dev APPS=analytics` in `../nk-platform` — PostgreSQL, the platform and this app in Electron in one command (`APPS=analytics-web` — in the browser). Separately: `make dev` there and `npm run electron:dev` (or `npm run dev`) here
+3. Sign in; a Pro plan is granted until billing exists: `uv run --frozen python -m app.admin plan <email> pro` in `nk-platform/services/auth` (on a server: `docker compose exec auth python -m app.admin plan <email> pro`)
 
 ### Full production build
 

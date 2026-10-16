@@ -61,7 +61,7 @@ function parseArgs(argv) {
     clean: false,
     skipBuilder: false,
     skipProtectAsar: false,
-    vitePort: 5173,
+    vitePort: 5175,
     viteHost: "127.0.0.1",
     outputDir: null,
     appVersion: null,
@@ -126,7 +126,7 @@ function parseArgs(argv) {
 function printHelp() {
   console.log(`
 Usage:
-  node scripts/electron.cjs dev [--vite-port=5173]
+  node scripts/electron.cjs dev [--vite-port=5175]
   node scripts/electron.cjs build [--platform=current|win|linux|mac] [--profile=standard|msi|store|local] [--clean]
                                 [--skip-icons] [--skip-builder] [--skip-protect-asar]
                                 [--version-mode=timestamp|package|branch] [--app-version=x.y.z]
@@ -149,7 +149,9 @@ async function runDev(options) {
 
   console.log("API — платформа NK-Tech Finance через прокси Vite: запустите make dev в ../nk-platform.");
   logStep("Starting Vite dev server");
-  const viteProcess = spawn(nodeBinary, [viteCli, "--host", options.viteHost], {
+  const viteProcess = spawn(nodeBinary, [
+    viteCli, "--host", options.viteHost, "--port", String(options.vitePort), "--strictPort",
+  ], {
     cwd: repoRoot,
     env: process.env,
     stdio: "inherit",
@@ -171,9 +173,12 @@ async function runDev(options) {
   }
 
   logStep("Starting Electron dev shell");
+  const electronEnv = { ...process.env, ELECTRON_RENDERER_URL: `http://${options.viteHost}:${options.vitePort}` };
+  // процессы VS Code передают ELECTRON_RUN_AS_NODE=1 — с ним Electron запустился бы как Node
+  delete electronEnv.ELECTRON_RUN_AS_NODE;
   const electronProcess = spawn(electronBinary, ["."], {
     cwd: repoRoot,
-    env: process.env,
+    env: electronEnv,
     stdio: "inherit",
     shell: false,
     windowsHide: false,

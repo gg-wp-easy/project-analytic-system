@@ -314,7 +314,8 @@ function createMainWindow() {
   });
 
   if (isDev) {
-    mainWindow.loadURL("http://localhost:5173");
+    // адрес Vite передаёт scripts/electron.cjs dev (--vite-host, --vite-port)
+    mainWindow.loadURL(process.env.ELECTRON_RENDERER_URL || "http://127.0.0.1:5175");
     mainWindow.webContents.openDevTools({ mode: "detach" });
   } else {
     mainWindow.loadFile(path.join(__dirname, "..", "dist", "index.html"));

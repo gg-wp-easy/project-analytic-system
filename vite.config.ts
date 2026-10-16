@@ -72,7 +72,9 @@ export default defineConfig(({ mode }) => ({
     },
   },
   server: {
-    port: 5173,
+    // порты dev-серверов клиентов NK-Tech Finance: трекер 5173, сайт 5174, аналитика 5175, финанализ 5176
+    port: 5175,
+    strictPort: true,
     watch: {
       ignored: [
         '**/.git/**',
