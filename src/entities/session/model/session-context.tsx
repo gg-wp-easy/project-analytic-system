@@ -16,6 +16,7 @@ import {
   refreshRequest,
   registerRequest,
   SessionApiError,
+  trialRequest,
 } from "../api/session.api";
 import { loadStoredSession, saveStoredSession } from "../lib/session-storage.helpers";
 import type {
@@ -128,9 +129,16 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     }
   }, [store]);
 
+  const startTrial = useCallback(async () => {
+    const { user, access_token } = await trialRequest();
+    if (sessionRef.current) {
+      store({ ...sessionRef.current, user, accessToken: access_token });
+    }
+  }, [store]);
+
   const value = useMemo<SessionContextValue>(
-    () => ({ status, user, login, register, logout, reload }),
-    [status, user, login, register, logout, reload],
+    () => ({ status, user, login, register, logout, reload, startTrial }),
+    [status, user, login, register, logout, reload, startTrial],
   );
 
   return <SessionContext.Provider value={value}>{children}</SessionContext.Provider>;

@@ -2,7 +2,7 @@
 
 Part of the NK-Tech Finance product family (repository `project-site-analytic-system`). App icons and logos come from the shared brand kit `../nk-tech-brand`: run `node nk-tech-brand/build.mjs --sync`, then `npm run icons:create -- --force`.
 
-Electron desktop application, a thin client of the NK-Tech Finance platform (`../nk-platform`). Since platform step 5 it bundles no Python: the user signs in with their NK-Tech Finance account (service `auth`), calculations run in the `analytics` service, and T-Invest market data comes through the `market` service with the server token, so no personal T-Bank token is needed. The app is part of the **Pro** plan; other plans see a plan screen after signing in.
+Electron desktop application, a thin client of the NK-Tech Finance platform (`../nk-platform`). Since platform step 5 it bundles no Python: the user signs in with their NK-Tech Finance account (service `auth`), calculations run in the `analytics` service, and T-Invest market data comes through the `market` service with the server token, so no personal T-Bank token is needed. The app is part of the **Pro** plan; other plans see a plan screen after signing in, with a one-time free 30-day Pro trial button (`POST /auth/trial`; the trial also unlocks the financial analysis app).
 
 | Path | Server |
 | --- | --- |
@@ -63,7 +63,7 @@ References: [CFA Institute overview of cash-flow matching and immunization](http
 
 1. `npm install` here and `make install` in `../nk-platform` (a T-Invest token for `market` goes to `.env` there, see `.env.example`)
 2. `make dev APPS=analytics` in `../nk-platform` — PostgreSQL, the platform and this app in Electron in one command (`APPS=analytics-web` — in the browser). Separately: `make dev` there and `npm run electron:dev` (or `npm run dev`) here
-3. Sign in; a Pro plan is granted until billing exists: `uv run --frozen python -m app.admin plan <email> pro` in `nk-platform/services/auth` (on a server: `docker compose exec auth python -m app.admin plan <email> pro`)
+3. Sign in; a Pro plan is granted until billing exists: `uv run --frozen python -m app.admin plan <email> pro` in `nk-platform/services/auth` (on a server: `docker compose exec auth python -m app.admin plan <email> pro`), or start the 30-day trial from the plan screen (`python -m app.admin trial-reset <email>` allows it again)
 
 ### Full production build
 

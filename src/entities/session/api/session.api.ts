@@ -57,6 +57,24 @@ export async function logoutRequest(refreshToken: string): Promise<void> {
   }
 }
 
+/** Пробный «Про»: профиль и новый access-токен с тарифом «Про» (refresh-токен прежний). */
+export async function trialRequest(): Promise<{ user: SessionUser; access_token: string }> {
+  let response: Response;
+  try {
+    response = await platformFetch(platformUrl("/auth/trial"), {
+      method: "POST",
+      headers: { Accept: "application/json" },
+    });
+  } catch {
+    throw new SessionApiError(0, "Нет соединения с сервером NK-Tech Finance.");
+  }
+  if (!response.ok) {
+    const detail = await readPlatformError(response);
+    throw new SessionApiError(response.status, detail ?? `Не удалось включить пробный период (${response.status}).`);
+  }
+  return (await response.json()) as { user: SessionUser; access_token: string };
+}
+
 export async function meRequest(): Promise<SessionUser> {
   let response: Response;
   try {

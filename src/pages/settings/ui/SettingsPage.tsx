@@ -11,7 +11,7 @@ import {
   UserRound,
 } from "lucide-react";
 import { useAppSettings } from "../../../app/context/AppSettingsContext";
-import { PLAN_TITLES, useSession } from "../../../entities/session";
+import { activeTrialEnd, formatTrialDate, PLAN_TITLES, useSession } from "../../../entities/session";
 import { PageHero, SectionCard } from "../../../shared/ui/analysis-shell";
 import type { StatusState, UpdateStatusPayload } from "../model";
 import { getDesktopApi, getStatusClassName } from "../lib";
@@ -27,6 +27,7 @@ export function SettingsPage() {
   const desktopApi = getDesktopApi();
   const isDesktop = Boolean(desktopApi?.isDesktop);
   const planTitle = user ? PLAN_TITLES[user.plan] : undefined;
+  const trialEnd = activeTrialEnd(user);
 
   useEffect(() => {
     const api = getDesktopApi();
@@ -166,6 +167,11 @@ export function SettingsPage() {
               {t({ ru: "Тариф", en: "Plan" })}
             </div>
             <div className="text-lg font-semibold">{planTitle ? t(planTitle) : user?.plan}</div>
+            {trialEnd ? (
+              <div className="text-sm text-slate-600 dark:text-white/80">
+                {t({ ru: "Пробный период до", en: "Trial until" })} {formatTrialDate(trialEnd, locale)}
+              </div>
+            ) : null}
             <div className="truncate text-sm text-slate-600 dark:text-white/80">{user?.email}</div>
           </div>
         }
